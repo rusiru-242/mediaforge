@@ -252,3 +252,4 @@ backend/target/surefire-reports/
 *.rej
 .sass-cache/
 .connect.lock
+

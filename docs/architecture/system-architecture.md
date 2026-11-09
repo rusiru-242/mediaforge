@@ -635,3 +635,4 @@ services:
 **Rationale:** Atomic cross-component changes, shared tooling, simplified dependency management during MVP phase.
 **Trade-offs:** Larger repo, requires careful CI path filtering.
 **Status:** Accepted
+

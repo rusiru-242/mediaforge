@@ -66,3 +66,4 @@ Clients must update their response parsing logic.
 - Reference issues in footer: `Closes #123`, `Fixes #456`
 - Never capitalize the first letter of the description
 - No period at the end of the subject line
+

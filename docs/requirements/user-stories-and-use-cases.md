@@ -356,3 +356,4 @@ The Minimum Viable Product covers:
 | AC-012 | Temporary files are deleted after 1 hour TTL | Integration Test |
 | AC-013 | Web app achieves Lighthouse Performance score ≥80 | Lighthouse Audit |
 | AC-014 | All pages are WCAG 2.1 AA accessible | Accessibility Audit |
+
