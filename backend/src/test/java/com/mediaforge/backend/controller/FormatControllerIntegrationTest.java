@@ -54,3 +54,4 @@ class FormatControllerIntegrationTest {
                 .andExpect(jsonPath("$.formats[0]").value("mp4"));
     }
 }
+

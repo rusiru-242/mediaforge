@@ -59,3 +59,4 @@ class RepositoryAndMigrationIntegrationTest {
         assertEquals("jobuser@mediaforge.app", foundJob.get().getUser().getEmail());
     }
 }
+

@@ -11,3 +11,4 @@ import java.util.UUID;
 public interface JobEventRepository extends JpaRepository<JobEvent, UUID> {
     List<JobEvent> findByJobIdOrderByCreatedAtAsc(UUID jobId);
 }
+

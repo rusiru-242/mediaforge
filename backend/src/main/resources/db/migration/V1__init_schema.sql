@@ -91,3 +91,4 @@ CREATE INDEX idx_media_files_storage_key ON media_files(storage_key);
 CREATE INDEX idx_download_requests_job_id ON download_requests(job_id);
 CREATE INDEX idx_conversion_requests_job_id ON conversion_requests(job_id);
 CREATE INDEX idx_job_events_job_id ON job_events(job_id);
+

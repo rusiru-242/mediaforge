@@ -96,3 +96,4 @@ class DownloadControllerIntegrationTest {
                 .andExpect(jsonPath("$.platform").value("example"));
     }
 }
+

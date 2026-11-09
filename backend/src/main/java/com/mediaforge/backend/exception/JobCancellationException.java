@@ -7,3 +7,4 @@ public class JobCancellationException extends RuntimeException {
         super(String.format("Job cannot be cancelled in status '%s'", status));
     }
 }
+

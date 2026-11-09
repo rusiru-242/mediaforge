@@ -7,3 +7,4 @@ public class InvalidJobTransitionException extends RuntimeException {
         super(String.format("Cannot transition job from status '%s' to '%s'", current, target));
     }
 }
+

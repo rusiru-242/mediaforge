@@ -130,3 +130,4 @@ class JobControllerIntegrationTest {
                 .andExpect(jsonPath("$.content[0].id").value(jobId.toString()));
     }
 }
+

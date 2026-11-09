@@ -15,3 +15,4 @@ public interface MediaJobRepository extends JpaRepository<MediaJob, UUID> {
     Page<MediaJob> findByUserId(UUID userId, Pageable pageable);
     Page<MediaJob> findByUserIdAndStatus(UUID userId, JobStatus status, Pageable pageable);
 }
+

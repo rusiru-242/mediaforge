@@ -61,3 +61,4 @@ class FormatServiceTest {
         assertTrue(res.getFormats().contains("jpg"));
     }
 }
+

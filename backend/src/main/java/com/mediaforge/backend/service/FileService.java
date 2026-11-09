@@ -7,3 +7,4 @@ import java.util.UUID;
 public interface FileService {
     FileMetadataResponse getFileMetadata(UUID id);
 }
+

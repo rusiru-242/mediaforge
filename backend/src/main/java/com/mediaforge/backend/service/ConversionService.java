@@ -8,3 +8,4 @@ import java.util.UUID;
 public interface ConversionService {
     ConversionResponse createConversion(ConversionCreateRequest request, UUID requestingUserId);
 }
+

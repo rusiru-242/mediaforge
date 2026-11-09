@@ -264,3 +264,4 @@ All API errors return RFC 7807-compliant payloads:
 | `RATE_LIMIT_EXCEEDED` | 429 | Request rate exceeded allowed threshold |
 | `PROCESSOR_NOT_AVAILABLE`| 501 | Processing engine phase scheduled for future phase |
 | `INTERNAL_SERVER_ERROR` | 500 | Unexpected server error |
+

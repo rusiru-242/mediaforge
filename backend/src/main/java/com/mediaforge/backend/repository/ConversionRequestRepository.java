@@ -11,3 +11,4 @@ import java.util.UUID;
 public interface ConversionRequestRepository extends JpaRepository<ConversionRequest, UUID> {
     Optional<ConversionRequest> findByJobId(UUID jobId);
 }
+

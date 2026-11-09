@@ -31,3 +31,4 @@ public class FormatListResponse {
         this.formats = formats;
     }
 }
+

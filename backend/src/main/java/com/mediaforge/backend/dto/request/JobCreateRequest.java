@@ -63,3 +63,4 @@ public class JobCreateRequest {
         this.outputFormat = outputFormat;
     }
 }
+

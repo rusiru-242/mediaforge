@@ -49,3 +49,4 @@ public class DownloadCreateRequest {
         this.selectedQuality = selectedQuality;
     }
 }
+

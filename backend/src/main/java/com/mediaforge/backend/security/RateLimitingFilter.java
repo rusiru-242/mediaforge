@@ -84,3 +84,4 @@ public class RateLimitingFilter extends OncePerRequestFilter {
     private record WindowCounter(long window, AtomicInteger counter) {
     }
 }
+

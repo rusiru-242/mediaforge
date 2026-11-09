@@ -117,3 +117,4 @@ public class UrlSecurityValidator {
         return dotIndex > 0 ? host.substring(0, dotIndex) : host;
     }
 }
+

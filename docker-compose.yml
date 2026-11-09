@@ -62,3 +62,4 @@ networks:
   mediaforge-network:
     name: mediaforge-network
     driver: bridge
+

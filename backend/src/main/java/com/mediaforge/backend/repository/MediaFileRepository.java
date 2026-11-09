@@ -13,3 +13,4 @@ public interface MediaFileRepository extends JpaRepository<MediaFile, UUID> {
     List<MediaFile> findByJobId(UUID jobId);
     Optional<MediaFile> findByStorageKey(String storageKey);
 }
+

@@ -107,3 +107,4 @@ class DownloadServiceTest {
         verify(eventRepository, times(1)).save(any());
     }
 }
+

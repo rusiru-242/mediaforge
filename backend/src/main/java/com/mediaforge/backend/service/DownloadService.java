@@ -11,3 +11,4 @@ public interface DownloadService {
     DownloadValidateResponse validateUrl(DownloadValidateRequest request);
     DownloadResponse createDownload(DownloadCreateRequest request, UUID requestingUserId);
 }
+

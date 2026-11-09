@@ -47,3 +47,4 @@ public class FormatServiceImpl implements FormatService {
         return new FormatListResponse("image", IMAGE_FORMATS);
     }
 }
+

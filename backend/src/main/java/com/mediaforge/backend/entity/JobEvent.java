@@ -85,3 +85,4 @@ public class JobEvent {
         this.createdAt = createdAt;
     }
 }
+

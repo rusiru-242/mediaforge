@@ -47,3 +47,4 @@ public class FormatController {
         return ResponseEntity.ok(formatService.getImageFormats());
     }
 }
+

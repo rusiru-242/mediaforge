@@ -16,3 +16,4 @@ public class MediaForgeApplication {
         SpringApplication.run(MediaForgeApplication.class, args);
     }
 }
+

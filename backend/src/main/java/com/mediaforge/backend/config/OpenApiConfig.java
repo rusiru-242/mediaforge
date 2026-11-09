@@ -41,3 +41,4 @@ public class OpenApiConfig {
                 .addSecurityItem(new SecurityRequirement().addList("bearer-jwt"));
     }
 }
+

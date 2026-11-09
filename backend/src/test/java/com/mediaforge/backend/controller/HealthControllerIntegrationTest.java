@@ -28,3 +28,4 @@ class HealthControllerIntegrationTest {
                 .andExpect(jsonPath("$.service").value("mediaforge-backend"));
     }
 }
+

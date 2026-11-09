@@ -11,3 +11,4 @@ import java.util.UUID;
 public interface DownloadRequestRepository extends JpaRepository<DownloadRequest, UUID> {
     Optional<DownloadRequest> findByJobId(UUID jobId);
 }
+

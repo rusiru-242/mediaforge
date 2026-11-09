@@ -48,3 +48,4 @@ class JobStatusTest {
         assertFalse(JobStatus.CANCELLED.canBeCancelled());
     }
 }
+

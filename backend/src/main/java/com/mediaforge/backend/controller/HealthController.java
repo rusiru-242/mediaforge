@@ -19,3 +19,4 @@ public class HealthController {
         return ResponseEntity.ok(new HealthResponse("UP", "mediaforge-backend", "0.1.0-SNAPSHOT"));
     }
 }
+

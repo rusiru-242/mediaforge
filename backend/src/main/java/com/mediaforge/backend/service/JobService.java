@@ -16,3 +16,4 @@ public interface JobService {
     JobResponse updateProgress(UUID id, int progress);
     JobResponse updateStatus(UUID id, JobStatus newStatus, String errorMessage);
 }
+

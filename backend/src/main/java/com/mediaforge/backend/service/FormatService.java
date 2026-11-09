@@ -11,3 +11,4 @@ public interface FormatService {
     FormatListResponse getAudioFormats();
     FormatListResponse getImageFormats();
 }
+

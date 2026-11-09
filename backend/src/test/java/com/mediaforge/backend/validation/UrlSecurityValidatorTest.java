@@ -66,3 +66,4 @@ class UrlSecurityValidatorTest {
         assertThrows(UrlSecurityException.class, () -> validator.validate(null));
     }
 }
+

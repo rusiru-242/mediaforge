@@ -4,3 +4,4 @@ public enum JobType {
     DOWNLOAD,
     CONVERSION
 }
+

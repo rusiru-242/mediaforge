@@ -5,3 +5,4 @@ public class ProcessorNotAvailableException extends RuntimeException {
         super(message);
     }
 }
+

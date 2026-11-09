@@ -5,3 +5,4 @@ public class UrlSecurityException extends RuntimeException {
         super(message);
     }
 }
+

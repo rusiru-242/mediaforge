@@ -72,3 +72,4 @@ public class DownloadValidateResponse {
         this.message = message;
     }
 }
+
