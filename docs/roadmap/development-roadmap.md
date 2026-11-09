@@ -664,3 +664,4 @@ MediaForge is developed across **10 structured phases**, each building on the pr
 - Production smoke tests (critical flows)
 - TLS/security headers verification (securityheaders.com)
 - Final Lighthouse audit
+

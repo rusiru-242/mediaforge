@@ -476,3 +476,4 @@ erDiagram
     USERS ||--o{ REFRESH_TOKENS : "owns"
     JOBS ||--o{ CONVERSION_OPTIONS : "has"
 ```
+

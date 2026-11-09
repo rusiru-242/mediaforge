@@ -96,3 +96,4 @@ Permissions-Policy: camera=(), microphone=(), geolocation=()
 | A08 Software Integrity | Signed Docker images (Phase 09), dependency verification |
 | A09 Logging Failures | Structured JSON logs, no PII in logs, audit log for admin actions |
 | A10 Server-Side Request Forgery | URL allowlist validation before any outbound HTTP |
+

@@ -223,3 +223,4 @@ For feature requests, use the [Feature Request template](.github/ISSUE_TEMPLATE/
 Open a [Discussion](https://github.com/rusiru-242/mediaforge/discussions) for questions, ideas, or general feedback.
 
 Thank you for contributing to MediaForge! 🚀
+
