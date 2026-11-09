@@ -80,3 +80,4 @@ Dismissible warning banner displaying RFC 7807 problem details or network failur
 ### `Footer`
 - Links to converter routes, legal documents (Privacy, Terms), about page, GitHub repository, and direct Swagger UI REST documentation.
 - Monorepo phase badge (`Phase 03 — Next.js & Spring Boot Integration`).
+

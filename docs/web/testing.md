@@ -42,3 +42,4 @@ npx vitest run --coverage
 
 ## 4. CI Workflow Integration
 The web test suite is executed on every push and pull request via the GitHub Actions workflow `.github/workflows/web-ci.yml`. The build step enforces zero test regressions and zero TypeScript/ESLint warnings before allowing merge to `develop`.
+

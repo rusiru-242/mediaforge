@@ -54,3 +54,4 @@ export function JobStatusBadge({ status }: JobStatusBadgeProps) {
       return <Badge variant="neutral">{status}</Badge>;
   }
 }
+

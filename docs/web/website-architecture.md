@@ -75,3 +75,4 @@ web/
   - Light Mode: Clean slate (`#F8FAFC`, `#FFFFFF`) with vibrant indigo/violet borders and buttons.
 - **Theme Persistence:** Stored in browser `localStorage('theme')` and applied synchronously via an inline `<head>` script to avoid FOUC (Flash of Unstyled Content).
 - **Responsive Layout:** Mobile drawer navigation, collapsible action bars, and flexible CSS grid layouts for mobile, tablet, and desktop viewports.
+

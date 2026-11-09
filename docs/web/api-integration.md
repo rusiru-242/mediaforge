@@ -144,3 +144,4 @@ Base URL is configured via environment variable `NEXT_PUBLIC_API_BASE_URL` (defa
 - **Metadata Endpoint:** `GET /files/{id}/metadata`
 - **Download Endpoint:** `GET /files/{id}/download`
 - **Response:** Direct octet stream download with Content-Disposition header.
+
