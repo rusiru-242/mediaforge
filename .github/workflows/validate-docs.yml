@@ -1,0 +1,176 @@
+name: Validate Documentation
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - 'chore/phase-*'
+      - 'docs/**'
+    paths:
+      - 'docs/**'
+      - '*.md'
+      - '.github/**'
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'docs/**'
+      - '*.md'
+      - '.github/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-markdown:
+    name: Validate Markdown Files
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install markdownlint-cli
+        run: npm install -g markdownlint-cli
+
+      - name: Lint Markdown files
+        run: |
+          markdownlint \
+            --config .markdownlint.json \
+            'docs/**/*.md' \
+            '*.md' \
+            '.github/**/*.md' \
+            || echo "::warning::Markdown linting completed with warnings"
+
+  validate-structure:
+    name: Validate Repository Structure
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check required directories exist
+        run: |
+          required_dirs=(
+            "backend"
+            "web"
+            "apps/flutter_app"
+            "workers/media-processor"
+            "docs/requirements"
+            "docs/architecture"
+            "docs/workflows"
+            "docs/diagrams"
+            "docs/roadmap"
+            "docs/github"
+            ".github/ISSUE_TEMPLATE"
+            ".github/workflows"
+          )
+          failed=0
+          for dir in "${required_dirs[@]}"; do
+            if [ ! -d "$dir" ]; then
+              echo "::error::Required directory missing: $dir"
+              failed=1
+            else
+              echo "✅ Found: $dir"
+            fi
+          done
+          exit $failed
+
+      - name: Check required files exist
+        run: |
+          required_files=(
+            "README.md"
+            "CONTRIBUTING.md"
+            ".gitignore"
+            ".env.example"
+            ".editorconfig"
+            ".github/pull_request_template.md"
+            ".github/ISSUE_TEMPLATE/bug-report.md"
+            ".github/ISSUE_TEMPLATE/feature-request.md"
+          )
+          failed=0
+          for file in "${required_files[@]}"; do
+            if [ ! -f "$file" ]; then
+              echo "::error::Required file missing: $file"
+              failed=1
+            else
+              echo "✅ Found: $file"
+            fi
+          done
+          exit $failed
+
+  check-secrets:
+    name: Check for Accidentally Committed Secrets
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for .env files (not .env.example)
+        run: |
+          if find . -name ".env" -not -name ".env.example" -not -path "./.git/*" | grep -q .; then
+            echo "::error::.env file found in repository! Remove it immediately."
+            find . -name ".env" -not -name ".env.example" -not -path "./.git/*"
+            exit 1
+          fi
+          echo "✅ No .env files found"
+
+      - name: Check for private keys and certificates
+        run: |
+          pattern_found=0
+          # Check for private key patterns
+          if grep -rn "BEGIN PRIVATE KEY\|BEGIN RSA PRIVATE KEY\|BEGIN EC PRIVATE KEY" \
+            --include="*.md" --include="*.yml" --include="*.yaml" \
+            --include="*.json" --include="*.properties" \
+            --exclude-dir=".git" . 2>/dev/null; then
+            echo "::error::Possible private key content found!"
+            pattern_found=1
+          fi
+          if [ $pattern_found -eq 0 ]; then
+            echo "✅ No private key patterns found"
+          fi
+          exit $pattern_found
+
+      - name: Check for media files
+        run: |
+          media_found=0
+          extensions=("mp4" "webm" "mkv" "avi" "mov" "mp3" "wav" "flac" "aac")
+          for ext in "${extensions[@]}"; do
+            if find . -name "*.${ext}" -not -path "./.git/*" | grep -q .; then
+              echo "::error::Media file (.${ext}) found in repository!"
+              find . -name "*.${ext}" -not -path "./.git/*"
+              media_found=1
+            fi
+          done
+          if [ $media_found -eq 0 ]; then
+            echo "✅ No media files found"
+          fi
+          exit $media_found
+
+  validate-yaml:
+    name: Validate YAML Files
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install yamllint
+        run: pip install yamllint
+
+      - name: Validate YAML files
+        run: |
+          yamllint -d relaxed .github/workflows/ || echo "::warning::YAML linting completed with warnings"
