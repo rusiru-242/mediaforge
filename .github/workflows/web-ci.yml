@@ -5,6 +5,8 @@ on:
     branches:
       - develop
       - main
+      - 'feature/**'
+      - 'chore/**'
     paths:
       - 'web/**'
       - '.github/workflows/web-ci.yml'

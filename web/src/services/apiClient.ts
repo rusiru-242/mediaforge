@@ -95,6 +95,17 @@ export const apiClient = {
       body: JSON.stringify(req),
     }),
 
+  getMediaMetadata: (req: DownloadValidateRequest) =>
+    request<import('@/types/api').MediaMetadataResponse>('/downloads/metadata', {
+      method: 'POST',
+      body: JSON.stringify(req),
+    }),
+
+  getDownloadFormats: (url?: string) => {
+    const query = url ? `?url=${encodeURIComponent(url)}` : '';
+    return request<import('@/types/api').MediaFormatOptionDto[]>(`/downloads/formats${query}`);
+  },
+
   createDownloadJob: (req: DownloadCreateRequest) =>
     request<JobResponse>('/downloads', {
       method: 'POST',

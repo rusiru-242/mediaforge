@@ -21,6 +21,7 @@ public class JobResponse {
     private OffsetDateTime createdAt;
     private OffsetDateTime startedAt;
     private OffsetDateTime completedAt;
+    private UUID outputFileId;
 
     public JobResponse() {
     }
@@ -40,6 +41,14 @@ public class JobResponse {
         this.createdAt = createdAt;
         this.startedAt = startedAt;
         this.completedAt = completedAt;
+    }
+
+    public UUID getOutputFileId() {
+        return outputFileId;
+    }
+
+    public void setOutputFileId(UUID outputFileId) {
+        this.outputFileId = outputFileId;
     }
 
     public UUID getId() {

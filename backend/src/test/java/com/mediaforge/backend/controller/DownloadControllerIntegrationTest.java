@@ -6,6 +6,8 @@ import com.mediaforge.backend.dto.request.DownloadValidateRequest;
 import com.mediaforge.backend.dto.response.DownloadResponse;
 import com.mediaforge.backend.dto.response.DownloadValidateResponse;
 import com.mediaforge.backend.dto.response.JobResponse;
+import com.mediaforge.backend.dto.response.MediaFormatOptionDto;
+import com.mediaforge.backend.dto.response.MediaMetadataResponse;
 import com.mediaforge.backend.enums.JobStatus;
 import com.mediaforge.backend.enums.JobType;
 import com.mediaforge.backend.enums.SourceType;
@@ -27,6 +29,7 @@ import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -62,6 +65,53 @@ class DownloadControllerIntegrationTest {
     }
 
     @Test
+    @DisplayName("POST /api/v1/downloads/metadata should return genuine media metadata")
+    void testGetMetadataEndpoint() throws Exception {
+        DownloadValidateRequest request = new DownloadValidateRequest("https://example.com/video.mp4");
+        MediaFormatOptionDto formatOption = new MediaFormatOptionDto("mp4", "1080p", "1920x1080", "video/mp4", 10485760L, true, false, "MP4");
+        MediaMetadataResponse response = new MediaMetadataResponse(
+                true,
+                "https://example.com/video.mp4",
+                "Direct Stream",
+                "Sample Video",
+                "VIDEO",
+                "video/mp4",
+                "mp4",
+                10485760L,
+                "1920x1080",
+                60.0,
+                null,
+                List.of(formatOption),
+                List.of("1080p"),
+                true,
+                "Inspected successfully"
+        );
+
+        when(downloadService.getMetadata(any(DownloadValidateRequest.class))).thenReturn(response);
+
+        mockMvc.perform(post("/api/v1/downloads/metadata")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.title").value("Sample Video"))
+                .andExpect(jsonPath("$.mediaType").value("VIDEO"))
+                .andExpect(jsonPath("$.directDownloadSupported").value(true));
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/downloads/formats should return format options list")
+    void testGetFormatsEndpoint() throws Exception {
+        MediaFormatOptionDto option = new MediaFormatOptionDto("mp4", "1080p", "1920x1080", "video/mp4", 1000L, true, false, "MP4");
+        when(downloadService.getFormats(any())).thenReturn(List.of(option));
+
+        mockMvc.perform(get("/api/v1/downloads/formats?url=https://example.com/sample.mp4"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].format").value("mp4"))
+                .andExpect(jsonPath("$[0].nativeStream").value(true));
+    }
+
+    @Test
     @DisplayName("POST /api/v1/downloads/validate should return 400 when SSRF detected")
     void testValidateUrlSsrfRejection() throws Exception {
         DownloadValidateRequest request = new DownloadValidateRequest("http://127.0.0.1/video");
@@ -82,9 +132,9 @@ class DownloadControllerIntegrationTest {
         DownloadCreateRequest request = new DownloadCreateRequest("https://example.com/video", "mp4", "720p");
         UUID jobId = UUID.randomUUID();
         JobResponse job = new JobResponse(jobId, null, JobType.DOWNLOAD, SourceType.URL,
-                JobStatus.PENDING, 0, null, "mp4", null, OffsetDateTime.now(), null, null);
+                JobStatus.QUEUED, 0, null, "mp4", null, OffsetDateTime.now(), null, null);
         DownloadResponse response = new DownloadResponse(jobId, job, "https://example.com/video", "example",
-                "mp4", "720p", "PENDING", "Queued");
+                "mp4", "720p", "QUEUED", "Queued");
 
         when(downloadService.createDownload(any(DownloadCreateRequest.class), any())).thenReturn(response);
 

@@ -17,8 +17,8 @@
   <a href="https://github.com/rusiru-242/mediaforge/blob/main/LICENSE">
     <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"/>
   </a>
-  <img src="https://img.shields.io/badge/phase-03%20Website-violet" alt="Phase"/>
-  <img src="https://img.shields.io/badge/status-Phase%2003%20Complete-success" alt="Status"/>
+  <img src="https://img.shields.io/badge/phase-04%20Downloader-violet" alt="Phase"/>
+  <img src="https://img.shields.io/badge/status-Phase%2004%20Complete-success" alt="Status"/>
 </p>
 
 ---
@@ -41,10 +41,10 @@ MediaForge is a **monorepo** composed of four primary applications:
 
 | Component | Technology | Description | Status |
 |-----------|-----------|-------------|:------:|
-| `backend/` | Java 21, Spring Boot 3.5, Spring Security, Flyway, PostgreSQL | High-performance REST API, job management, SSRF protection | ✅ Merged (Phase 02) |
-| `web/` | Next.js 15, React 19, TypeScript, Tailwind CSS, Vitest | Responsive modern web portal with live API telemetry | ✅ Implemented (Phase 03) |
+| `backend/` | Java 21, Spring Boot 3.5, Spring Security, Flyway, PostgreSQL | High-performance REST API, job management, SSRF protection, Downloader Engine | ✅ Implemented (Phase 04) |
+| `web/` | Next.js 15, React 19, TypeScript, Tailwind CSS, Vitest | Responsive modern web portal with live API telemetry & Downloader UI | ✅ Implemented (Phase 04) |
 | `apps/flutter_app/` | Flutter 3 (Dart) | Desktop (Win/macOS/Linux) & Mobile (Android/iOS) | ⬜ Planned (Phase 06/07) |
-| `workers/media-processor/` | FFmpeg 6+, Node.js / Java Worker | Distributed media download and transcoding worker engine | ⬜ Planned (Phase 04/05) |
+| `workers/media-processor/` | FFmpeg 6+, Node.js / Java Worker | Distributed media download and transcoding worker engine | ⬜ Planned (Phase 05) |
 
 ---
 
@@ -97,8 +97,9 @@ mediaforge/
 ├── workers/
 │   └── media-processor/          # FFmpeg background job workers
 ├── docs/
-│   ├── architecture/             # System architecture documents
+│   ├── downloader/               # Phase 04 Downloader architecture, API, security & testing docs
 │   ├── web/                      # Phase 03 Web architecture & API docs
+│   ├── architecture/             # System architecture documents
 │   ├── requirements/             # Functional & non-functional requirements
 │   ├── workflows/                # Workflow documentation
 │   ├── diagrams/                 # Mermaid diagrams
@@ -121,8 +122,8 @@ mediaforge/
 | **01** | Foundation, Architecture & GitHub | ✅ Complete |
 | **02** | Backend & Database Foundation | ✅ Complete |
 | **03** | Website Development & API Integration | ✅ Complete |
-| **04** | Media Downloader Engine | ⬜ Next Phase |
-| **05** | Online Media Converter (FFmpeg) | ⬜ Planned |
+| **04** | Media Downloader Engine | ✅ Complete |
+| **05** | Online Media Converter (FFmpeg) | ⬜ Next Phase |
 | **06** | Desktop Application (Flutter) | ⬜ Planned |
 | **07** | Mobile Application (Flutter) | ⬜ Planned |
 | **08** | Advanced Features & Batch Processing | ⬜ Planned |

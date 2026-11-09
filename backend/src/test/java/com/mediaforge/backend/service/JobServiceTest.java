@@ -44,13 +44,16 @@ class JobServiceTest {
     @Mock
     private UserRepository userRepository;
 
+    @Mock
+    private com.mediaforge.backend.downloader.service.MediaDownloadService mediaDownloadService;
+
     private JobMapper jobMapper;
     private JobService jobService;
 
     @BeforeEach
     void setUp() {
         jobMapper = new JobMapper();
-        jobService = new JobServiceImpl(jobRepository, eventRepository, userRepository, jobMapper);
+        jobService = new JobServiceImpl(jobRepository, eventRepository, userRepository, jobMapper, mediaDownloadService);
     }
 
     @Test
