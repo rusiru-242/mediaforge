@@ -60,3 +60,4 @@
 | Redis | 7+ |
 | FFmpeg | 6+ |
 | Nginx | 1.24+ |
+
