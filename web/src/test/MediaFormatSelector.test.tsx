@@ -75,3 +75,4 @@ describe('MediaFormatSelector component', () => {
     expect(handleSelect).not.toHaveBeenCalled();
   });
 });
+

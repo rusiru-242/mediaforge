@@ -68,3 +68,4 @@ class DirectImageSourceAdapterTest {
         assertTrue(metadata.getAvailableFormats().stream().anyMatch(f -> f.isNativeStream() && "png".equals(f.getFormat())));
     }
 }
+

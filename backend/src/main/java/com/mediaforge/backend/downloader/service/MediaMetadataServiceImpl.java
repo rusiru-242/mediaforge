@@ -27,3 +27,4 @@ public class MediaMetadataServiceImpl implements MediaMetadataService {
         return adapter.extractMetadata(validatedUri);
     }
 }
+

@@ -113,3 +113,4 @@ public class DirectImageSourceAdapter implements MediaSourceAdapter {
         return httpClient.download(task, progressCallback);
     }
 }
+

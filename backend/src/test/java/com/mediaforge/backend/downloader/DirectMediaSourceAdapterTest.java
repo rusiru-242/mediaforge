@@ -76,3 +76,4 @@ class DirectMediaSourceAdapterTest {
         assertTrue(metadata.getAvailableFormats().stream().anyMatch(f -> f.isRequiresConversion() && "mp3".equals(f.getFormat())));
     }
 }
+

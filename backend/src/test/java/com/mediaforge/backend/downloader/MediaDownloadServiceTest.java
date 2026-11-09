@@ -140,3 +140,4 @@ class MediaDownloadServiceTest {
         assertTrue(cancelled);
     }
 }
+

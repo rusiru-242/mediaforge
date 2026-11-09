@@ -88,3 +88,4 @@ export function MediaInfoCard({ metadata }: MediaInfoCardProps) {
     </div>
   );
 }
+

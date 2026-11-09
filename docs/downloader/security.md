@@ -58,3 +58,4 @@ To mitigate this, `HttpDownloadClient`:
 ### 3.3 Ephemeral File Lifecycle & 24h Retention
 - Files are kept for a maximum retention period (default: 24 hours).
 - A scheduled cron task (`@Scheduled(cron = "0 0 * * * *")`) scans the storage directory and purges files older than 24 hours to prevent disk saturation.
+

@@ -116,3 +116,4 @@ class MediaStorageServiceTest {
         verify(mediaFileRepository, times(1)).delete(expiredMediaFile);
     }
 }
+

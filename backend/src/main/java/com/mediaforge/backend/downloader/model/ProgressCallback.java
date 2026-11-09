@@ -4,3 +4,4 @@ package com.mediaforge.backend.downloader.model;
 public interface ProgressCallback {
     void onProgress(DownloadProgress progress);
 }
+

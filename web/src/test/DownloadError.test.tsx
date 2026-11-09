@@ -25,3 +25,4 @@ describe('DownloadError component', () => {
     expect(screen.getByText('Network socket timeout occurred')).toBeDefined();
   });
 });
+

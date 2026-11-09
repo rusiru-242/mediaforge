@@ -35,3 +35,4 @@ public class MediaSourceAdapterRegistry {
         return adapters;
     }
 }
+

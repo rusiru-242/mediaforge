@@ -20,3 +20,4 @@ public interface MediaDownloadService {
      */
     boolean isJobActive(UUID jobId);
 }
+

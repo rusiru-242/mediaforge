@@ -40,3 +40,4 @@ public interface MediaStorageService {
      */
     int cleanupExpiredFiles();
 }
+

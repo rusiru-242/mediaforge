@@ -207,3 +207,4 @@ Streams the completed media binary to the client with `Content-Disposition: atta
 - **URL**: `GET /api/v1/files/{id}/download`
 - **Security**: Public (`permitAll`)
 - **Response**: Binary byte stream with `Content-Type`, `Content-Length`, and sanitised filename headers.
+

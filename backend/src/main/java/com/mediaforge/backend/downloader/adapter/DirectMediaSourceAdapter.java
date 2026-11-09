@@ -141,3 +141,4 @@ public class DirectMediaSourceAdapter implements MediaSourceAdapter {
         return httpClient.download(task, progressCallback);
     }
 }
+

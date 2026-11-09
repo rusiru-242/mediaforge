@@ -66,3 +66,4 @@ Media source resolution is handled dynamically through ordered, registered adapt
 - Strict path traversal protection: Ensures all temporary and permanent storage paths are canonicalized and reside inside configured storage roots (`mediaforge_data/downloads`).
 - Scratch isolation: Active downloads stream to `temp/` scratch files before atomic relocation to final media directories upon verified completion.
 - Automated 24-hour TTL cleanup: Scheduled cron task purges expired downloads and temporary files older than retention policy.
+

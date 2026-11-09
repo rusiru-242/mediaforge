@@ -154,3 +154,4 @@ public class MediaMetadata {
         this.directStreamUri = directStreamUri;
     }
 }
+

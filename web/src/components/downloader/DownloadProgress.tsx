@@ -52,3 +52,4 @@ export function DownloadProgress({ progress, status, onCancel, isCancelling = fa
     </div>
   );
 }
+

@@ -49,3 +49,4 @@ describe('DownloadProgress component', () => {
     expect(screen.queryByRole('button', { name: /cancel/i })).toBeNull();
   });
 });
+

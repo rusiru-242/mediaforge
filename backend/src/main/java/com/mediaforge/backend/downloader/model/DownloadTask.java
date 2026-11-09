@@ -83,3 +83,4 @@ public class DownloadTask {
         this.cancelled = true;
     }
 }
+

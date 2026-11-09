@@ -30,3 +30,4 @@ public interface MediaSourceAdapter {
      */
     DownloadedMedia download(DownloadTask task, ProgressCallback progressCallback) throws IOException;
 }
+

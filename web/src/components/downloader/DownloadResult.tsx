@@ -59,3 +59,4 @@ export function DownloadResult({ jobId, outputFileId, targetFormat, targetQualit
     </div>
   );
 }
+

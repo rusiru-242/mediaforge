@@ -93,3 +93,4 @@ public class GenericWebSourceAdapter implements MediaSourceAdapter {
         return httpClient.download(task, progressCallback);
     }
 }
+

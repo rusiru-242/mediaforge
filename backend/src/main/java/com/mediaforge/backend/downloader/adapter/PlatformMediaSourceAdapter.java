@@ -79,3 +79,4 @@ public class PlatformMediaSourceAdapter implements MediaSourceAdapter {
         return "Protected Platform";
     }
 }
+

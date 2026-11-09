@@ -90,3 +90,4 @@ describe('MediaUrlInput component', () => {
     expect(input.disabled).toBe(true);
   });
 });
+

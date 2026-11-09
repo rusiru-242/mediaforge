@@ -11,3 +11,4 @@ public interface MediaMetadataService {
      */
     MediaMetadata extractMetadata(String url) throws IOException;
 }
+

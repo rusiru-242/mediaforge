@@ -32,3 +32,4 @@ Every candidate URL must satisfy the following validation criteria before any ne
 - **FQDN / Host Presence**: Hostnames must resolve through standard DNS resolvers.
 - **SSRF Subnet Check**: Resolved IP addresses must not fall within loopback, RFC 1918 private subnets, carrier-grade NAT, or link-local cloud metadata addresses.
 - **Port Restrictions**: Non-standard internal ports (e.g. `22`, `3306`, `5432`, `6379`, `9200`) are rejected.
+

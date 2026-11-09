@@ -83,3 +83,4 @@ public class DownloadProgress {
         this.message = message;
     }
 }
+

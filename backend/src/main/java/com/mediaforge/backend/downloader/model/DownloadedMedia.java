@@ -72,3 +72,4 @@ public class DownloadedMedia {
         this.containerFormat = containerFormat;
     }
 }
+

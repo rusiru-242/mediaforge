@@ -187,3 +187,4 @@ public class LocalStorageServiceImpl implements MediaStorageService {
         return dot >= 0 && dot < filename.length() - 1 ? filename.substring(dot + 1) : "";
     }
 }
+
