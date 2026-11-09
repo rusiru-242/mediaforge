@@ -1,13 +1,13 @@
 package com.mediaforge.backend.service;
 
+import com.mediaforge.backend.downloader.service.MediaDownloadService;
+import com.mediaforge.backend.downloader.service.MediaMetadataService;
 import com.mediaforge.backend.dto.request.DownloadCreateRequest;
 import com.mediaforge.backend.dto.request.DownloadValidateRequest;
 import com.mediaforge.backend.dto.response.DownloadResponse;
 import com.mediaforge.backend.dto.response.DownloadValidateResponse;
 import com.mediaforge.backend.entity.MediaJob;
 import com.mediaforge.backend.enums.JobStatus;
-import com.mediaforge.backend.enums.JobType;
-import com.mediaforge.backend.enums.SourceType;
 import com.mediaforge.backend.exception.UrlSecurityException;
 import com.mediaforge.backend.mapper.JobMapper;
 import com.mediaforge.backend.repository.DownloadRequestRepository;
@@ -44,6 +44,12 @@ class DownloadServiceTest {
     @Mock
     private UserRepository userRepository;
 
+    @Mock
+    private MediaMetadataService metadataService;
+
+    @Mock
+    private MediaDownloadService mediaDownloadService;
+
     private UrlSecurityValidator urlValidator;
     private JobMapper jobMapper;
     private DownloadService downloadService;
@@ -54,6 +60,8 @@ class DownloadServiceTest {
         jobMapper = new JobMapper();
         downloadService = new DownloadServiceImpl(
                 urlValidator,
+                metadataService,
+                mediaDownloadService,
                 jobRepository,
                 downloadRequestRepository,
                 eventRepository,
@@ -100,10 +108,11 @@ class DownloadServiceTest {
         assertEquals("example", response.getPlatform());
         assertEquals("mp4", response.getSelectedFormat());
         assertEquals("1080p", response.getSelectedQuality());
-        assertEquals(JobStatus.PENDING.name(), response.getStatus());
+        assertEquals(JobStatus.QUEUED.name(), response.getStatus());
 
         verify(jobRepository, times(1)).save(any(MediaJob.class));
         verify(downloadRequestRepository, times(1)).save(any());
         verify(eventRepository, times(1)).save(any());
+        verify(mediaDownloadService, times(1)).submitDownloadJob(any(), any(), any(), any());
     }
 }

@@ -35,15 +35,18 @@ public class JobServiceImpl implements JobService {
     private final JobEventRepository eventRepository;
     private final UserRepository userRepository;
     private final JobMapper jobMapper;
+    private final com.mediaforge.backend.downloader.service.MediaDownloadService mediaDownloadService;
 
     public JobServiceImpl(MediaJobRepository jobRepository,
                           JobEventRepository eventRepository,
                           UserRepository userRepository,
-                          JobMapper jobMapper) {
+                          JobMapper jobMapper,
+                          @org.springframework.context.annotation.Lazy com.mediaforge.backend.downloader.service.MediaDownloadService mediaDownloadService) {
         this.jobRepository = jobRepository;
         this.eventRepository = eventRepository;
         this.userRepository = userRepository;
         this.jobMapper = jobMapper;
+        this.mediaDownloadService = mediaDownloadService;
     }
 
     @Override
@@ -107,6 +110,9 @@ public class JobServiceImpl implements JobService {
         if (!job.getStatus().canBeCancelled()) {
             throw new JobCancellationException(job.getStatus());
         }
+
+        // Signal worker thread if download is currently running
+        mediaDownloadService.cancelActiveDownload(id);
 
         JobStatus previousStatus = job.getStatus();
         job.setStatus(JobStatus.CANCELLED);

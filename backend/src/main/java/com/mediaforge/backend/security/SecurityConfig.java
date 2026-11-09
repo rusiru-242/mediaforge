@@ -55,8 +55,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/formats/**").permitAll()
 
                         // Media Download and Conversion endpoints (guest permitted with validated requests)
-                        .requestMatchers("/api/v1/downloads/validate", "/api/v1/downloads").permitAll()
-                        .requestMatchers("/api/v1/conversions").permitAll()
+                        .requestMatchers("/api/v1/downloads/**").permitAll()
+                        .requestMatchers("/api/v1/conversions/**").permitAll()
                         .requestMatchers("/api/v1/jobs/**").permitAll()
                         .requestMatchers("/api/v1/files/**").permitAll()
 

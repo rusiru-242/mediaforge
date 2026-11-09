@@ -42,6 +42,13 @@ app:
     requests-per-minute: ${RATE_LIMIT_RPM:60}
   storage:
     base-path: ${STORAGE_LOCAL_PATH:./uploads}
+    retention-hours: ${STORAGE_RETENTION_HOURS:24}
+  downloader:
+    max-file-size-bytes: ${DOWNLOAD_MAX_FILE_SIZE:524288000}
+    connect-timeout-ms: ${DOWNLOAD_CONNECT_TIMEOUT_MS:10000}
+    read-timeout-ms: ${DOWNLOAD_READ_TIMEOUT_MS:30000}
+    max-redirects: ${DOWNLOAD_MAX_REDIRECTS:5}
+    user-agent: "MediaForge-Downloader/1.0 (+https://mediaforge.local)"
 
 # Management & Actuator
 management:

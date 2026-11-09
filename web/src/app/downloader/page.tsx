@@ -1,90 +1,132 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import {
   DownloadCloud,
-  CheckCircle,
-  AlertCircle,
   ShieldCheck,
-  ArrowRight,
-  ExternalLink,
-  ClipboardPaste,
   Sparkles,
-  Info,
+  ExternalLink,
+  RefreshCw,
+  ArrowRight,
+  CheckCircle,
 } from 'lucide-react';
 import { apiClient } from '@/services/apiClient';
-import { DownloadValidationResponse, JobResponse } from '@/types/api';
+import { MediaMetadataResponse, MediaFormatOptionDto, JobResponse } from '@/types/api';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { Select } from '@/components/ui/Select';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { JobStatusBadge } from '@/components/feedback/JobStatusBadge';
-import { ErrorAlert } from '@/components/feedback/ErrorAlert';
+import { MediaUrlInput } from '@/components/downloader/MediaUrlInput';
+import { MediaInfoCard } from '@/components/downloader/MediaInfoCard';
+import { MediaFormatSelector } from '@/components/downloader/MediaFormatSelector';
+import { MediaQualitySelector } from '@/components/downloader/MediaQualitySelector';
+import { DownloadProgress } from '@/components/downloader/DownloadProgress';
+import { DownloadResult } from '@/components/downloader/DownloadResult';
+import { DownloadError } from '@/components/downloader/DownloadError';
 
 export default function DownloaderPage() {
   const [url, setUrl] = useState('');
+  const [isProbing, setIsProbing] = useState(false);
+  const [metadata, setMetadata] = useState<MediaMetadataResponse | null>(null);
   const [selectedFormat, setSelectedFormat] = useState('mp4');
   const [selectedQuality, setSelectedQuality] = useState('1080p');
+  const [probeError, setProbeError] = useState<string | null>(null);
 
-  // Validation State
-  const [isValidating, setIsValidating] = useState(false);
-  const [validationResult, setValidationResult] = useState<DownloadValidationResponse | null>(null);
-  const [validationError, setValidationError] = useState<string | null>(null);
-
-  // Submission State
+  // Job Submission and Polling State
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [createdJob, setCreatedJob] = useState<JobResponse | null>(null);
-  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [activeJob, setActiveJob] = useState<JobResponse | null>(null);
+  const [jobError, setJobError] = useState<string | null>(null);
+  const [isCancelling, setIsCancelling] = useState(false);
 
-  const handlePaste = async () => {
-    try {
-      const text = await navigator.clipboard.readText();
-      if (text) {
-        setUrl(text.trim());
-        setValidationResult(null);
-        setValidationError(null);
-        setCreatedJob(null);
-      }
-    } catch (e) {
-      console.warn('Clipboard access denied:', e);
+  const pollingRef = useRef<NodeJS.Timeout | null>(null);
+
+  const stopPolling = useCallback(() => {
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+      pollingRef.current = null;
     }
-  };
+  }, []);
 
-  const handleValidate = async () => {
+  useEffect(() => {
+    return () => {
+      stopPolling();
+    };
+  }, [stopPolling]);
+
+  // Handle URL probe / metadata inspection
+  const handleProbe = async () => {
     if (!url.trim()) {
-      setValidationError('Please enter a valid media URL');
+      setProbeError('Please enter a valid media URL');
       return;
     }
 
-    setIsValidating(true);
-    setValidationError(null);
-    setValidationResult(null);
+    setIsProbing(true);
+    setProbeError(null);
+    setJobError(null);
+    setActiveJob(null);
+    stopPolling();
 
     try {
-      const res = await apiClient.validateDownloadUrl({ url: url.trim() });
-      setValidationResult(res);
-      if (!res.valid) {
-        setValidationError(res.reason || 'This URL is not supported or was blocked by SSRF defense.');
+      const data = await apiClient.getMediaMetadata({ url: url.trim() });
+      setMetadata(data);
+
+      // Select default format based on native availability
+      if (data.availableFormats && data.availableFormats.length > 0) {
+        const nativeFmt = data.availableFormats.find((f) => f.nativeStream && !f.requiresConversion);
+        if (nativeFmt) {
+          setSelectedFormat(nativeFmt.format.toLowerCase());
+        } else {
+          setSelectedFormat(data.availableFormats[0].format.toLowerCase());
+        }
+      } else if (data.containerFormat) {
+        setSelectedFormat(data.containerFormat.toLowerCase());
+      }
+
+      // Select default quality
+      if (data.availableQualities && data.availableQualities.length > 0) {
+        setSelectedQuality(data.availableQualities[0]);
+      } else if (data.resolution) {
+        setSelectedQuality(data.resolution);
       }
     } catch (err: any) {
-      setValidationError(err.message || 'Failed to validate URL against backend service.');
+      setMetadata(null);
+      setProbeError(err.message || 'Failed to inspect media stream. Ensure URL is valid and publicly reachable.');
     } finally {
-      setIsValidating(false);
+      setIsProbing(false);
     }
   };
 
-  const handleCreateDownload = async (e: React.FormEvent) => {
+  // Poll active job status until terminal
+  const startJobPolling = useCallback((jobId: string) => {
+    stopPolling();
+
+    pollingRef.current = setInterval(async () => {
+      try {
+        const updated = await apiClient.getJobById(jobId);
+        setActiveJob(updated);
+
+        if (updated.status === 'COMPLETED' || updated.status === 'FAILED' || updated.status === 'CANCELLED') {
+          stopPolling();
+          if (updated.status === 'FAILED') {
+            setJobError(updated.errorMessage || 'Media download processing failed.');
+          }
+        }
+      } catch (e: any) {
+        console.error('Polling error for job:', jobId, e);
+      }
+    }, 1500);
+  }, [stopPolling]);
+
+  // Handle Download submission
+  const handleStartDownload = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!url.trim()) {
-      setValidationError('Please provide a URL to download.');
+      setProbeError('Please provide a URL to download.');
       return;
     }
 
     setIsSubmitting(true);
-    setSubmitError(null);
-    setCreatedJob(null);
+    setJobError(null);
 
     try {
       const job = await apiClient.createDownloadJob({
@@ -92,13 +134,46 @@ export default function DownloaderPage() {
         targetFormat: selectedFormat,
         targetQuality: selectedQuality,
       });
-      setCreatedJob(job);
+
+      setActiveJob(job);
+      if (job.status !== 'COMPLETED' && job.status !== 'FAILED') {
+        startJobPolling(job.id);
+      }
     } catch (err: any) {
-      setSubmitError(err.message || 'Failed to initiate download job.');
+      setJobError(err.message || 'Failed to initiate download job.');
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  // Handle cancellation
+  const handleCancelJob = async () => {
+    if (!activeJob) return;
+
+    setIsCancelling(true);
+    try {
+      const cancelled = await apiClient.cancelJob(activeJob.id);
+      setActiveJob(cancelled);
+      stopPolling();
+    } catch (err: any) {
+      console.error('Failed to cancel job:', err);
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
+  // Handle reset to inspect a new URL
+  const handleReset = () => {
+    stopPolling();
+    setUrl('');
+    setMetadata(null);
+    setActiveJob(null);
+    setProbeError(null);
+    setJobError(null);
+  };
+
+  const isJobRunning = Boolean(activeJob && (activeJob.status === 'QUEUED' || activeJob.status === 'PROCESSING'));
+  const isJobCompleted = Boolean(activeJob && activeJob.status === 'COMPLETED');
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 lg:px-8">
@@ -106,198 +181,164 @@ export default function DownloaderPage() {
       <div className="text-center space-y-3">
         <div className="inline-flex items-center gap-2 rounded-full bg-violet-100 px-3 py-1 text-xs font-semibold text-violet-700 dark:bg-violet-950/60 dark:text-violet-300">
           <DownloadCloud className="h-3.5 w-3.5" />
-          <span>Universal Stream Ingestion</span>
+          <span>Universal Stream Ingestion Engine</span>
         </div>
         <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100 sm:text-4xl">
           Online Media Downloader
         </h1>
         <p className="mx-auto max-w-xl text-sm text-slate-600 dark:text-slate-400">
-          Download high-definition video and audio streams from supported authorized URLs.
-          Backed by SSRF defense and async background processing queues.
+          Inspect, probe, and stream high-definition video, audio, and images from authorized sources.
+          Protected by multi-hop SSRF validation, ephemeral 24h storage, and asynchronous background queues.
         </p>
       </div>
 
-      {/* Main Download Form Card */}
-      <Card className="mt-8 p-6 sm:p-8">
-        <form onSubmit={handleCreateDownload} className="space-y-6">
-          {/* URL Input */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <label htmlFor="media-url" className="text-sm font-semibold text-slate-800 dark:text-slate-200">
-                Media Source URL
-              </label>
-              <button
-                type="button"
-                onClick={handlePaste}
-                className="inline-flex items-center gap-1 text-xs font-medium text-violet-600 hover:text-violet-700 dark:text-violet-400"
-              >
-                <ClipboardPaste className="h-3.5 w-3.5" />
-                Paste from clipboard
-              </button>
-            </div>
+      {/* Main Interactive Card */}
+      <Card className="mt-8 p-6 sm:p-8 space-y-6">
+        {/* URL Input Bar */}
+        <MediaUrlInput
+          url={url}
+          onChange={(newVal) => {
+            setUrl(newVal);
+            setProbeError(null);
+          }}
+          onProbe={handleProbe}
+          isLoading={isProbing}
+          disabled={isSubmitting || isJobRunning}
+        />
 
-            <div className="flex gap-2">
-              <Input
-                id="media-url"
-                type="url"
-                placeholder="https://example.com/video or direct streaming link..."
-                value={url}
-                onChange={(e) => {
-                  setUrl(e.target.value);
-                  setValidationResult(null);
-                  setValidationError(null);
-                }}
-                className="flex-1"
-                required
+        {/* Probe / Inspection Error */}
+        {probeError && (
+          <DownloadError
+            error={probeError}
+            onDismiss={() => setProbeError(null)}
+          />
+        )}
+
+        {/* Metadata Preview & Format Configuration */}
+        {metadata && (
+          <div className="space-y-6 pt-2 animate-in fade-in-50 duration-300">
+            <MediaInfoCard metadata={metadata} />
+
+            <form onSubmit={handleStartDownload} className="space-y-6">
+              {/* Format Selection */}
+              <MediaFormatSelector
+                formats={metadata.availableFormats || []}
+                selectedFormat={selectedFormat}
+                onSelectFormat={setSelectedFormat}
+                disabled={isSubmitting || isJobRunning}
               />
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleValidate}
-                isLoading={isValidating}
-                disabled={!url.trim()}
-              >
-                Validate
-              </Button>
-            </div>
-          </div>
 
-          {/* Validation Feedback Banner */}
-          {validationResult && validationResult.valid && (
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300">
-              <div className="flex items-center gap-2">
-                <CheckCircle className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
-                <span className="font-semibold text-sm">URL Validated & Safe</span>
-              </div>
-              <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-400">
-                Host: <span className="font-mono">{validationResult.domain || 'Verified Web Host'}</span> • Scheme: <span className="font-mono">{validationResult.scheme || 'https'}</span> • SSRF Protection Passed.
-              </p>
-            </div>
-          )}
+              {/* Quality Selection */}
+              {metadata.availableQualities && metadata.availableQualities.length > 0 && (
+                <MediaQualitySelector
+                  qualities={metadata.availableQualities}
+                  selectedQuality={selectedQuality}
+                  onSelectQuality={setSelectedQuality}
+                  disabled={isSubmitting || isJobRunning}
+                />
+              )}
 
-          {validationError && (
-            <ErrorAlert
-              title="Validation Warning"
-              message={validationError}
-              onClose={() => setValidationError(null)}
-            />
-          )}
+              {/* Job / Submission Error */}
+              {jobError && (
+                <DownloadError
+                  error={jobError}
+                  onDismiss={() => setJobError(null)}
+                />
+              )}
 
-          {/* Options Grid */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Select
-              label="Target Format"
-              value={selectedFormat}
-              onChange={(e) => setSelectedFormat(e.target.value)}
-              options={[
-                { label: 'MP4 (Universal Video)', value: 'mp4' },
-                { label: 'WEBM (Web Optimized)', value: 'webm' },
-                { label: 'MKV (High Quality Container)', value: 'mkv' },
-                { label: 'MP3 (Extracted Audio Only)', value: 'mp3' },
-                { label: 'AAC (Raw Audio Stream)', value: 'aac' },
-              ]}
-            />
-
-            <Select
-              label="Target Quality"
-              value={selectedQuality}
-              onChange={(e) => setSelectedQuality(e.target.value)}
-              options={[
-                { label: '1080p (Full HD)', value: '1080p' },
-                { label: '720p (HD)', value: '720p' },
-                { label: '480p (Standard Definition)', value: '480p' },
-                { label: '360p (Data Saver)', value: '360p' },
-                { label: 'Best Available', value: 'best' },
-              ]}
-            />
-          </div>
-
-          {/* Submit Error */}
-          {submitError && (
-            <ErrorAlert
-              title="Failed to Submit Download"
-              message={submitError}
-              onClose={() => setSubmitError(null)}
-            />
-          )}
-
-          {/* Submit Action */}
-          <div className="pt-2">
-            <Button
-              type="submit"
-              variant="primary"
-              size="lg"
-              className="w-full"
-              isLoading={isSubmitting}
-              leftIcon={<DownloadCloud className="h-5 w-5" />}
-            >
-              Start Download Job
-            </Button>
-          </div>
-        </form>
-
-        {/* Created Job Card */}
-        {createdJob && (
-          <div className="mt-8 rounded-2xl border border-violet-200 bg-violet-50/50 p-6 dark:border-violet-900 dark:bg-violet-950/20">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              <div>
-                <div className="flex items-center gap-2">
-                  <Badge variant="success">Job Created (HTTP 202)</Badge>
-                  <JobStatusBadge status={createdJob.status} />
-                </div>
-                <h3 className="mt-2 text-base font-semibold text-slate-900 dark:text-slate-100">
-                  Job ID: <span className="font-mono text-violet-600 dark:text-violet-400">{createdJob.id}</span>
-                </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                  Format: {createdJob.targetFormat || createdJob.outputFormat} • Quality: {createdJob.targetQuality || selectedQuality}
-                </p>
-              </div>
-
-              <Link href={`/jobs/${createdJob.id}`}>
-                <Button variant="primary" rightIcon={<ArrowRight className="h-4 w-4" />}>
-                  Track Progress Live
+              {/* Action Buttons */}
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="lg"
+                  className="flex-1"
+                  isLoading={isSubmitting}
+                  disabled={!metadata.directDownloadSupported || isJobRunning}
+                  leftIcon={<DownloadCloud className="h-5 w-5" />}
+                >
+                  {isJobRunning ? 'Download in Progress...' : 'Start Download Job'}
                 </Button>
-              </Link>
-            </div>
 
-            <div className="mt-4 flex items-start gap-2 rounded-lg bg-white/80 p-3 text-xs text-slate-600 dark:bg-slate-900/80 dark:text-slate-300">
-              <Info className="h-4 w-4 shrink-0 text-violet-500 mt-0.5" />
-              <span>
-                <strong>Architecture Notice:</strong> The Spring Boot backend accepted and queued this job. Full media stream downloading and FFmpeg extraction workers are scheduled for implementation in <strong>Phase 04</strong>.
-              </span>
+                {metadata && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="lg"
+                    onClick={handleReset}
+                    disabled={isJobRunning}
+                    leftIcon={<RefreshCw className="h-4 w-4" />}
+                  >
+                    Reset
+                  </Button>
+                )}
+              </div>
+            </form>
+          </div>
+        )}
+
+        {/* Active Download Progress */}
+        {activeJob && (
+          <div className="space-y-4 pt-4 border-t border-slate-200/80 dark:border-slate-800">
+            <DownloadProgress
+              progress={activeJob.progress || (activeJob.status === 'COMPLETED' ? 100 : 15)}
+              status={activeJob.status}
+              onCancel={handleCancelJob}
+              isCancelling={isCancelling}
+            />
+
+            {/* Completed Result Card */}
+            {isJobCompleted && (
+              <DownloadResult
+                jobId={activeJob.id}
+                outputFileId={activeJob.outputFileId}
+                targetFormat={activeJob.targetFormat || activeJob.outputFormat || selectedFormat}
+                targetQuality={activeJob.targetQuality || selectedQuality}
+              />
+            )}
+
+            {/* Track in Jobs Manager link */}
+            <div className="flex justify-between items-center text-xs text-slate-500 dark:text-slate-400">
+              <span>Job ID: <code className="font-mono">{activeJob.id}</code></span>
+              <Link
+                href={`/jobs/${activeJob.id}`}
+                className="inline-flex items-center gap-1 font-medium text-violet-600 hover:text-violet-700 dark:text-violet-400"
+              >
+                Inspect in Jobs Manager <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
             </div>
           </div>
         )}
       </Card>
 
-      {/* Security & Feature Badges */}
+      {/* Security & Feature Highlights */}
       <div className="mt-12 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div className="flex items-start gap-3 rounded-xl border border-slate-200/70 bg-white p-4 dark:border-slate-800 dark:bg-slate-900/50">
+        <div className="flex items-start gap-3 rounded-xl border border-slate-200/70 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/50">
           <ShieldCheck className="h-5 w-5 text-emerald-500 shrink-0 mt-0.5" />
           <div>
-            <h4 className="text-xs font-semibold text-slate-900 dark:text-slate-200">SSRF Protection</h4>
+            <h4 className="text-xs font-semibold text-slate-900 dark:text-slate-200">SSRF Defense-in-Depth</h4>
             <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-              Strict loopback and RFC 1918 private IP blocking for safe ingestion.
+              Strict loopback, RFC 1918 private subnets, and AWS/GCP cloud metadata IP blocking across all redirect hops.
             </p>
           </div>
         </div>
 
-        <div className="flex items-start gap-3 rounded-xl border border-slate-200/70 bg-white p-4 dark:border-slate-800 dark:bg-slate-900/50">
+        <div className="flex items-start gap-3 rounded-xl border border-slate-200/70 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/50">
           <Sparkles className="h-5 w-5 text-violet-500 shrink-0 mt-0.5" />
           <div>
-            <h4 className="text-xs font-semibold text-slate-900 dark:text-slate-200">Async Background Queue</h4>
+            <h4 className="text-xs font-semibold text-slate-900 dark:text-slate-200">Async Downloader Pool</h4>
             <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-              Non-blocking processing engine with persistent job tracking.
+              High-throughput asynchronous queue with live byte tracking, cancellation support, and 24h retention cleanup.
             </p>
           </div>
         </div>
 
-        <div className="flex items-start gap-3 rounded-xl border border-slate-200/70 bg-white p-4 dark:border-slate-800 dark:bg-slate-900/50">
+        <div className="flex items-start gap-3 rounded-xl border border-slate-200/70 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900/50">
           <ExternalLink className="h-5 w-5 text-blue-500 shrink-0 mt-0.5" />
           <div>
-            <h4 className="text-xs font-semibold text-slate-900 dark:text-slate-200">Multi-Resolution</h4>
+            <h4 className="text-xs font-semibold text-slate-900 dark:text-slate-200">Real Stream Probing</h4>
             <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-              Supports 1080p, 720p, 480p, 360p, and direct audio stream ripping.
+              Live HTTP/FFprobe container inspection. Clear distinction between native streams and conversion requirements.
             </p>
           </div>
         </div>

@@ -86,6 +86,35 @@ export interface ConversionResponse {
   message: string;
 }
 
+export interface MediaFormatOptionDto {
+  format: string;
+  quality: string;
+  resolution?: string;
+  mimeType?: string;
+  estimatedBytes?: number;
+  nativeStream: boolean;
+  requiresConversion: boolean;
+  label: string;
+}
+
+export interface MediaMetadataResponse {
+  success: boolean;
+  url: string;
+  platform: string;
+  title: string;
+  mediaType: 'VIDEO' | 'AUDIO' | 'IMAGE' | string;
+  mimeType: string;
+  containerFormat: string;
+  fileSize?: number;
+  resolution?: string;
+  duration?: number;
+  thumbnail?: string;
+  availableFormats: MediaFormatOptionDto[];
+  availableQualities: string[];
+  directDownloadSupported: boolean;
+  message?: string;
+}
+
 export interface SupportedFormatsResponse {
   video: string[];
   audio: string[];
