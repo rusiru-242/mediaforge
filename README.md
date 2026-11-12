@@ -17,8 +17,8 @@
   <a href="https://github.com/rusiru-242/mediaforge/blob/main/LICENSE">
     <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"/>
   </a>
-  <img src="https://img.shields.io/badge/phase-04%20Downloader-violet" alt="Phase"/>
-  <img src="https://img.shields.io/badge/status-Phase%2004%20Complete-success" alt="Status"/>
+  <img src="https://img.shields.io/badge/phase-05%20Converter-blue" alt="Phase"/>
+  <img src="https://img.shields.io/badge/status-Phase%2005%20Complete-success" alt="Status"/>
 </p>
 
 ---
@@ -28,8 +28,8 @@
 **MediaForge** is an all-in-one, cross-platform media processing suite that combines:
 
 - 🔽 **Media Downloader** — Download videos and images from authorized, supported URLs in multiple quality options with strict SSRF defense.
-- 🔄 **Media Converter** — Convert video, audio, and image files between popular formats — online (via Spring Boot backend) and offline (natively in desktop/mobile apps).
-- 📦 **Batch Processing** — Queue and process multiple files simultaneously with real-time progress tracking.
+- 🔄 **Online Media Converter** — Full-featured server-side FFmpeg and FFprobe transcoding engine with live progress reporting, resolution scaling, and cooperative cancellation.
+- 📦 **Batch Processing** — Queue and convert multiple audio, video, or image files in parallel and download consolidated ZIP archives.
 - 🔐 **Optional Accounts** — Save conversion history and preferences with optional user accounts.
 - 🛡️ **Ephemeral Lifecycle** — Processed files and media caches are automatically purged after 24 hours.
 
@@ -41,10 +41,10 @@ MediaForge is a **monorepo** composed of four primary applications:
 
 | Component | Technology | Description | Status |
 |-----------|-----------|-------------|:------:|
-| `backend/` | Java 21, Spring Boot 3.5, Spring Security, Flyway, PostgreSQL | High-performance REST API, job management, SSRF protection, Downloader Engine | ✅ Implemented (Phase 04) |
-| `web/` | Next.js 15, React 19, TypeScript, Tailwind CSS, Vitest | Responsive modern web portal with live API telemetry & Downloader UI | ✅ Implemented (Phase 04) |
+| `backend/` | Java 21, Spring Boot 3.5, Spring Security, Flyway, PostgreSQL, FFmpeg | High-performance REST API, job management, SSRF protection, Downloader & Online Converter Engine | ✅ Implemented (Phase 05) |
+| `web/` | Next.js 15, React 19, TypeScript, Tailwind CSS, Vitest | Responsive modern web portal with live API telemetry, Downloader UI & Universal Converter UI | ✅ Implemented (Phase 05) |
 | `apps/flutter_app/` | Flutter 3 (Dart) | Desktop (Win/macOS/Linux) & Mobile (Android/iOS) | ⬜ Planned (Phase 06/07) |
-| `workers/media-processor/` | FFmpeg 6+, Node.js / Java Worker | Distributed media download and transcoding worker engine | ⬜ Planned (Phase 05) |
+| `workers/media-processor/` | FFmpeg 6+, Java ThreadPoolTaskExecutor Workers | Integrated background transcoding worker pool | ✅ Implemented (Phase 05) |
 
 ---
 
@@ -97,6 +97,7 @@ mediaforge/
 ├── workers/
 │   └── media-processor/          # FFmpeg background job workers
 ├── docs/
+│   ├── converter/                # Phase 05 Converter architecture, FFmpeg, API, security & testing docs
 │   ├── downloader/               # Phase 04 Downloader architecture, API, security & testing docs
 │   ├── web/                      # Phase 03 Web architecture & API docs
 │   ├── architecture/             # System architecture documents

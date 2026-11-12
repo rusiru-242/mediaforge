@@ -36,17 +36,28 @@ public class JobServiceImpl implements JobService {
     private final UserRepository userRepository;
     private final JobMapper jobMapper;
     private final com.mediaforge.backend.downloader.service.MediaDownloadService mediaDownloadService;
+    private final com.mediaforge.backend.converter.service.ConversionWorker conversionWorker;
 
     public JobServiceImpl(MediaJobRepository jobRepository,
                           JobEventRepository eventRepository,
                           UserRepository userRepository,
                           JobMapper jobMapper,
                           @org.springframework.context.annotation.Lazy com.mediaforge.backend.downloader.service.MediaDownloadService mediaDownloadService) {
+        this(jobRepository, eventRepository, userRepository, jobMapper, mediaDownloadService, null);
+    }
+
+    public JobServiceImpl(MediaJobRepository jobRepository,
+                          JobEventRepository eventRepository,
+                          UserRepository userRepository,
+                          JobMapper jobMapper,
+                          @org.springframework.context.annotation.Lazy com.mediaforge.backend.downloader.service.MediaDownloadService mediaDownloadService,
+                          @org.springframework.context.annotation.Lazy com.mediaforge.backend.converter.service.ConversionWorker conversionWorker) {
         this.jobRepository = jobRepository;
         this.eventRepository = eventRepository;
         this.userRepository = userRepository;
         this.jobMapper = jobMapper;
         this.mediaDownloadService = mediaDownloadService;
+        this.conversionWorker = conversionWorker;
     }
 
     @Override
@@ -111,8 +122,11 @@ public class JobServiceImpl implements JobService {
             throw new JobCancellationException(job.getStatus());
         }
 
-        // Signal worker thread if download is currently running
+        // Signal worker thread if download or conversion is currently running
         mediaDownloadService.cancelActiveDownload(id);
+        if (conversionWorker != null) {
+            conversionWorker.cancel(id);
+        }
 
         JobStatus previousStatus = job.getStatus();
         job.setStatus(JobStatus.CANCELLED);

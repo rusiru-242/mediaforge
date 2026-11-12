@@ -18,11 +18,14 @@ RUN ./mvnw clean package -DskipTests || \
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 
+# Install FFmpeg and FFprobe binaries
+RUN apk add --no-cache ffmpeg
+
 # Security: create non-root user
 RUN addgroup -S mediaforge && adduser -S mediaforge -G mediaforge
 
-# Create storage directory with appropriate permissions
-RUN mkdir -p /app/uploads && chown -R mediaforge:mediaforge /app
+# Create storage directories with appropriate permissions
+RUN mkdir -p /app/uploads /app/storage/conversions /app/storage/scratch && chown -R mediaforge:mediaforge /app
 
 USER mediaforge
 

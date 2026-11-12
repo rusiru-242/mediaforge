@@ -38,6 +38,11 @@ jobs:
           java-version: '21'
           cache: 'maven'
 
+      - name: Install FFmpeg & FFprobe
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
       - name: Build with Maven
         working-directory: backend
         run: mvn -B clean verify

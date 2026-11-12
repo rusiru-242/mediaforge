@@ -46,6 +46,10 @@ public class ConversionResponse {
         return outputFormat;
     }
 
+    public String getTargetFormat() {
+        return outputFormat;
+    }
+
     public void setOutputFormat(String outputFormat) {
         this.outputFormat = outputFormat;
     }

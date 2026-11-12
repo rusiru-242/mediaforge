@@ -13,7 +13,7 @@ public class MediaFile {
     private UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "job_id", nullable = false)
+    @JoinColumn(name = "job_id", nullable = true)
     private MediaJob job;
 
     @Column(name = "original_filename", nullable = false, length = 255)

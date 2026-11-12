@@ -17,6 +17,19 @@ spring:
   flyway:
     enabled: false
 
+app:
+  storage:
+    base-path: ./target/test-storage
+    retention-hours: 24
+  downloader:
+    max-file-size-bytes: 104857600
+  converter:
+    ffmpeg-path: ffmpeg
+    ffprobe-path: ffprobe
+    max-file-size-bytes: 104857600
+    timeout-seconds: 60
+    max-concurrent-jobs: 2
+
 management:
   endpoints:
     web:

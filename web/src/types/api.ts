@@ -67,6 +67,16 @@ export interface ConversionCreateRequest {
   outputFormat?: string;
   targetResolution?: string;
   audioBitrate?: number;
+  videoBitrate?: string;
+  frameRate?: number;
+  sampleRate?: number;
+  quality?: number;
+  stripAudio?: boolean;
+  videoCodec?: string;
+  audioCodec?: string;
+  resizeWidth?: number;
+  resizeHeight?: number;
+  rotateDegrees?: number;
 
   // Frontend helper fields
   sourceFileId?: string;
@@ -74,6 +84,43 @@ export interface ConversionCreateRequest {
   targetFormat?: string;
   mediaType?: string;
   options?: Record<string, any>;
+}
+
+export interface FileUploadResponse {
+  id?: string;
+  fileId: string;
+  originalFilename: string;
+  storedFilename: string;
+  mimeType: string;
+  fileSize: number;
+  expiresAt?: string | null;
+  message?: string;
+}
+
+export interface BatchConversionRequest {
+  items: ConversionCreateRequest[];
+}
+
+export interface BatchConversionResponse {
+  batchId: string;
+  totalJobs: number;
+  jobs: JobResponse[];
+  status: string;
+  message: string;
+}
+
+export interface ConversionProgressResponse {
+  jobId: string;
+  status: JobStatus;
+  percentage: number;
+  speed?: string;
+  fps?: number;
+  timeRemainingSeconds?: number;
+  currentFrame?: number;
+  outTimeMicros?: number;
+  completed: boolean;
+  failed: boolean;
+  errorMessage?: string | null;
 }
 
 export interface ConversionResponse {

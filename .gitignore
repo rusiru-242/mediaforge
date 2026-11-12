@@ -208,6 +208,9 @@ docker-compose.override.yml
 *.webp
 *.ico
 *.svg
+
+# Allow test fixtures
+!**/src/test/resources/fixtures/**
 !docs/diagrams/*.svg
 *.pdf
 
