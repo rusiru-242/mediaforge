@@ -8,6 +8,7 @@ on:
       - 'feature/**'
       - 'chore/**'
       - 'refactor/**'
+      - 'test/**'
     paths:
       - 'backend/**'
       - '.github/workflows/backend-ci.yml'
