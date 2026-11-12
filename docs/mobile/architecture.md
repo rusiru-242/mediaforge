@@ -105,3 +105,4 @@ The app dynamically inspects `MediaQuery.of(context).size.width`:
 Mobile platforms enforce sandboxing (Android Scoped Storage and iOS Sandbox):
 1. Downloads and conversions write to standard `getApplicationDocumentsDirectory()`.
 2. Users can immediately dispatch any output file via the native share sheet (`PlatformService.shareFile`) to save into Google Photos, Apple Files, WhatsApp, AirDrop, or external storage.
+

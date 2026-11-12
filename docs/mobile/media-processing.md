@@ -42,3 +42,4 @@ if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
 Active conversions and downloads support cooperative real-time cancellation:
 - **Downloads**: Active `http.Client` is immediately terminated via `_activeClient?.close()`, resetting progress and updating the UI state.
 - **Conversion Jobs**: In-flight processes are terminated via `ConversionService.cancelJob(jobId)` or `cancelAll()`, setting job status to `JobStatus.cancelled`.
+

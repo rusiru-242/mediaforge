@@ -91,3 +91,4 @@ flutter build apk --release
 # Run on connected device or emulator
 flutter run -d android
 ```
+

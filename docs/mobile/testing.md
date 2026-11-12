@@ -42,3 +42,4 @@ addTearDown(tester.view.resetDevicePixelRatio);
 ```
 
 This guarantees layout stability and prevents `RenderFlex` overflows on small devices.
+

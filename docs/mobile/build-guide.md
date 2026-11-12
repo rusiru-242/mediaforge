@@ -48,3 +48,4 @@ flutter build ios --no-codesign --simulator
 cd apps/flutter_app
 flutter build ipa --release
 ```
+

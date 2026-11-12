@@ -51,3 +51,4 @@ flutter build ios --no-codesign --simulator
 ```
 
 This ensures the iOS project compiles cleanly without requiring code-signing certificates on every push.
+
