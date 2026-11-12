@@ -45,7 +45,7 @@ class ImagePresetConfig {
 
 class AppConfig {
   static const String appName = 'MediaForge';
-  static const String appVersion = '0.1.0';
+  static const String appVersion = '1.0.0';
   static const String backendBaseUrl = 'http://localhost:8080/api/v1';
   static const int maxConcurrentJobs = 3;
   static const int downloadTimeoutSeconds = 300;

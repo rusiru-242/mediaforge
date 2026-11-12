@@ -12,6 +12,18 @@ export const metadata: Metadata = {
   icons: {
     icon: '/favicon.ico',
   },
+  openGraph: {
+    title: 'MediaForge — Universal Media Downloader & Transcoder',
+    description: 'High-performance, database-free, privacy-first media downloader and converter.',
+    url: 'https://mediaforge.local',
+    siteName: 'MediaForge',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'MediaForge — Universal Media Downloader & Transcoder',
+    description: 'High-performance, database-free, privacy-first media downloader and converter.',
+  },
 };
 
 export default function RootLayout({

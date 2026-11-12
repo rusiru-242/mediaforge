@@ -16,6 +16,6 @@ public class HealthController {
     @GetMapping
     @Operation(summary = "Check service health", description = "Returns service availability status and metadata")
     public ResponseEntity<HealthResponse> getHealth() {
-        return ResponseEntity.ok(new HealthResponse("UP", "mediaforge-backend", "0.1.0-SNAPSHOT"));
+        return ResponseEntity.ok(new HealthResponse("UP", "mediaforge-backend", "1.0.0"));
     }
 }
