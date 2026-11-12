@@ -78,6 +78,7 @@ export interface ConversionCreateRequest {
   resizeWidth?: number;
   resizeHeight?: number;
   rotateDegrees?: number;
+  qualityPreset?: string;
 
   // Frontend helper fields
   sourceFileId?: string;

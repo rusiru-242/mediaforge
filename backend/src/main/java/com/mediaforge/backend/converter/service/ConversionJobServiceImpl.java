@@ -167,6 +167,7 @@ public class ConversionJobServiceImpl implements ConversionJobService {
         options.setImageQuality(request.getImageQuality());
         options.setImageRotation(request.getImageRotation());
         options.setStripMetadata(request.getStripMetadata());
+        options.normalizePresets();
 
         conversionWorker.submit(savedJob.getId(), inputFile, targetFormat, options);
 

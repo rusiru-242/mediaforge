@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
 import 'dart:io';
 import '../../core/config/app_config.dart';
+import '../../core/services/platform_service.dart';
 import '../../shared/models/media_job.dart';
 import '../../shared/models/media_info.dart';
 import '../../shared/providers/app_providers.dart';
@@ -19,12 +20,26 @@ class ImageConverterPage extends ConsumerStatefulWidget {
 class _ImageConverterPageState extends ConsumerState<ImageConverterPage> {
   String? _inputPath;
   MediaInfo? _mediaInfo;
-  String _outputFormat = 'jpg';
-  int _quality = 85;
+  String _outputFormat = 'webp';
+  String _selectedPreset = 'balanced';
+  int _quality = 75;
   String? _outputFolder;
   bool _isLoading = false;
   String? _error;
   String? _currentJobId;
+
+  void _onPresetChanged(String presetId) {
+    setState(() {
+      _selectedPreset = presetId;
+      if (presetId != 'custom') {
+        final found = AppConfig.imagePresets.firstWhere(
+          (p) => p.id == presetId,
+          orElse: () => AppConfig.imagePresets[1],
+        );
+        _quality = found.quality;
+      }
+    });
+  }
 
   Future<void> _pickFile() async {
     final result = await FilePicker.platform.pickFiles(
@@ -67,26 +82,27 @@ class _ImageConverterPageState extends ConsumerState<ImageConverterPage> {
   }
 
   Future<void> _openFolder(String path) async {
-    if (Platform.isWindows) {
-      await Process.run('explorer', [path]);
-    } else if (Platform.isMacOS) {
-      await Process.run('open', [path]);
-    } else {
-      await Process.run('xdg-open', [path]);
-    }
+    await PlatformService.openFolder(path);
   }
 
   Future<void> _startConversion() async {
     if (_inputPath == null) return;
-    final outputDir = _outputFolder ?? p.dirname(_inputPath!);
+    String outputDir = _outputFolder ?? p.dirname(_inputPath!);
+    if (PlatformService.isMobile && _outputFolder == null) {
+      outputDir = await PlatformService.getDefaultDownloadDirectory();
+    }
     final baseName = p.basenameWithoutExtension(_inputPath!);
-    final outputPath = p.join(outputDir, '${baseName}_converted.$_outputFormat');
+    final outputPath = AppConfig.getUniqueOutputPath(outputDir, '${baseName}_converted', _outputFormat);
 
     final job = MediaJob(
       type: JobType.imageConversion,
       inputPath: _inputPath!,
       outputPath: outputPath,
       outputFormat: _outputFormat,
+      settings: {
+        'preset': _selectedPreset,
+        'quality': _quality,
+      },
     );
     ref.read(jobListProvider.notifier).addJob(job);
     ref.read(jobListProvider.notifier).updateJob(job.id, status: JobStatus.processing, progress: 0.0);
@@ -108,8 +124,14 @@ class _ImageConverterPageState extends ConsumerState<ImageConverterPage> {
               SnackBar(
                 content: Text('Image converted: $outputPath'),
                 action: SnackBarAction(
-                  label: 'Open Folder',
-                  onPressed: () => _openFolder(outputDir),
+                  label: PlatformService.isMobile ? 'Share' : 'Open Folder',
+                  onPressed: () {
+                    if (PlatformService.isMobile) {
+                      PlatformService.shareFile(outputPath);
+                    } else {
+                      _openFolder(outputDir);
+                    }
+                  },
                 ),
               ),
             );
@@ -198,6 +220,23 @@ class _ImageConverterPageState extends ConsumerState<ImageConverterPage> {
                       style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
                     ),
                     const SizedBox(height: 16),
+                    SettingRow(
+                      label: 'Quality Preset',
+                      helpText: 'Pre-configured compression level',
+                      child: DropdownButton<String>(
+                        value: _selectedPreset,
+                        isExpanded: true,
+                        items: [
+                          ...AppConfig.imagePresets.map(
+                            (p) => DropdownMenuItem(value: p.id, child: Text(p.label)),
+                          ),
+                          const DropdownMenuItem(value: 'custom', child: Text('Custom Quality')),
+                        ],
+                        onChanged: (v) {
+                          if (v != null) _onPresetChanged(v);
+                        },
+                      ),
+                    ),
                     SettingRow(
                       label: 'Output Format',
                       helpText: 'Target image extension',

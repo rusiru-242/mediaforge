@@ -17,10 +17,14 @@
   <a href="https://github.com/rusiru-242/mediaforge/actions/workflows/flutter-desktop-ci.yml">
     <img src="https://github.com/rusiru-242/mediaforge/actions/workflows/flutter-desktop-ci.yml/badge.svg" alt="Flutter Desktop CI"/>
   </a>
+  <a href="https://github.com/rusiru-242/mediaforge/actions/workflows/flutter-mobile-ci.yml">
+    <img src="https://github.com/rusiru-242/mediaforge/actions/workflows/flutter-mobile-ci.yml/badge.svg" alt="Flutter Mobile CI"/>
+  </a>
   <a href="https://github.com/rusiru-242/mediaforge/blob/main/LICENSE">
     <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"/>
   </a>
   <img src="https://img.shields.io/badge/architecture-database--free-emerald" alt="Database-Free"/>
+  <img src="https://img.shields.io/badge/mobile-Android%20%7C%20iOS-green" alt="Flutter Mobile"/>
   <img src="https://img.shields.io/badge/desktop-Flutter%203-blue" alt="Flutter Desktop"/>
 </p>
 
@@ -33,7 +37,10 @@
 - 🔽 **Media Downloader** — Download videos and images from authorized, supported URLs in multiple quality options with strict SSRF defense.
 - 🔄 **Online Media Converter** — Server-side FFmpeg transcoding engine with live progress reporting, resolution scaling, and cooperative cancellation.
 - 💻 **Desktop Application (Flutter)** — Fast, native desktop app (Windows, macOS, Linux) with 100% offline conversion, video-to-audio extraction, image compression, batch processing, and zero external backend required for local files.
-- 📦 **Batch Processing** — Queue and convert multiple audio, video, or image files in parallel.
+- 📦 **Batch Processing** — Queue and convert multiple audio, video, or image files in parallel with intelligent format compatibility detection.
+- 🎛️ **Quality Presets** — Standardized presets across Video (Original, High, Balanced, Small), Audio (320k, 192k, 128k), and Image (90%, 75%, 50%).
+- ⚡ **Enhanced Downloader** — Real-time download speed tracking (KB/s, MB/s), byte counter, ETA estimation, cancellation, and retry recovery.
+- 🛡️ **Smart File Safety** — Collision-free output naming, atomic writes, and automatic cleanup of partial failed downloads.
 - 🔒 **Privacy by Design** — Zero user accounts, zero logins, zero database storage. All jobs are tracked in-memory.
 - 🛡️ **Ephemeral Lifecycle** — Processed files and media caches are automatically purged after 24 hours.
 
@@ -47,7 +54,7 @@ MediaForge is a **monorepo** composed of four primary applications:
 |-----------|-----------|-------------|:------:|
 | `backend/` | Java 21, Spring Boot 3.4+, Spring Security, In-Memory Ephemeral Store, FFmpeg | High-performance database-free REST API, job management, SSRF protection, Downloader & Online Converter Engine | ✅ Implemented |
 | `web/` | Next.js 15, React 19, TypeScript, Tailwind CSS, Vitest | Responsive modern web portal with live API telemetry, Downloader UI & Universal Converter UI | ✅ Implemented |
-| `apps/flutter_app/` | Flutter 3.24+, Dart 3.5+, Riverpod, Local FFmpeg | Native cross-platform desktop application for Windows, macOS, and Linux with full offline transcoding | ✅ Implemented (Phase 06) |
+| `apps/flutter_app/` | Flutter 3.24+, Dart 3.5+, Riverpod, Local FFmpeg | Native cross-platform desktop & mobile application for Android, iOS, Windows, macOS, and Linux with full offline transcoding | ✅ Implemented (Phases 06 & 07) |
 | `workers/media-processor/` | FFmpeg 6+, Java ThreadPoolTaskExecutor Workers | Integrated background transcoding worker pool | ✅ Implemented |
 
 ---
@@ -55,15 +62,36 @@ MediaForge is a **monorepo** composed of four primary applications:
 ## 🚀 Features
 
 - ✅ Download from authorized supported video/image sources (with SSRF protection)
-- ✅ Quality selection (1080p, 720p, 480p, 240p, audio-only)
-- ✅ Output formats: MP4, WEBM, MKV, MP3, WAV, FLAC, AAC, M4A, WEBP, PNG, JPEG, GIF
+- ✅ Quality selection presets (Original, High 1080p, Balanced 720p, Small 480p)
+- ✅ Audio presets (High 320k, Standard 192k, Small 128k) & Image presets (90%, 75%, 50%)
+- ✅ Real-time download speed calculation (KB/s, MB/s), byte counter, ETA, and cancellation
+- ✅ Output formats: MP4, WEBM, MKV, MOV, AVI, MP3, WAV, FLAC, AAC, M4A, OGG, WEBP, PNG, JPEG, AVIF
 - ✅ Online conversion (backend-processed via Spring Boot REST APIs)
-- ✅ Offline desktop conversion (runs standalone without Spring Boot or internet)
+- ✅ Offline desktop & mobile conversion (runs standalone without Spring Boot or internet)
 - ✅ Video-to-audio extraction (MP4, MKV, WEBM, MOV -> MP3, WAV, AAC, FLAC)
-- ✅ Batch processing orchestration interface and queue management
+- ✅ Batch processing with per-file compatible format resolution and quick apply shortcuts
+- ✅ Collision avoidance and unique file naming preventing file overwrite
 - ✅ Real-time async progress tracking, cancellation, and polling
+- ✅ Standardized transient error recovery and partial file cleanup
 - ✅ Dark/Light responsive modern theme with persistent toggle
 - ✅ 100% Database-Free and Account-Free architecture
+
+---
+
+## 🗺️ Project Roadmap & Phase Progress
+
+| Phase | Description | Status |
+| :---: | :--- | :---: |
+| **01** | Project Initialization & Repository Setup | ✅ Completed |
+| **02** | Backend Foundation & REST Architecture | ✅ Completed |
+| **03** | Web Application Development (Next.js 15 + React 19) | ✅ Completed |
+| **04** | Media Downloader Engine (SSRF-Protected) | ✅ Completed |
+| **05** | Online Media Converter Engine (FFmpeg) | ✅ Completed |
+| **Refactor** | Database-Free Ephemeral Architecture Migration | ✅ Completed |
+| **06** | Cross-Platform Desktop Application (Windows, macOS, Linux) | ✅ Completed |
+| **07** | Android & iOS Mobile Application (Flutter Responsive) | ✅ Completed |
+| **08** | Advanced Features & Cross-Platform Integration | ✅ Completed |
+| **09** | Cloud Deployment, Containerization & Production Release | ⏳ Next Up |
 
 ---
 
@@ -126,7 +154,7 @@ mediaforge/
 | **05** | Online Media Converter (FFmpeg) | ✅ Complete |
 | **Refactor** | Database-Free Ephemeral Architecture | ✅ Complete |
 | **06** | Desktop Application (Flutter) | ✅ Complete |
-| **07** | Mobile Application (Flutter) | ⬜ Planned |
+| **07** | Mobile Application (Flutter - Android & iOS) | ✅ Complete |
 | **08** | Advanced Features & Batch Processing | ⬜ Planned |
 | **09** | Security, Testing & Hardening | ⬜ Planned |
 | **10** | Production Deployment & Release | ⬜ Planned |
@@ -148,7 +176,7 @@ See [`docs/roadmap/`](docs/roadmap/) for detailed phase documentation.
 | FFmpeg & FFprobe | 6.0+ | ✅ |
 | Git | 2.40+ | ✅ |
 
-### 2. Run the Flutter Desktop Application (Offline Media Converter)
+### 2. Run the Flutter Application (Desktop & Mobile)
 
 ```bash
 cd apps/flutter_app
@@ -156,14 +184,20 @@ cd apps/flutter_app
 # Fetch dependencies
 flutter pub get
 
-# Run static analysis (0 warnings)
+# Run static analysis (0 issues)
 flutter analyze
 
-# Run unit and widget test suite
+# Run comprehensive test suite (20 tests)
 flutter test
 
-# Launch on Desktop (Windows)
+# Run on Desktop (Windows)
 flutter run -d windows
+
+# Build Android Debug APK
+flutter build apk --debug
+
+# Run on Android Emulator or Device
+flutter run -d android
 ```
 
 ### 3. Run the Backend API (Optional for Desktop Offline Conversion)

@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
-import 'dart:io';
 import '../../core/config/app_config.dart';
+import '../../core/services/platform_service.dart';
 import '../../shared/models/media_job.dart';
 import '../../shared/models/media_info.dart';
 import '../../shared/providers/app_providers.dart';
@@ -20,8 +20,9 @@ class _VideoConverterPageState extends ConsumerState<VideoConverterPage> {
   String? _inputPath;
   MediaInfo? _mediaInfo;
   String _outputFormat = 'mp4';
-  String _resolution = 'Original';
-  String _videoBitrate = '';
+  String _selectedPreset = 'balanced';
+  String _resolution = '1280x720';
+  String _videoBitrate = '1200k';
   final String _audioBitrate = '128k';
   final String _frameRate = 'Original';
   String? _outputFolder;
@@ -30,6 +31,20 @@ class _VideoConverterPageState extends ConsumerState<VideoConverterPage> {
   String? _currentJobId;
 
   final _resolutions = const ['Original', '1920x1080', '1280x720', '854x480', '640x360'];
+
+  void _onPresetChanged(String presetId) {
+    setState(() {
+      _selectedPreset = presetId;
+      if (presetId != 'custom') {
+        final found = AppConfig.videoPresets.firstWhere(
+          (p) => p.id == presetId,
+          orElse: () => AppConfig.videoPresets[2],
+        );
+        _resolution = found.resolution;
+        _videoBitrate = found.videoBitrate;
+      }
+    });
+  }
 
   Future<void> _pickFile() async {
     final result = await FilePicker.platform.pickFiles(
@@ -75,20 +90,17 @@ class _VideoConverterPageState extends ConsumerState<VideoConverterPage> {
   }
 
   Future<void> _openFolder(String path) async {
-    if (Platform.isWindows) {
-      await Process.run('explorer', [path]);
-    } else if (Platform.isMacOS) {
-      await Process.run('open', [path]);
-    } else {
-      await Process.run('xdg-open', [path]);
-    }
+    await PlatformService.openFolder(path);
   }
 
   Future<void> _startConversion() async {
     if (_inputPath == null) return;
-    final outputDir = _outputFolder ?? p.dirname(_inputPath!);
+    String outputDir = _outputFolder ?? p.dirname(_inputPath!);
+    if (PlatformService.isMobile && _outputFolder == null) {
+      outputDir = await PlatformService.getDefaultDownloadDirectory();
+    }
     final baseName = p.basenameWithoutExtension(_inputPath!);
-    final outputPath = p.join(outputDir, '${baseName}_converted.$_outputFormat');
+    final outputPath = AppConfig.getUniqueOutputPath(outputDir, '${baseName}_converted', _outputFormat);
 
     final job = MediaJob(
       type: JobType.videoConversion,
@@ -96,6 +108,7 @@ class _VideoConverterPageState extends ConsumerState<VideoConverterPage> {
       outputPath: outputPath,
       outputFormat: _outputFormat,
       settings: {
+        'preset': _selectedPreset,
         'resolution': _resolution,
         'videoBitrate': _videoBitrate,
         'audioBitrate': _audioBitrate,
@@ -135,8 +148,14 @@ class _VideoConverterPageState extends ConsumerState<VideoConverterPage> {
               SnackBar(
                 content: Text('Video conversion completed: $outputPath'),
                 action: SnackBarAction(
-                  label: 'Open Folder',
-                  onPressed: () => _openFolder(outputDir),
+                  label: PlatformService.isMobile ? 'Share' : 'Open Folder',
+                  onPressed: () {
+                    if (PlatformService.isMobile) {
+                      PlatformService.shareFile(outputPath);
+                    } else {
+                      _openFolder(outputDir);
+                    }
+                  },
                 ),
               ),
             );
@@ -203,6 +222,23 @@ class _VideoConverterPageState extends ConsumerState<VideoConverterPage> {
                       style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
                     ),
                     const SizedBox(height: 16),
+                    SettingRow(
+                      label: 'Quality Preset',
+                      helpText: 'Pre-configured resolution & bitrate',
+                      child: DropdownButton<String>(
+                        value: _selectedPreset,
+                        isExpanded: true,
+                        items: [
+                          ...AppConfig.videoPresets.map(
+                            (p) => DropdownMenuItem(value: p.id, child: Text(p.label)),
+                          ),
+                          const DropdownMenuItem(value: 'custom', child: Text('Custom Settings')),
+                        ],
+                        onChanged: (v) {
+                          if (v != null) _onPresetChanged(v);
+                        },
+                      ),
+                    ),
                     SettingRow(
                       label: 'Output Format',
                       helpText: 'Container format',

@@ -13,14 +13,26 @@ import { Badge } from '@/components/ui/Badge';
 import { JobStatusBadge } from '@/components/feedback/JobStatusBadge';
 import { ErrorAlert } from '@/components/feedback/ErrorAlert';
 import { ProgressBar } from '@/components/ui/ProgressBar';
+import { VIDEO_PRESETS } from '@/utils/presets';
 
 export default function VideoConverterPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [targetFormat, setTargetFormat] = useState('mp4');
+  const [selectedPreset, setSelectedPreset] = useState<string>('high');
   const [resolution, setResolution] = useState('1080p');
   const [videoBitrate, setVideoBitrate] = useState('2500k');
-  const [audioBitrate, setAudioBitrate] = useState('192k');
+  const [audioBitrate, setAudioBitrate] = useState('256k');
   const [stripAudio, setStripAudio] = useState(false);
+
+  const handlePresetChange = (presetId: string) => {
+    setSelectedPreset(presetId);
+    const found = VIDEO_PRESETS.find((p) => p.id === presetId);
+    if (found) {
+      setResolution(found.resolution);
+      setVideoBitrate(found.videoBitrate);
+      setAudioBitrate(found.audioBitrate);
+    }
+  };
 
   const [stage, setStage] = useState<'IDLE' | 'UPLOADING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'CANCELLED'>('IDLE');
   const [error, setError] = useState<string | null>(null);
@@ -97,6 +109,7 @@ export default function VideoConverterPage() {
         inputFileId: uploadResp.id || uploadResp.fileId,
         inputFormat,
         outputFormat: targetFormat,
+        qualityPreset: selectedPreset !== 'custom' ? selectedPreset : undefined,
         targetResolution: resolution !== 'source' ? resolution : undefined,
         videoBitrate: videoBitrate !== 'auto' ? videoBitrate : undefined,
         audioBitrate: audioBitrate !== 'auto' ? parseInt(audioBitrate.replace('k', ''), 10) : undefined,
@@ -168,6 +181,21 @@ export default function VideoConverterPage() {
               </div>
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <Select
+                    label="Quality & Compression Preset"
+                    value={selectedPreset}
+                    onChange={(e) => handlePresetChange(e.target.value)}
+                    options={[
+                      ...VIDEO_PRESETS.map((p) => ({
+                        label: `${p.label} — ${p.description}`,
+                        value: p.id,
+                      })),
+                      { label: 'Custom Configuration', value: 'custom' },
+                    ]}
+                  />
+                </div>
+
                 <Select
                   label="Target Container Format"
                   value={targetFormat}

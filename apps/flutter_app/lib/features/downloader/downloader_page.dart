@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:io';
 import '../../core/config/app_config.dart';
+import '../../core/services/platform_service.dart';
 
 class DownloaderPage extends ConsumerStatefulWidget {
   const DownloaderPage({super.key});
@@ -19,6 +20,11 @@ class _DownloaderPageState extends ConsumerState<DownloaderPage> {
   bool _isValidating = false;
   bool _isDownloading = false;
   double _downloadProgress = 0.0;
+  String? _downloadSpeed;
+  int _receivedBytes = 0;
+  int _totalBytes = 0;
+  String? _etaString;
+  String? _currentSavePath;
   String? _error;
   String? _successMessage;
   String? _outputFolder;
@@ -41,13 +47,7 @@ class _DownloaderPageState extends ConsumerState<DownloaderPage> {
   }
 
   Future<void> _openFolder(String path) async {
-    if (Platform.isWindows) {
-      await Process.run('explorer', [path]);
-    } else if (Platform.isMacOS) {
-      await Process.run('open', [path]);
-    } else {
-      await Process.run('xdg-open', [path]);
-    }
+    await PlatformService.openFolder(path);
   }
 
   Future<void> _inspectUrl() async {
@@ -130,19 +130,26 @@ class _DownloaderPageState extends ConsumerState<DownloaderPage> {
     if (url.isEmpty) return;
 
     final uri = Uri.parse(url);
-    final fileName = uri.pathSegments.isNotEmpty && uri.pathSegments.last.isNotEmpty
+    final rawFileName = uri.pathSegments.isNotEmpty && uri.pathSegments.last.isNotEmpty
         ? uri.pathSegments.last
         : 'mediaforge_${DateTime.now().millisecondsSinceEpoch}';
 
-    final outputDir = _outputFolder ?? (Platform.environment['USERPROFILE'] != null
-        ? p.join(Platform.environment['USERPROFILE']!, 'Downloads')
-        : Directory.current.path);
+    final baseName = p.basenameWithoutExtension(rawFileName);
+    final ext = p.extension(rawFileName).replaceFirst('.', '').isNotEmpty
+        ? p.extension(rawFileName).replaceFirst('.', '')
+        : 'mp4';
 
-    final savePath = p.join(outputDir, fileName);
+    final outputDir = _outputFolder ?? await PlatformService.getDefaultDownloadDirectory();
+    final savePath = AppConfig.getUniqueOutputPath(outputDir, baseName, ext);
 
     setState(() {
       _isDownloading = true;
       _downloadProgress = 0.0;
+      _downloadSpeed = null;
+      _receivedBytes = 0;
+      _totalBytes = 0;
+      _etaString = null;
+      _currentSavePath = savePath;
       _error = null;
       _successMessage = null;
     });
@@ -155,6 +162,8 @@ class _DownloaderPageState extends ConsumerState<DownloaderPage> {
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final totalBytes = response.contentLength ?? 0;
         int receivedBytes = 0;
+        int lastTimestamp = DateTime.now().millisecondsSinceEpoch;
+        int bytesSinceLastTick = 0;
 
         final file = File(savePath);
         final sink = file.openWrite();
@@ -162,10 +171,37 @@ class _DownloaderPageState extends ConsumerState<DownloaderPage> {
         await response.stream.listen((chunk) {
           sink.add(chunk);
           receivedBytes += chunk.length;
-          if (totalBytes > 0 && mounted) {
+          bytesSinceLastTick += chunk.length;
+
+          final now = DateTime.now().millisecondsSinceEpoch;
+          final elapsedMs = now - lastTimestamp;
+
+          if (elapsedMs >= 500 && mounted) {
+            final speedBytesPerSec = (bytesSinceLastTick * 1000) / elapsedMs;
+            final speedText = speedBytesPerSec > 1048576
+                ? '${(speedBytesPerSec / 1048576).toStringAsFixed(2)} MB/s'
+                : '${(speedBytesPerSec / 1024).toStringAsFixed(1)} KB/s';
+
+            String? eta;
+            if (totalBytes > 0 && speedBytesPerSec > 0) {
+              final remainingSec = ((totalBytes - receivedBytes) / speedBytesPerSec).round();
+              eta = remainingSec > 60
+                  ? '${remainingSec ~/ 60}m ${remainingSec % 60}s remaining'
+                  : '${remainingSec}s remaining';
+            }
+
             setState(() {
-              _downloadProgress = (receivedBytes / totalBytes).clamp(0.0, 1.0);
+              _downloadSpeed = speedText;
+              _receivedBytes = receivedBytes;
+              _totalBytes = totalBytes;
+              _etaString = eta;
+              if (totalBytes > 0) {
+                _downloadProgress = (receivedBytes / totalBytes).clamp(0.0, 1.0);
+              }
             });
+
+            lastTimestamp = now;
+            bytesSinceLastTick = 0;
           }
         }).asFuture();
 
@@ -177,6 +213,7 @@ class _DownloaderPageState extends ConsumerState<DownloaderPage> {
             _isDownloading = false;
             _downloadProgress = 1.0;
             _downloadedFilePath = savePath;
+            _currentSavePath = null;
             _successMessage = 'Media downloaded successfully to:\n$savePath';
           });
         }
@@ -184,9 +221,19 @@ class _DownloaderPageState extends ConsumerState<DownloaderPage> {
         throw HttpException('HTTP error ${response.statusCode}: ${response.reasonPhrase}');
       }
     } catch (e) {
+      // Clean up partial file on failure
+      if (_currentSavePath != null) {
+        try {
+          final partialFile = File(_currentSavePath!);
+          if (partialFile.existsSync()) {
+            partialFile.deleteSync();
+          }
+        } catch (_) {}
+      }
       if (mounted) {
         setState(() {
           _isDownloading = false;
+          _currentSavePath = null;
           _error = 'Download failed: $e';
         });
       }
@@ -198,8 +245,18 @@ class _DownloaderPageState extends ConsumerState<DownloaderPage> {
   void _cancelDownload() {
     _activeClient?.close();
     _activeClient = null;
+    // Clean up partial file on cancellation
+    if (_currentSavePath != null) {
+      try {
+        final partialFile = File(_currentSavePath!);
+        if (partialFile.existsSync()) {
+          partialFile.deleteSync();
+        }
+      } catch (_) {}
+    }
     setState(() {
       _isDownloading = false;
+      _currentSavePath = null;
       _error = 'Download cancelled by user.';
     });
   }
@@ -207,10 +264,13 @@ class _DownloaderPageState extends ConsumerState<DownloaderPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 720;
+    final pagePadding = isMobile ? const EdgeInsets.all(16) : const EdgeInsets.all(24);
 
     return Scaffold(
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+        padding: pagePadding,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -235,51 +295,101 @@ class _DownloaderPageState extends ConsumerState<DownloaderPage> {
                       style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
                     ),
                     const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _urlController,
-                            decoration: const InputDecoration(
-                              hintText: 'https://example.com/media/sample.mp4',
-                              prefixIcon: Icon(Icons.link),
+                    if (isMobile) ...[
+                      TextField(
+                        controller: _urlController,
+                        decoration: const InputDecoration(
+                          hintText: 'https://example.com/media/sample.mp4',
+                          prefixIcon: Icon(Icons.link),
+                        ),
+                        onSubmitted: (_) => _inspectUrl(),
+                      ),
+                      const SizedBox(height: 10),
+                      ElevatedButton.icon(
+                        onPressed: _isValidating || _isDownloading ? null : _inspectUrl,
+                        icon: _isValidating
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                              )
+                            : const Icon(Icons.search),
+                        label: const Text('Inspect'),
+                      ),
+                    ] else ...[
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _urlController,
+                              decoration: const InputDecoration(
+                                hintText: 'https://example.com/media/sample.mp4',
+                                prefixIcon: Icon(Icons.link),
+                              ),
+                              onSubmitted: (_) => _inspectUrl(),
                             ),
-                            onSubmitted: (_) => _inspectUrl(),
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        ElevatedButton.icon(
-                          onPressed: _isValidating || _isDownloading ? null : _inspectUrl,
-                          icon: _isValidating
-                              ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                                )
-                              : const Icon(Icons.search),
-                          label: const Text('Inspect'),
-                        ),
-                      ],
-                    ),
+                          const SizedBox(width: 12),
+                          ElevatedButton.icon(
+                            onPressed: _isValidating || _isDownloading ? null : _inspectUrl,
+                            icon: _isValidating
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                  )
+                                : const Icon(Icons.search),
+                            label: const Text('Inspect'),
+                          ),
+                        ],
+                      ),
+                    ],
                     const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        const Text('Save To: ', style: TextStyle(fontWeight: FontWeight.w500)),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            _outputFolder ?? 'Default Downloads Folder',
-                            style: theme.textTheme.bodySmall,
-                            overflow: TextOverflow.ellipsis,
+                    if (isMobile) ...[
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Text('Save To: ', style: TextStyle(fontWeight: FontWeight.w500)),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  _outputFolder ?? 'Default Downloads Folder',
+                                  style: theme.textTheme.bodySmall,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                        TextButton.icon(
-                          onPressed: _isDownloading ? null : _pickOutputFolder,
-                          icon: const Icon(Icons.folder_open, size: 16),
-                          label: const Text('Change Folder'),
-                        ),
-                      ],
-                    ),
+                          const SizedBox(height: 4),
+                          TextButton.icon(
+                            onPressed: _isDownloading ? null : _pickOutputFolder,
+                            icon: const Icon(Icons.folder_open, size: 16),
+                            label: const Text('Change Folder'),
+                          ),
+                        ],
+                      ),
+                    ] else ...[
+                      Row(
+                        children: [
+                          const Text('Save To: ', style: TextStyle(fontWeight: FontWeight.w500)),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _outputFolder ?? 'Default Downloads Folder',
+                              style: theme.textTheme.bodySmall,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          TextButton.icon(
+                            onPressed: _isDownloading ? null : _pickOutputFolder,
+                            icon: const Icon(Icons.folder_open, size: 16),
+                            label: const Text('Change Folder'),
+                          ),
+                        ],
+                      ),
+                    ],
                     if (_error != null) ...[
                       const SizedBox(height: 16),
                       Container(
@@ -294,6 +404,12 @@ class _DownloaderPageState extends ConsumerState<DownloaderPage> {
                             const Icon(Icons.error_outline, color: Colors.red, size: 20),
                             const SizedBox(width: 8),
                             Expanded(child: Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 13))),
+                            if (_metadata != null && !_isDownloading)
+                              TextButton.icon(
+                                onPressed: _startDownload,
+                                icon: const Icon(Icons.refresh, size: 16, color: Colors.red),
+                                label: const Text('Retry', style: TextStyle(color: Colors.red)),
+                              ),
                           ],
                         ),
                       ),
@@ -312,11 +428,17 @@ class _DownloaderPageState extends ConsumerState<DownloaderPage> {
                             const Icon(Icons.check_circle, color: Colors.green, size: 20),
                             const SizedBox(width: 8),
                             Expanded(child: Text(_successMessage!, style: const TextStyle(color: Colors.green, fontSize: 13))),
-                            if (_downloadedFilePath != null)
+                            if (_downloadedFilePath != null) ...[
+                              IconButton(
+                                icon: const Icon(Icons.share, size: 20),
+                                tooltip: 'Share File',
+                                onPressed: () => PlatformService.shareFile(_downloadedFilePath!),
+                              ),
                               TextButton(
                                 onPressed: () => _openFolder(p.dirname(_downloadedFilePath!)),
                                 child: const Text('Open Folder'),
                               ),
+                            ],
                           ],
                         ),
                       ),
@@ -373,12 +495,27 @@ class _DownloaderPageState extends ConsumerState<DownloaderPage> {
                             if (_isDownloading) ...[
                               const SizedBox(height: 16),
                               LinearProgressIndicator(value: _downloadProgress > 0 ? _downloadProgress : null),
-                              const SizedBox(height: 4),
-                              Text(
-                                _downloadProgress > 0
-                                    ? '${(_downloadProgress * 100).toInt()}% downloaded'
-                                    : 'Downloading stream...',
-                                style: theme.textTheme.bodySmall,
+                              const SizedBox(height: 6),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    _totalBytes > 0
+                                        ? '${(_downloadProgress * 100).toInt()}% (${(_receivedBytes / 1048576).toStringAsFixed(1)} / ${(_totalBytes / 1048576).toStringAsFixed(1)} MB)'
+                                        : '${(_receivedBytes / 1048576).toStringAsFixed(1)} MB downloaded',
+                                    style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w500),
+                                  ),
+                                  Row(
+                                    children: [
+                                      if (_downloadSpeed != null) ...[
+                                        Text(_downloadSpeed!, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.primary)),
+                                        const SizedBox(width: 8),
+                                      ],
+                                      if (_etaString != null)
+                                        Text(_etaString!, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline)),
+                                    ],
+                                  ),
+                                ],
                               ),
                             ],
                           ],

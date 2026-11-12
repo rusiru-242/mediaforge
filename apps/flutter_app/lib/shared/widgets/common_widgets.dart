@@ -122,6 +122,25 @@ class SettingRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isNarrow = MediaQuery.of(context).size.width < 500;
+    if (isNarrow) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+            if (helpText != null)
+              Text(
+                helpText!,
+                style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
+              ),
+            const SizedBox(height: 6),
+            child,
+          ],
+        ),
+      );
+    }
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
