@@ -104,7 +104,10 @@ public class AudioConversionServiceImpl implements AudioConversionService {
 
     private String resolveAudioCodec(String format, String requestedCodec) {
         if (requestedCodec != null && !requestedCodec.isBlank() && !"auto".equalsIgnoreCase(requestedCodec)) {
-            return requestedCodec;
+            String clean = requestedCodec.trim().toLowerCase(Locale.ROOT);
+            if (clean.matches("^[a-zA-Z0-9_-]{1,32}$")) {
+                return clean;
+            }
         }
 
         switch (format) {

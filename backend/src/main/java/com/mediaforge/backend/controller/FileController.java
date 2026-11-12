@@ -89,6 +89,7 @@ public class FileController {
         if (filename == null || filename.isBlank()) {
             filename = file.getStoredFilename();
         }
+        String safeFilename = filename.replaceAll("[\\r\\n\"\\\\]", "_");
 
         MediaType mediaType;
         try {
@@ -100,7 +101,7 @@ public class FileController {
         return ResponseEntity.ok()
                 .contentType(mediaType)
                 .contentLength(file.getFileSize())
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + safeFilename + "\"")
                 .body(resource);
     }
 
