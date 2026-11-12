@@ -66,3 +66,4 @@
 - [ ] Tag the release: `git tag -a v1.0.0 -m "Release v1.0.0: Privacy-first Media Downloader & Converter"`
 - [ ] Push tag: `git push origin v1.0.0`
 - [ ] Verify GitHub Actions release workflow compiles and attaches binary artifacts to GitHub Releases.
+

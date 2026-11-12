@@ -116,3 +116,4 @@ MediaForge is designed with an ephemeral, zero-database architecture. Data exist
 | **Information Disclosure** | High | **Low** | Automatic metadata stripping & zero-db storage |
 | **Denial of Service** | High | **Low** | Stream size caps, dimension caps, process timeouts |
 | **Elevation of Privilege** | High | **Low** | Unprivileged runtime & OS container isolation |
+

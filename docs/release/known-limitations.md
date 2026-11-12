@@ -37,3 +37,4 @@
 - **Max Download Stream Size:** 500 MB per request.
 - **Max Image Dimensions:** 16,384 x 16,384 pixels, with a maximum 100,000,000 pixel buffer.
 - **Max Concurrent Jobs:** Bounded by available system CPU cores to prevent system thrashing.
+

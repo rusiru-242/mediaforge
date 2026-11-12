@@ -75,3 +75,4 @@ Concurrent Jobs    Average Latency    CPU Utilization    Disk Throughput    Erro
 - Benchmarked deleting 1,000 expired temporary files:
   - Total time: 142 ms.
   - Zero disk locking or database query overhead.
+

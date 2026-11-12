@@ -127,3 +127,4 @@ Environment: Flutter 3.29.0, Dart 3.7.0
 | **DEF-03** | Auto-generated Spring Security password logged on startup | Backend `SecurityConfig` | Registered no-op `UserDetailsService` bean |
 | **DEF-04** | Web CI missing push trigger on `test/**` branches | CI `.github/workflows/` | Added `test/**` branch pattern to all workflow configs |
 | **DEF-05** | Missing `permissions: contents: read` in Web CI | CI `.github/workflows/web-ci.yml` | Added explicit read-only token permissions block |
+
