@@ -4,6 +4,8 @@ import com.mediaforge.backend.dto.response.JobResponse;
 import com.mediaforge.backend.entity.MediaJob;
 import org.springframework.stereotype.Component;
 
+import java.util.UUID;
+
 @Component
 public class JobMapper {
 
@@ -12,9 +14,9 @@ public class JobMapper {
             return null;
         }
 
-        return new JobResponse(
+        JobResponse response = new JobResponse(
                 job.getId(),
-                job.getUser() != null ? job.getUser().getId() : null,
+                null,
                 job.getJobType(),
                 job.getSourceType(),
                 job.getStatus(),
@@ -26,5 +28,14 @@ public class JobMapper {
                 job.getStartedAt(),
                 job.getCompletedAt()
         );
+        response.setAccessToken(job.getAccessToken());
+
+        if (job.getOutputFileId() != null) {
+            response.setOutputFileId(job.getOutputFileId());
+        } else if (job.getFiles() != null && !job.getFiles().isEmpty()) {
+            response.setOutputFileId(job.getFiles().get(0).getId());
+        }
+
+        return response;
     }
 }

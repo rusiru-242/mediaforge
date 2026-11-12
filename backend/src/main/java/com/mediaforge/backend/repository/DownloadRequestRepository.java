@@ -1,13 +1,12 @@
 package com.mediaforge.backend.repository;
 
 import com.mediaforge.backend.entity.DownloadRequest;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
 import java.util.UUID;
 
-@Repository
-public interface DownloadRequestRepository extends JpaRepository<DownloadRequest, UUID> {
+public interface DownloadRequestRepository {
+    DownloadRequest save(DownloadRequest request);
     Optional<DownloadRequest> findByJobId(UUID jobId);
+    void deleteByJobId(UUID jobId);
 }

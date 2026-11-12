@@ -8,26 +8,34 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/rusiru-242/mediaforge/actions/workflows/validate-docs.yml">
-    <img src="https://github.com/rusiru-242/mediaforge/actions/workflows/validate-docs.yml/badge.svg" alt="Docs Validation"/>
+  <a href="https://github.com/rusiru-242/mediaforge/actions/workflows/web-ci.yml">
+    <img src="https://github.com/rusiru-242/mediaforge/actions/workflows/web-ci.yml/badge.svg" alt="Web CI"/>
+  </a>
+  <a href="https://github.com/rusiru-242/mediaforge/actions/workflows/backend-ci.yml">
+    <img src="https://github.com/rusiru-242/mediaforge/actions/workflows/backend-ci.yml/badge.svg" alt="Backend CI"/>
+  </a>
+  <a href="https://github.com/rusiru-242/mediaforge/actions/workflows/flutter-desktop-ci.yml">
+    <img src="https://github.com/rusiru-242/mediaforge/actions/workflows/flutter-desktop-ci.yml/badge.svg" alt="Flutter Desktop CI"/>
   </a>
   <a href="https://github.com/rusiru-242/mediaforge/blob/main/LICENSE">
     <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"/>
   </a>
-  <img src="https://img.shields.io/badge/phase-01%20Foundation-orange" alt="Phase"/>
-  <img src="https://img.shields.io/badge/status-In%20Development-yellow" alt="Status"/>
+  <img src="https://img.shields.io/badge/architecture-database--free-emerald" alt="Database-Free"/>
+  <img src="https://img.shields.io/badge/desktop-Flutter%203-blue" alt="Flutter Desktop"/>
 </p>
 
 ---
 
 ## 📖 Overview
 
-**MediaForge** is an all-in-one, cross-platform media processing suite that combines:
+**MediaForge** is an all-in-one, cross-platform media processing suite operating on a **database-free, privacy-first, ephemeral architecture**:
 
-- 🔽 **Media Downloader** — Download videos and images from authorized, supported URLs in multiple quality options.
-- 🔄 **Media Converter** — Convert video, audio, and image files between popular formats — online (via backend) and offline (natively in desktop/mobile apps).
-- 📦 **Batch Processing** — Queue and process multiple files simultaneously with real-time progress tracking.
-- 🔐 **Optional Accounts** — Save conversion history and preferences with optional user accounts.
+- 🔽 **Media Downloader** — Download videos and images from authorized, supported URLs in multiple quality options with strict SSRF defense.
+- 🔄 **Online Media Converter** — Server-side FFmpeg transcoding engine with live progress reporting, resolution scaling, and cooperative cancellation.
+- 💻 **Desktop Application (Flutter)** — Fast, native desktop app (Windows, macOS, Linux) with 100% offline conversion, video-to-audio extraction, image compression, batch processing, and zero external backend required for local files.
+- 📦 **Batch Processing** — Queue and convert multiple audio, video, or image files in parallel.
+- 🔒 **Privacy by Design** — Zero user accounts, zero logins, zero database storage. All jobs are tracked in-memory.
+- 🛡️ **Ephemeral Lifecycle** — Processed files and media caches are automatically purged after 24 hours.
 
 ---
 
@@ -35,27 +43,27 @@
 
 MediaForge is a **monorepo** composed of four primary applications:
 
-| Component | Technology | Description |
-|-----------|-----------|-------------|
-| `backend/` | Java 21, Spring Boot 3, Spring Security | REST API, job management, auth |
-| `web/` | Next.js 15, TypeScript, Tailwind CSS | Web application |
-| `apps/flutter_app/` | Flutter 3 | Desktop (Win/macOS/Linux) & Mobile (Android/iOS) |
-| `workers/media-processor/` | Node.js / Java Worker | FFmpeg-powered background job processor |
+| Component | Technology | Description | Status |
+|-----------|-----------|-------------|:------:|
+| `backend/` | Java 21, Spring Boot 3.4+, Spring Security, In-Memory Ephemeral Store, FFmpeg | High-performance database-free REST API, job management, SSRF protection, Downloader & Online Converter Engine | ✅ Implemented |
+| `web/` | Next.js 15, React 19, TypeScript, Tailwind CSS, Vitest | Responsive modern web portal with live API telemetry, Downloader UI & Universal Converter UI | ✅ Implemented |
+| `apps/flutter_app/` | Flutter 3.24+, Dart 3.5+, Riverpod, Local FFmpeg | Native cross-platform desktop application for Windows, macOS, and Linux with full offline transcoding | ✅ Implemented (Phase 06) |
+| `workers/media-processor/` | FFmpeg 6+, Java ThreadPoolTaskExecutor Workers | Integrated background transcoding worker pool | ✅ Implemented |
 
 ---
 
 ## 🚀 Features
 
-- ✅ Download from authorized supported video/image sources
+- ✅ Download from authorized supported video/image sources (with SSRF protection)
 - ✅ Quality selection (1080p, 720p, 480p, 240p, audio-only)
-- ✅ Output formats: MP4, WEBM, MKV, MP3
-- ✅ Online conversion (backend-processed)
-- ✅ Offline conversion (desktop & mobile, FFmpeg embedded)
-- ✅ Batch processing and download queue management
-- ✅ Real-time progress tracking and cancellation
-- ✅ Comprehensive error handling and retry logic
-- ✅ Optional user accounts and conversion history
-- ✅ Secure temporary file storage with auto-cleanup
+- ✅ Output formats: MP4, WEBM, MKV, MP3, WAV, FLAC, AAC, M4A, WEBP, PNG, JPEG, GIF
+- ✅ Online conversion (backend-processed via Spring Boot REST APIs)
+- ✅ Offline desktop conversion (runs standalone without Spring Boot or internet)
+- ✅ Video-to-audio extraction (MP4, MKV, WEBM, MOV -> MP3, WAV, AAC, FLAC)
+- ✅ Batch processing orchestration interface and queue management
+- ✅ Real-time async progress tracking, cancellation, and polling
+- ✅ Dark/Light responsive modern theme with persistent toggle
+- ✅ 100% Database-Free and Account-Free architecture
 
 ---
 
@@ -63,14 +71,15 @@ MediaForge is a **monorepo** composed of four primary applications:
 
 | Layer | Technology |
 |-------|-----------|
-| Backend API | Java 21, Spring Boot 3.x, Spring Security, Spring Data JPA |
-| Database | PostgreSQL 16 |
-| Background Jobs | Redis 7, Spring Batch / Custom Workers |
-| Web Frontend | Next.js 15, TypeScript, Tailwind CSS, shadcn/ui |
-| Desktop & Mobile | Flutter 3 (Dart) |
+| Desktop Application | Flutter 3.24+, Dart 3.5+, Riverpod 2.6+, Window Manager |
+| Backend API | Java 21, Spring Boot 3.4+, Spring Security |
+| Job & File Tracking | In-memory `ConcurrentHashMap` with short-lived access tokens |
+| Background Jobs | Java `ThreadPoolTaskExecutor` / Virtual Thread workers |
+| Web Frontend | Next.js 15 (App Router), React 19, TypeScript, Tailwind CSS |
+| Testing Suites | Vitest (Web), JUnit 5 (Backend), Flutter Test (Desktop) |
 | Media Processing | FFmpeg 6+, FFprobe |
-| Storage | Local filesystem / S3-compatible (MinIO, AWS S3) |
-| DevOps | Docker, Docker Compose, GitHub Actions |
+| Storage | Ephemeral local filesystem / S3-compatible |
+| DevOps & CI/CD | GitHub Actions, Docker, Docker Compose |
 
 ---
 
@@ -78,26 +87,29 @@ MediaForge is a **monorepo** composed of four primary applications:
 
 ```
 mediaforge/
-├── backend/              # Spring Boot REST API
-├── web/                  # Next.js web application
 ├── apps/
-│   └── flutter_app/      # Flutter desktop & mobile app
-├── workers/
-│   └── media-processor/  # FFmpeg background job workers
+│   └── flutter_app/              # Flutter Desktop Application (Phase 06)
+│       ├── lib/                  # Architecture: core, features, shared
+│       ├── test/                 # Widget, unit, and service test suites
+│       └── pubspec.yaml          # Flutter dependencies
+├── backend/                      # Spring Boot REST API (Database-Free)
+│   ├── src/main/java/            # Layered Java architecture & in-memory repos
+│   ├── src/main/resources/       # application.yml
+│   └── pom.xml                   # Maven dependencies
+├── web/                          # Next.js 15 Web Application
+│   ├── src/app/                  # 13 App Router routes & layouts
+│   ├── src/components/           # Reusable UI & feedback component library
+│   ├── src/services/             # Typed API client
+│   └── package.json              # Web dependencies
 ├── docs/
-│   ├── requirements/     # Functional & non-functional requirements
-│   ├── architecture/     # System architecture documents
-│   ├── workflows/        # Workflow documentation
-│   ├── diagrams/         # Mermaid diagrams
-│   ├── roadmap/          # Development phases & roadmap
-│   └── github/           # GitHub-specific documentation
+│   ├── desktop/                  # Phase 06 Desktop architecture, setup, ffmpeg docs
+│   ├── converter/                # Phase 05 Converter architecture & docs
+│   ├── downloader/               # Phase 04 Downloader architecture & docs
+│   ├── web/                      # Phase 03 Web architecture & API docs
+│   └── roadmap/                  # Development phases & roadmap
 ├── .github/
-│   ├── ISSUE_TEMPLATE/   # GitHub issue templates
-│   └── workflows/        # GitHub Actions CI/CD
-├── .gitignore
-├── .editorconfig
-├── .env.example
-├── CONTRIBUTING.md
+│   └── workflows/                # Web, Backend, and Flutter Desktop CI workflows
+├── docker-compose.yml
 └── README.md
 ```
 
@@ -106,17 +118,18 @@ mediaforge/
 ## 🗺️ Development Roadmap
 
 | Phase | Title | Status |
-|-------|-------|--------|
-| 01 | Foundation, Architecture & GitHub | 🟡 In Progress |
-| 02 | Backend & Database | ⬜ Planned |
-| 03 | Website Development | ⬜ Planned |
-| 04 | Media Downloader Engine | ⬜ Planned |
-| 05 | Online Media Converter | ⬜ Planned |
-| 06 | Desktop Application | ⬜ Planned |
-| 07 | Mobile Application | ⬜ Planned |
-| 08 | Advanced Features & Integration | ⬜ Planned |
-| 09 | Security, Testing & CI/CD | ⬜ Planned |
-| 10 | Deployment & Release | ⬜ Planned |
+|:---:|-------|:------:|
+| **01** | Foundation, Architecture & GitHub | ✅ Complete |
+| **02** | Backend & Database Foundation | ✅ Complete |
+| **03** | Website Development & API Integration | ✅ Complete |
+| **04** | Media Downloader Engine | ✅ Complete |
+| **05** | Online Media Converter (FFmpeg) | ✅ Complete |
+| **Refactor** | Database-Free Ephemeral Architecture | ✅ Complete |
+| **06** | Desktop Application (Flutter) | ✅ Complete |
+| **07** | Mobile Application (Flutter) | ⬜ Planned |
+| **08** | Advanced Features & Batch Processing | ⬜ Planned |
+| **09** | Security, Testing & Hardening | ⬜ Planned |
+| **10** | Production Deployment & Release | ⬜ Planned |
 
 See [`docs/roadmap/`](docs/roadmap/) for detailed phase documentation.
 
@@ -124,31 +137,52 @@ See [`docs/roadmap/`](docs/roadmap/) for detailed phase documentation.
 
 ## ⚡ Quick Start
 
-> **Note:** Application code is not yet implemented. This section will be updated as each phase completes.
+### 1. Prerequisites
 
-### Prerequisites
+| Tool | Minimum Version | Verified |
+|------|:---------------:|:--------:|
+| Node.js | 20+ | ✅ |
+| Java | 21+ | ✅ |
+| Maven | 3.9+ | ✅ |
+| Flutter SDK | 3.24+ | ✅ |
+| FFmpeg & FFprobe | 6.0+ | ✅ |
+| Git | 2.40+ | ✅ |
 
-| Tool | Minimum Version |
-|------|----------------|
-| Git | 2.40+ |
-| Java | 21+ |
-| Node.js | 20+ |
-| Flutter | 3.10+ |
-| Docker | 24+ |
-
-### Setup
+### 2. Run the Flutter Desktop Application (Offline Media Converter)
 
 ```bash
-# Clone the repository
-git clone https://github.com/rusiru-242/mediaforge.git
-cd mediaforge
+cd apps/flutter_app
 
-# Copy environment variables
-cp .env.example .env
-# Edit .env with your values
+# Fetch dependencies
+flutter pub get
 
-# Start infrastructure (PostgreSQL + Redis)
-docker compose up -d db redis
+# Run static analysis (0 warnings)
+flutter analyze
+
+# Run unit and widget test suite
+flutter test
+
+# Launch on Desktop (Windows)
+flutter run -d windows
+```
+
+### 3. Run the Backend API (Optional for Desktop Offline Conversion)
+
+```bash
+# Start Spring Boot application directly (zero external DB required)
+cd backend
+mvn spring-boot:run
+# Backend runs at http://localhost:8080/api/v1
+```
+
+### 4. Run the Next.js Web Portal
+
+```bash
+cd web
+npm install
+npm run test
+npm run dev
+# Web portal opens at http://localhost:3000
 ```
 
 ---
@@ -156,8 +190,7 @@ docker compose up -d db redis
 ## 🤝 Contributing
 
 Please read [CONTRIBUTING.md](CONTRIBUTING.md) before submitting pull requests.
-
-We follow [Conventional Commits](https://www.conventionalcommits.org/) and [GitHub Flow](https://docs.github.com/en/get-started/using-github/github-flow).
+We adhere to [Conventional Commits](https://www.conventionalcommits.org/) and [GitHub Flow](https://docs.github.com/en/get-started/using-github/github-flow).
 
 ---
 
@@ -169,11 +202,10 @@ This project is licensed under the MIT License — see the [LICENSE](LICENSE) fi
 
 ## ⚠️ Legal Notice
 
-MediaForge is designed to download and process only content that the user is authorized to access. Downloading copyrighted content without permission is prohibited. Users are responsible for complying with applicable laws and the terms of service of any platform they interact with.
+MediaForge is designed to download and transcode media only from sources that the user is authorized to access. Downloading copyrighted material without permission is prohibited. Users are responsible for complying with applicable copyright laws and platform terms of service.
 
 ---
 
 <p align="center">
   Built with ❤️ by <a href="https://github.com/rusiru-242">rusiru-242</a>
 </p>
-

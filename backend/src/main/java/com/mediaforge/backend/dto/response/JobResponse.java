@@ -21,6 +21,8 @@ public class JobResponse {
     private OffsetDateTime createdAt;
     private OffsetDateTime startedAt;
     private OffsetDateTime completedAt;
+    private UUID outputFileId;
+    private String accessToken;
 
     public JobResponse() {
     }
@@ -40,6 +42,14 @@ public class JobResponse {
         this.createdAt = createdAt;
         this.startedAt = startedAt;
         this.completedAt = completedAt;
+    }
+
+    public UUID getOutputFileId() {
+        return outputFileId;
+    }
+
+    public void setOutputFileId(UUID outputFileId) {
+        this.outputFileId = outputFileId;
     }
 
     public UUID getId() {
@@ -112,6 +122,14 @@ public class JobResponse {
 
     public void setErrorMessage(String errorMessage) {
         this.errorMessage = errorMessage;
+    }
+
+    public String getAccessToken() {
+        return accessToken;
+    }
+
+    public void setAccessToken(String accessToken) {
+        this.accessToken = accessToken;
     }
 
     public OffsetDateTime getCreatedAt() {

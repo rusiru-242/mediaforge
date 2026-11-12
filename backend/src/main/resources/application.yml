@@ -6,29 +6,11 @@ spring:
   application:
     name: mediaforge-backend
 
-  datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:mediaforge_db}
-    username: ${DB_USER:mediaforge_user}
-    password: ${DB_PASSWORD:mediaforge_secret}
-    driver-class-name: org.postgresql.Driver
-    hikari:
-      connection-timeout: 30000
-      maximum-pool-size: 10
-      minimum-idle: 2
-
-  jpa:
-    open-in-view: false
-    hibernate:
-      ddl-auto: validate
-    properties:
-      hibernate:
-        dialect: org.hibernate.dialect.PostgreSQLDialect
-        format_sql: false
-
-  flyway:
-    enabled: true
-    locations: classpath:db/migration
-    baseline-on-migrate: true
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 500MB
+      max-request-size: 510MB
 
 # Security Configuration
 app:
@@ -42,6 +24,22 @@ app:
     requests-per-minute: ${RATE_LIMIT_RPM:60}
   storage:
     base-path: ${STORAGE_LOCAL_PATH:./uploads}
+    retention-hours: ${STORAGE_RETENTION_HOURS:24}
+  downloader:
+    max-file-size-bytes: ${DOWNLOAD_MAX_FILE_SIZE:524288000}
+    connect-timeout-ms: ${DOWNLOAD_CONNECT_TIMEOUT_MS:10000}
+    read-timeout-ms: ${DOWNLOAD_READ_TIMEOUT_MS:30000}
+    max-redirects: ${DOWNLOAD_MAX_REDIRECTS:5}
+    user-agent: "MediaForge-Downloader/1.0 (+https://mediaforge.local)"
+  converter:
+    ffmpeg-path: ${FFMPEG_PATH:ffmpeg}
+    ffprobe-path: ${FFPROBE_PATH:ffprobe}
+    max-file-size-bytes: ${CONVERTER_MAX_FILE_SIZE:524288000}
+    timeout-seconds: ${CONVERTER_TIMEOUT_SECONDS:600}
+    max-concurrent-jobs: ${CONVERTER_MAX_CONCURRENT_JOBS:4}
+    allowed-video-formats: mp4,webm,mkv,mov,avi
+    allowed-audio-formats: mp3,wav,aac,flac,m4a,ogg
+    allowed-image-formats: jpg,jpeg,png,webp,avif
 
 # Management & Actuator
 management:

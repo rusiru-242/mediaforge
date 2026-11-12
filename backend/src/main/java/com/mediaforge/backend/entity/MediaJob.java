@@ -3,85 +3,61 @@ package com.mediaforge.backend.entity;
 import com.mediaforge.backend.enums.JobStatus;
 import com.mediaforge.backend.enums.JobType;
 import com.mediaforge.backend.enums.SourceType;
-import jakarta.persistence.*;
+
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-@Entity
-@Table(name = "media_jobs")
+/**
+ * In-memory representation of a MediaForge processing job.
+ */
 public class MediaJob {
 
-    @Id
-    @Column(name = "id", nullable = false, updatable = false)
     private UUID id;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id")
-    private User user;
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "job_type", nullable = false, length = 20)
     private JobType jobType;
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "source_type", nullable = false, length = 20)
     private SourceType sourceType;
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false, length = 20)
     private JobStatus status = JobStatus.PENDING;
-
-    @Column(name = "progress", nullable = false)
     private int progress = 0;
-
-    @Column(name = "input_format", length = 20)
     private String inputFormat;
-
-    @Column(name = "output_format", nullable = false, length = 20)
     private String outputFormat;
-
-    @Column(name = "error_message", columnDefinition = "TEXT")
+    private String targetResolution;
+    private String sourceUrl;
+    private UUID outputFileId;
     private String errorMessage;
-
-    @Column(name = "created_at", nullable = false, updatable = false)
+    private UUID batchId;
+    private String accessToken;
     private OffsetDateTime createdAt;
-
-    @Column(name = "started_at")
     private OffsetDateTime startedAt;
-
-    @Column(name = "completed_at")
     private OffsetDateTime completedAt;
+    private OffsetDateTime expiresAt;
 
-    @OneToMany(mappedBy = "job", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<JobEvent> events = new ArrayList<>();
-
-    @OneToMany(mappedBy = "job", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<MediaFile> files = new ArrayList<>();
 
     public MediaJob() {
+        this.id = UUID.randomUUID();
+        this.createdAt = OffsetDateTime.now();
+        this.accessToken = UUID.randomUUID().toString().replace("-", "");
+        this.expiresAt = this.createdAt.plusHours(24);
     }
 
-    public MediaJob(UUID id, User user, JobType jobType, SourceType sourceType, String inputFormat, String outputFormat) {
+    public MediaJob(UUID id, JobType jobType, SourceType sourceType, String inputFormat, String outputFormat) {
         this.id = id != null ? id : UUID.randomUUID();
-        this.user = user;
         this.jobType = jobType;
         this.sourceType = sourceType;
         this.inputFormat = inputFormat;
         this.outputFormat = outputFormat;
         this.status = JobStatus.PENDING;
         this.progress = 0;
+        this.createdAt = OffsetDateTime.now();
+        this.accessToken = UUID.randomUUID().toString().replace("-", "");
+        this.expiresAt = this.createdAt.plusHours(24);
     }
 
-    @PrePersist
-    protected void onCreate() {
-        if (id == null) {
-            id = UUID.randomUUID();
-        }
-        if (createdAt == null) {
-            createdAt = OffsetDateTime.now();
-        }
+    // Overloaded constructor for legacy calls passing user=null
+    public MediaJob(UUID id, Object unusedUser, JobType jobType, SourceType sourceType, String inputFormat, String outputFormat) {
+        this(id, jobType, sourceType, inputFormat, outputFormat);
     }
 
     public UUID getId() {
@@ -92,12 +68,17 @@ public class MediaJob {
         this.id = id;
     }
 
-    public User getUser() {
-        return user;
+    // User accounts removed: returns null
+    public UUID getUserId() {
+        return null;
     }
 
-    public void setUser(User user) {
-        this.user = user;
+    public Object getUser() {
+        return null;
+    }
+
+    public void setUser(Object user) {
+        // No-op
     }
 
     public JobType getJobType() {
@@ -148,12 +129,52 @@ public class MediaJob {
         this.outputFormat = outputFormat;
     }
 
+    public String getTargetResolution() {
+        return targetResolution;
+    }
+
+    public void setTargetResolution(String targetResolution) {
+        this.targetResolution = targetResolution;
+    }
+
+    public String getSourceUrl() {
+        return sourceUrl;
+    }
+
+    public void setSourceUrl(String sourceUrl) {
+        this.sourceUrl = sourceUrl;
+    }
+
+    public UUID getOutputFileId() {
+        return outputFileId;
+    }
+
+    public void setOutputFileId(UUID outputFileId) {
+        this.outputFileId = outputFileId;
+    }
+
     public String getErrorMessage() {
         return errorMessage;
     }
 
     public void setErrorMessage(String errorMessage) {
         this.errorMessage = errorMessage;
+    }
+
+    public UUID getBatchId() {
+        return batchId;
+    }
+
+    public void setBatchId(UUID batchId) {
+        this.batchId = batchId;
+    }
+
+    public String getAccessToken() {
+        return accessToken;
+    }
+
+    public void setAccessToken(String accessToken) {
+        this.accessToken = accessToken;
     }
 
     public OffsetDateTime getCreatedAt() {
@@ -178,6 +199,14 @@ public class MediaJob {
 
     public void setCompletedAt(OffsetDateTime completedAt) {
         this.completedAt = completedAt;
+    }
+
+    public OffsetDateTime getExpiresAt() {
+        return expiresAt;
+    }
+
+    public void setExpiresAt(OffsetDateTime expiresAt) {
+        this.expiresAt = expiresAt;
     }
 
     public List<JobEvent> getEvents() {

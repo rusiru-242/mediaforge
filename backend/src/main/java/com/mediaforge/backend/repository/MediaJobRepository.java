@@ -1,17 +1,23 @@
 package com.mediaforge.backend.repository;
 
+import com.mediaforge.backend.dto.response.PageResponse;
 import com.mediaforge.backend.entity.MediaJob;
 import com.mediaforge.backend.enums.JobStatus;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
 
+import java.time.OffsetDateTime;
+import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
-@Repository
-public interface MediaJobRepository extends JpaRepository<MediaJob, UUID> {
-    Page<MediaJob> findByStatus(JobStatus status, Pageable pageable);
-    Page<MediaJob> findByUserId(UUID userId, Pageable pageable);
-    Page<MediaJob> findByUserIdAndStatus(UUID userId, JobStatus status, Pageable pageable);
+public interface MediaJobRepository {
+    MediaJob save(MediaJob job);
+    Optional<MediaJob> findById(UUID id);
+    List<MediaJob> findAll();
+    PageResponse<MediaJob> findAll(int page, int size);
+    List<MediaJob> findByStatus(JobStatus status);
+    PageResponse<MediaJob> findByStatus(JobStatus status, int page, int size);
+    List<MediaJob> findByBatchId(UUID batchId);
+    void deleteById(UUID id);
+    long count();
+    void deleteExpired(OffsetDateTime threshold);
 }
