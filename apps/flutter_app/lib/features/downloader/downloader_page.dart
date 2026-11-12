@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:io';
 import '../../core/config/app_config.dart';
+import '../../core/services/platform_service.dart';
 
 class DownloaderPage extends ConsumerStatefulWidget {
   const DownloaderPage({super.key});
@@ -41,13 +42,7 @@ class _DownloaderPageState extends ConsumerState<DownloaderPage> {
   }
 
   Future<void> _openFolder(String path) async {
-    if (Platform.isWindows) {
-      await Process.run('explorer', [path]);
-    } else if (Platform.isMacOS) {
-      await Process.run('open', [path]);
-    } else {
-      await Process.run('xdg-open', [path]);
-    }
+    await PlatformService.openFolder(path);
   }
 
   Future<void> _inspectUrl() async {
@@ -134,9 +129,7 @@ class _DownloaderPageState extends ConsumerState<DownloaderPage> {
         ? uri.pathSegments.last
         : 'mediaforge_${DateTime.now().millisecondsSinceEpoch}';
 
-    final outputDir = _outputFolder ?? (Platform.environment['USERPROFILE'] != null
-        ? p.join(Platform.environment['USERPROFILE']!, 'Downloads')
-        : Directory.current.path);
+    final outputDir = _outputFolder ?? await PlatformService.getDefaultDownloadDirectory();
 
     final savePath = p.join(outputDir, fileName);
 
@@ -207,10 +200,13 @@ class _DownloaderPageState extends ConsumerState<DownloaderPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 720;
+    final pagePadding = isMobile ? const EdgeInsets.all(16) : const EdgeInsets.all(24);
 
     return Scaffold(
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+        padding: pagePadding,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -235,51 +231,101 @@ class _DownloaderPageState extends ConsumerState<DownloaderPage> {
                       style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
                     ),
                     const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _urlController,
-                            decoration: const InputDecoration(
-                              hintText: 'https://example.com/media/sample.mp4',
-                              prefixIcon: Icon(Icons.link),
+                    if (isMobile) ...[
+                      TextField(
+                        controller: _urlController,
+                        decoration: const InputDecoration(
+                          hintText: 'https://example.com/media/sample.mp4',
+                          prefixIcon: Icon(Icons.link),
+                        ),
+                        onSubmitted: (_) => _inspectUrl(),
+                      ),
+                      const SizedBox(height: 10),
+                      ElevatedButton.icon(
+                        onPressed: _isValidating || _isDownloading ? null : _inspectUrl,
+                        icon: _isValidating
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                              )
+                            : const Icon(Icons.search),
+                        label: const Text('Inspect'),
+                      ),
+                    ] else ...[
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _urlController,
+                              decoration: const InputDecoration(
+                                hintText: 'https://example.com/media/sample.mp4',
+                                prefixIcon: Icon(Icons.link),
+                              ),
+                              onSubmitted: (_) => _inspectUrl(),
                             ),
-                            onSubmitted: (_) => _inspectUrl(),
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        ElevatedButton.icon(
-                          onPressed: _isValidating || _isDownloading ? null : _inspectUrl,
-                          icon: _isValidating
-                              ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                                )
-                              : const Icon(Icons.search),
-                          label: const Text('Inspect'),
-                        ),
-                      ],
-                    ),
+                          const SizedBox(width: 12),
+                          ElevatedButton.icon(
+                            onPressed: _isValidating || _isDownloading ? null : _inspectUrl,
+                            icon: _isValidating
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                  )
+                                : const Icon(Icons.search),
+                            label: const Text('Inspect'),
+                          ),
+                        ],
+                      ),
+                    ],
                     const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        const Text('Save To: ', style: TextStyle(fontWeight: FontWeight.w500)),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            _outputFolder ?? 'Default Downloads Folder',
-                            style: theme.textTheme.bodySmall,
-                            overflow: TextOverflow.ellipsis,
+                    if (isMobile) ...[
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Text('Save To: ', style: TextStyle(fontWeight: FontWeight.w500)),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  _outputFolder ?? 'Default Downloads Folder',
+                                  style: theme.textTheme.bodySmall,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                        TextButton.icon(
-                          onPressed: _isDownloading ? null : _pickOutputFolder,
-                          icon: const Icon(Icons.folder_open, size: 16),
-                          label: const Text('Change Folder'),
-                        ),
-                      ],
-                    ),
+                          const SizedBox(height: 4),
+                          TextButton.icon(
+                            onPressed: _isDownloading ? null : _pickOutputFolder,
+                            icon: const Icon(Icons.folder_open, size: 16),
+                            label: const Text('Change Folder'),
+                          ),
+                        ],
+                      ),
+                    ] else ...[
+                      Row(
+                        children: [
+                          const Text('Save To: ', style: TextStyle(fontWeight: FontWeight.w500)),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _outputFolder ?? 'Default Downloads Folder',
+                              style: theme.textTheme.bodySmall,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          TextButton.icon(
+                            onPressed: _isDownloading ? null : _pickOutputFolder,
+                            icon: const Icon(Icons.folder_open, size: 16),
+                            label: const Text('Change Folder'),
+                          ),
+                        ],
+                      ),
+                    ],
                     if (_error != null) ...[
                       const SizedBox(height: 16),
                       Container(
@@ -312,11 +358,17 @@ class _DownloaderPageState extends ConsumerState<DownloaderPage> {
                             const Icon(Icons.check_circle, color: Colors.green, size: 20),
                             const SizedBox(width: 8),
                             Expanded(child: Text(_successMessage!, style: const TextStyle(color: Colors.green, fontSize: 13))),
-                            if (_downloadedFilePath != null)
+                            if (_downloadedFilePath != null) ...[
+                              IconButton(
+                                icon: const Icon(Icons.share, size: 20),
+                                tooltip: 'Share File',
+                                onPressed: () => PlatformService.shareFile(_downloadedFilePath!),
+                              ),
                               TextButton(
                                 onPressed: () => _openFolder(p.dirname(_downloadedFilePath!)),
                                 child: const Text('Open Folder'),
                               ),
+                            ],
                           ],
                         ),
                       ),

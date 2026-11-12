@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
-import 'dart:io';
 import '../../core/config/app_config.dart';
+import '../../core/services/platform_service.dart';
 import '../../shared/models/media_job.dart';
 import '../../shared/models/media_info.dart';
 import '../../shared/providers/app_providers.dart';
@@ -77,18 +77,15 @@ class _AudioConverterPageState extends ConsumerState<AudioConverterPage> {
   }
 
   Future<void> _openFolder(String path) async {
-    if (Platform.isWindows) {
-      await Process.run('explorer', [path]);
-    } else if (Platform.isMacOS) {
-      await Process.run('open', [path]);
-    } else {
-      await Process.run('xdg-open', [path]);
-    }
+    await PlatformService.openFolder(path);
   }
 
   Future<void> _startConversion() async {
     if (_inputPath == null) return;
-    final outputDir = _outputFolder ?? p.dirname(_inputPath!);
+    String outputDir = _outputFolder ?? p.dirname(_inputPath!);
+    if (PlatformService.isMobile && _outputFolder == null) {
+      outputDir = await PlatformService.getDefaultDownloadDirectory();
+    }
     final baseName = p.basenameWithoutExtension(_inputPath!);
     final outputPath = p.join(outputDir, '${baseName}_converted.$_outputFormat');
 
@@ -127,8 +124,14 @@ class _AudioConverterPageState extends ConsumerState<AudioConverterPage> {
               SnackBar(
                 content: Text('Audio conversion complete: $outputPath'),
                 action: SnackBarAction(
-                  label: 'Open Folder',
-                  onPressed: () => _openFolder(outputDir),
+                  label: PlatformService.isMobile ? 'Share' : 'Open Folder',
+                  onPressed: () {
+                    if (PlatformService.isMobile) {
+                      PlatformService.shareFile(outputPath);
+                    } else {
+                      _openFolder(outputDir);
+                    }
+                  },
                 ),
               ),
             );
