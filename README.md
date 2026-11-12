@@ -17,20 +17,20 @@
   <a href="https://github.com/rusiru-242/mediaforge/blob/main/LICENSE">
     <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"/>
   </a>
-  <img src="https://img.shields.io/badge/phase-05%20Converter-blue" alt="Phase"/>
-  <img src="https://img.shields.io/badge/status-Phase%2005%20Complete-success" alt="Status"/>
+  <img src="https://img.shields.io/badge/architecture-database--free-emerald" alt="Database-Free"/>
+  <img src="https://img.shields.io/badge/privacy-zero--accounts-blue" alt="Privacy"/>
 </p>
 
 ---
 
 ## 📖 Overview
 
-**MediaForge** is an all-in-one, cross-platform media processing suite that combines:
+**MediaForge** is an all-in-one, cross-platform media processing suite operating on a **database-free, privacy-first, ephemeral architecture**:
 
 - 🔽 **Media Downloader** — Download videos and images from authorized, supported URLs in multiple quality options with strict SSRF defense.
 - 🔄 **Online Media Converter** — Full-featured server-side FFmpeg and FFprobe transcoding engine with live progress reporting, resolution scaling, and cooperative cancellation.
 - 📦 **Batch Processing** — Queue and convert multiple audio, video, or image files in parallel and download consolidated ZIP archives.
-- 🔐 **Optional Accounts** — Save conversion history and preferences with optional user accounts.
+- 🔒 **Privacy by Design** — Zero user accounts, zero logins, zero database storage. All jobs and files are tracked in-memory with short-lived tokens.
 - 🛡️ **Ephemeral Lifecycle** — Processed files and media caches are automatically purged after 24 hours.
 
 ---
@@ -41,10 +41,10 @@ MediaForge is a **monorepo** composed of four primary applications:
 
 | Component | Technology | Description | Status |
 |-----------|-----------|-------------|:------:|
-| `backend/` | Java 21, Spring Boot 3.5, Spring Security, Flyway, PostgreSQL, FFmpeg | High-performance REST API, job management, SSRF protection, Downloader & Online Converter Engine | ✅ Implemented (Phase 05) |
-| `web/` | Next.js 15, React 19, TypeScript, Tailwind CSS, Vitest | Responsive modern web portal with live API telemetry, Downloader UI & Universal Converter UI | ✅ Implemented (Phase 05) |
+| `backend/` | Java 21, Spring Boot 3.4+, Spring Security, In-Memory Ephemeral Store, FFmpeg | High-performance database-free REST API, job management, SSRF protection, Downloader & Online Converter Engine | ✅ Implemented |
+| `web/` | Next.js 15, React 19, TypeScript, Tailwind CSS, Vitest | Responsive modern web portal with live API telemetry, Downloader UI & Universal Converter UI | ✅ Implemented |
 | `apps/flutter_app/` | Flutter 3 (Dart) | Desktop (Win/macOS/Linux) & Mobile (Android/iOS) | ⬜ Planned (Phase 06/07) |
-| `workers/media-processor/` | FFmpeg 6+, Java ThreadPoolTaskExecutor Workers | Integrated background transcoding worker pool | ✅ Implemented (Phase 05) |
+| `workers/media-processor/` | FFmpeg 6+, Java ThreadPoolTaskExecutor Workers | Integrated background transcoding worker pool | ✅ Implemented |
 
 ---
 
@@ -58,7 +58,8 @@ MediaForge is a **monorepo** composed of four primary applications:
 - ✅ Real-time async progress tracking, cancellation, and polling
 - ✅ Comprehensive RFC 7807 problem details error handling
 - ✅ Dark/Light responsive modern theme with persistent toggle
-- ✅ Ephemeral 24-hour retention lifecycle
+- ✅ Ephemeral 24-hour retention lifecycle with automatic cleanup
+- ✅ 100% Database-Free and Account-Free architecture
 
 ---
 
@@ -66,9 +67,9 @@ MediaForge is a **monorepo** composed of four primary applications:
 
 | Layer | Technology |
 |-------|-----------|
-| Backend API | Java 21, Spring Boot 3.5, Spring Security, Spring Data JPA, Flyway |
-| Database | PostgreSQL 16 |
-| Background Jobs | Redis 7, Spring Batch / Custom Workers |
+| Backend API | Java 21, Spring Boot 3.4+, Spring Security |
+| Job & File Tracking | In-memory `ConcurrentHashMap` with short-lived access tokens |
+| Background Jobs | Java `ThreadPoolTaskExecutor` / Virtual Thread workers |
 | Web Frontend | Next.js 15 (App Router), React 19, TypeScript, Tailwind CSS |
 | Frontend Testing | Vitest, React Testing Library, JSDOM |
 | Media Processing | FFmpeg 6+, FFprobe |
@@ -81,12 +82,12 @@ MediaForge is a **monorepo** composed of four primary applications:
 
 ```
 mediaforge/
-├── backend/                      # Spring Boot REST API (Phase 02)
-│   ├── src/main/java/            # Layered Java architecture
-│   ├── src/main/resources/       # Flyway migrations V1 & application.yml
+├── backend/                      # Spring Boot REST API (Database-Free)
+│   ├── src/main/java/            # Layered Java architecture & in-memory repos
+│   ├── src/main/resources/       # application.yml
 │   └── pom.xml                   # Maven dependencies
-├── web/                          # Next.js 15 Web Application (Phase 03)
-│   ├── src/app/                  # 14 App Router routes & layouts
+├── web/                          # Next.js 15 Web Application
+│   ├── src/app/                  # 13 App Router routes & layouts
 │   ├── src/components/           # Reusable UI & feedback component library
 │   ├── src/services/             # Typed API client
 │   ├── src/test/                 # Vitest component & API test suites
@@ -97,8 +98,8 @@ mediaforge/
 ├── workers/
 │   └── media-processor/          # FFmpeg background job workers
 ├── docs/
-│   ├── converter/                # Phase 05 Converter architecture, FFmpeg, API, security & testing docs
-│   ├── downloader/               # Phase 04 Downloader architecture, API, security & testing docs
+│   ├── converter/                # Phase 05 Converter architecture & docs
+│   ├── downloader/               # Phase 04 Downloader architecture & docs
 │   ├── web/                      # Phase 03 Web architecture & API docs
 │   ├── architecture/             # System architecture documents
 │   ├── requirements/             # Functional & non-functional requirements
@@ -124,8 +125,9 @@ mediaforge/
 | **02** | Backend & Database Foundation | ✅ Complete |
 | **03** | Website Development & API Integration | ✅ Complete |
 | **04** | Media Downloader Engine | ✅ Complete |
-| **05** | Online Media Converter (FFmpeg) | ⬜ Next Phase |
-| **06** | Desktop Application (Flutter) | ⬜ Planned |
+| **05** | Online Media Converter (FFmpeg) | ✅ Complete |
+| **Refactor** | Database-Free Ephemeral Architecture | ✅ In Progress |
+| **06** | Desktop Application (Flutter) | ⬜ Next Phase |
 | **07** | Mobile Application (Flutter) | ⬜ Planned |
 | **08** | Advanced Features & Batch Processing | ⬜ Planned |
 | **09** | Security, Testing & Hardening | ⬜ Planned |
@@ -147,13 +149,10 @@ See [`docs/roadmap/`](docs/roadmap/) for detailed phase documentation.
 | Docker & Docker Compose | 24+ | ✅ |
 | Git | 2.40+ | ✅ |
 
-### 2. Run the Backend API
+### 2. Run the Backend API (No Database Required!)
 
 ```bash
-# Start PostgreSQL database
-docker compose up -d postgres
-
-# Start Spring Boot application
+# Start Spring Boot application directly (zero external DB required)
 cd backend
 mvn spring-boot:run
 # Backend runs at http://localhost:8080/api/v1

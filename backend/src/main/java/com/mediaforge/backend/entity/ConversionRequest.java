@@ -1,99 +1,48 @@
 package com.mediaforge.backend.entity;
 
-import jakarta.persistence.*;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
-@Entity
-@Table(name = "conversion_requests")
+/**
+ * In-memory representation of media conversion request parameters.
+ */
 public class ConversionRequest {
 
-    @Id
-    @Column(name = "id", nullable = false, updatable = false)
     private UUID id;
-
-    @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "job_id", nullable = false)
     private MediaJob job;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "input_file_id")
     private MediaFile inputFile;
-
-    @Column(name = "output_format", nullable = false, length = 20)
     private String outputFormat;
-
-    @Column(name = "target_resolution", length = 20)
     private String targetResolution;
-
-    @Column(name = "audio_bitrate")
     private Integer audioBitrate;
-
-    @Column(name = "video_bitrate", length = 20)
     private String videoBitrate;
-
-    @Column(name = "frame_rate")
     private Integer frameRate;
-
-    @Column(name = "video_codec", length = 20)
     private String videoCodec;
-
-    @Column(name = "audio_codec", length = 20)
     private String audioCodec;
-
-    @Column(name = "sample_rate")
     private Integer sampleRate;
-
-    @Column(name = "audio_channels")
     private Integer audioChannels;
-
-    @Column(name = "quality_preset", length = 20)
     private String qualityPreset;
-
-    @Column(name = "remove_audio")
     private Boolean removeAudio = false;
-
-    @Column(name = "image_width")
     private Integer imageWidth;
-
-    @Column(name = "image_height")
     private Integer imageHeight;
-
-    @Column(name = "image_quality")
     private Integer imageQuality;
-
-    @Column(name = "image_rotation")
     private Integer imageRotation;
-
-    @Column(name = "strip_metadata")
-    private Boolean stripMetadata = true;
-
-    @Column(name = "custom_options_json", columnDefinition = "TEXT")
-    private String customOptionsJson;
-
-    @Column(name = "created_at", nullable = false, updatable = false)
+    private Boolean stripMetadata = false;
     private OffsetDateTime createdAt;
 
     public ConversionRequest() {
+        this.id = UUID.randomUUID();
+        this.createdAt = OffsetDateTime.now();
     }
 
-    public ConversionRequest(UUID id, MediaJob job, MediaFile inputFile, String outputFormat, String targetResolution, Integer audioBitrate) {
+    public ConversionRequest(UUID id, MediaJob job, MediaFile inputFile, String outputFormat,
+                             String targetResolution, Integer audioBitrate) {
         this.id = id != null ? id : UUID.randomUUID();
         this.job = job;
         this.inputFile = inputFile;
         this.outputFormat = outputFormat;
         this.targetResolution = targetResolution;
         this.audioBitrate = audioBitrate;
-    }
-
-    @PrePersist
-    protected void onCreate() {
-        if (id == null) {
-            id = UUID.randomUUID();
-        }
-        if (createdAt == null) {
-            createdAt = OffsetDateTime.now();
-        }
+        this.createdAt = OffsetDateTime.now();
     }
 
     public UUID getId() {
@@ -246,14 +195,6 @@ public class ConversionRequest {
 
     public void setStripMetadata(Boolean stripMetadata) {
         this.stripMetadata = stripMetadata;
-    }
-
-    public String getCustomOptionsJson() {
-        return customOptionsJson;
-    }
-
-    public void setCustomOptionsJson(String customOptionsJson) {
-        this.customOptionsJson = customOptionsJson;
     }
 
     public OffsetDateTime getCreatedAt() {

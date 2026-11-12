@@ -22,6 +22,7 @@ export interface JobResponse {
   targetFormat?: string;
   targetQuality?: string;
   outputFileId?: string;
+  accessToken?: string;
 }
 
 export interface DownloadValidateRequest {

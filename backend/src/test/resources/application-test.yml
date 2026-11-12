@@ -2,20 +2,8 @@ server:
   port: 0
 
 spring:
-  datasource:
-    url: jdbc:h2:mem:mediaforge_test;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH
-    username: sa
-    password: ""
-    driver-class-name: org.h2.Driver
-  jpa:
-    open-in-view: false
-    hibernate:
-      ddl-auto: create-drop
-    properties:
-      hibernate:
-        dialect: org.hibernate.dialect.H2Dialect
-  flyway:
-    enabled: false
+  application:
+    name: mediaforge-backend-test
 
 app:
   storage:

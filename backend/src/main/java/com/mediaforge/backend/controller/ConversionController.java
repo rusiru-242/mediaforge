@@ -36,7 +36,7 @@ public class ConversionController {
     @Operation(summary = "Submit a media conversion job",
             description = "Validates conversion options, persists the request, and initializes a background conversion job")
     public ResponseEntity<ConversionResponse> createConversion(@Valid @RequestBody ConversionCreateRequest request) {
-        ConversionResponse response = conversionService.createConversion(request, null);
+        ConversionResponse response = conversionService.createConversion(request);
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
     }
 
@@ -44,7 +44,7 @@ public class ConversionController {
     @Operation(summary = "Submit a batch media conversion job",
             description = "Submits multiple media files for concurrent conversion under a common batch group")
     public ResponseEntity<BatchConversionResponse> createBatchConversion(@Valid @RequestBody BatchConversionRequest request) {
-        BatchConversionResponse response = conversionService.createBatchConversion(request, null);
+        BatchConversionResponse response = conversionService.createBatchConversion(request);
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
     }
 

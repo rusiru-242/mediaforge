@@ -1,37 +1,24 @@
 package com.mediaforge.backend.entity;
 
-import jakarta.persistence.*;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
-@Entity
-@Table(name = "download_requests")
+/**
+ * In-memory representation of download request parameters.
+ */
 public class DownloadRequest {
 
-    @Id
-    @Column(name = "id", nullable = false, updatable = false)
     private UUID id;
-
-    @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "job_id", nullable = false)
     private MediaJob job;
-
-    @Column(name = "source_url", nullable = false, columnDefinition = "TEXT")
     private String sourceUrl;
-
-    @Column(name = "platform", nullable = false, length = 50)
     private String platform;
-
-    @Column(name = "selected_format", nullable = false, length = 20)
     private String selectedFormat;
-
-    @Column(name = "selected_quality", nullable = false, length = 20)
     private String selectedQuality;
-
-    @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
 
     public DownloadRequest() {
+        this.id = UUID.randomUUID();
+        this.createdAt = OffsetDateTime.now();
     }
 
     public DownloadRequest(UUID id, MediaJob job, String sourceUrl, String platform, String selectedFormat, String selectedQuality) {
@@ -41,16 +28,7 @@ public class DownloadRequest {
         this.platform = platform;
         this.selectedFormat = selectedFormat;
         this.selectedQuality = selectedQuality;
-    }
-
-    @PrePersist
-    protected void onCreate() {
-        if (id == null) {
-            id = UUID.randomUUID();
-        }
-        if (createdAt == null) {
-            createdAt = OffsetDateTime.now();
-        }
+        this.createdAt = OffsetDateTime.now();
     }
 
     public UUID getId() {

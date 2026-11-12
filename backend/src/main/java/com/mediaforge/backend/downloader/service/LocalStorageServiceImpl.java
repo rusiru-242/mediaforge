@@ -11,7 +11,6 @@ import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
 import java.net.MalformedURLException;
@@ -65,7 +64,6 @@ public class LocalStorageServiceImpl implements MediaStorageService {
     }
 
     @Override
-    @Transactional
     public MediaFile storeDownloadedFile(MediaJob job, String originalFilename, Path tempFilePath, String mimeType, long fileSize) throws IOException {
         assertPathWithinRoot(tempFilePath);
         if (!Files.exists(tempFilePath)) {
@@ -100,7 +98,6 @@ public class LocalStorageServiceImpl implements MediaStorageService {
     }
 
     @Override
-    @Transactional(readOnly = true)
     public Resource loadAsResource(UUID fileId) throws IOException {
         MediaFile mediaFile = getMediaFile(fileId);
         Path filePath = storageRoot.resolve(mediaFile.getStorageKey()).normalize();
@@ -123,7 +120,6 @@ public class LocalStorageServiceImpl implements MediaStorageService {
     }
 
     @Override
-    @Transactional(readOnly = true)
     public MediaFile getMediaFile(UUID fileId) {
         return mediaFileRepository.findById(fileId)
                 .orElseThrow(() -> new ResourceNotFoundException("File record not found for id: " + fileId));
@@ -149,7 +145,6 @@ public class LocalStorageServiceImpl implements MediaStorageService {
 
     @Override
     @Scheduled(cron = "${app.storage.cleanup-cron:0 0 * * * *}") // Hourly cleanup
-    @Transactional
     public int cleanupExpiredFiles() {
         OffsetDateTime now = OffsetDateTime.now();
         List<MediaFile> allFiles = mediaFileRepository.findAll();
@@ -163,7 +158,7 @@ public class LocalStorageServiceImpl implements MediaStorageService {
                 } catch (IOException e) {
                     log.warn("Failed to delete expired physical file: {}", filePath, e);
                 }
-                mediaFileRepository.delete(file);
+                mediaFileRepository.deleteById(file.getId());
                 purgedCount++;
             }
         }

@@ -14,5 +14,8 @@ public interface DownloadService {
     DownloadValidateResponse validateUrl(DownloadValidateRequest request);
     MediaMetadataResponse getMetadata(DownloadValidateRequest request);
     List<MediaFormatOptionDto> getFormats(String url);
-    DownloadResponse createDownload(DownloadCreateRequest request, UUID requestingUserId);
+    DownloadResponse createDownload(DownloadCreateRequest request);
+    default DownloadResponse createDownload(DownloadCreateRequest request, UUID requestingUserId) {
+        return createDownload(request);
+    }
 }

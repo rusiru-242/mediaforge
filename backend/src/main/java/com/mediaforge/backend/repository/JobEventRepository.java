@@ -1,13 +1,12 @@
 package com.mediaforge.backend.repository;
 
 import com.mediaforge.backend.entity.JobEvent;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.UUID;
 
-@Repository
-public interface JobEventRepository extends JpaRepository<JobEvent, UUID> {
+public interface JobEventRepository {
+    JobEvent save(JobEvent event);
     List<JobEvent> findByJobIdOrderByCreatedAtAsc(UUID jobId);
+    void deleteByJobId(UUID jobId);
 }

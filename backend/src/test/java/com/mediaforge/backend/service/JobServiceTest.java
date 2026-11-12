@@ -2,6 +2,7 @@ package com.mediaforge.backend.service;
 
 import com.mediaforge.backend.dto.request.JobCreateRequest;
 import com.mediaforge.backend.dto.response.JobResponse;
+import com.mediaforge.backend.dto.response.PageResponse;
 import com.mediaforge.backend.entity.MediaJob;
 import com.mediaforge.backend.enums.JobStatus;
 import com.mediaforge.backend.enums.JobType;
@@ -12,7 +13,6 @@ import com.mediaforge.backend.exception.ResourceNotFoundException;
 import com.mediaforge.backend.mapper.JobMapper;
 import com.mediaforge.backend.repository.JobEventRepository;
 import com.mediaforge.backend.repository.MediaJobRepository;
-import com.mediaforge.backend.repository.UserRepository;
 import com.mediaforge.backend.service.impl.JobServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -20,9 +20,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
 
 import java.util.List;
 import java.util.Optional;
@@ -42,9 +39,6 @@ class JobServiceTest {
     private JobEventRepository eventRepository;
 
     @Mock
-    private UserRepository userRepository;
-
-    @Mock
     private com.mediaforge.backend.downloader.service.MediaDownloadService mediaDownloadService;
 
     private JobMapper jobMapper;
@@ -53,7 +47,7 @@ class JobServiceTest {
     @BeforeEach
     void setUp() {
         jobMapper = new JobMapper();
-        jobService = new JobServiceImpl(jobRepository, eventRepository, userRepository, jobMapper, mediaDownloadService);
+        jobService = new JobServiceImpl(jobRepository, eventRepository, jobMapper, mediaDownloadService);
     }
 
     @Test
@@ -67,7 +61,7 @@ class JobServiceTest {
             return job;
         });
 
-        JobResponse response = jobService.createJob(request, null);
+        JobResponse response = jobService.createJob(request);
 
         assertNotNull(response);
         assertNotNull(response.getId());
@@ -91,7 +85,7 @@ class JobServiceTest {
 
         when(jobRepository.findById(jobId)).thenReturn(Optional.of(job));
 
-        JobResponse response = jobService.getJobById(jobId, null);
+        JobResponse response = jobService.getJobById(jobId);
 
         assertNotNull(response);
         assertEquals(jobId, response.getId());
@@ -105,7 +99,7 @@ class JobServiceTest {
         UUID jobId = UUID.randomUUID();
         when(jobRepository.findById(jobId)).thenReturn(Optional.empty());
 
-        assertThrows(ResourceNotFoundException.class, () -> jobService.getJobById(jobId, null));
+        assertThrows(ResourceNotFoundException.class, () -> jobService.getJobById(jobId));
     }
 
     @Test
@@ -118,7 +112,7 @@ class JobServiceTest {
         when(jobRepository.findById(jobId)).thenReturn(Optional.of(job));
         when(jobRepository.save(any(MediaJob.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        JobResponse response = jobService.cancelJob(jobId, null);
+        JobResponse response = jobService.cancelJob(jobId);
 
         assertNotNull(response);
         assertEquals(JobStatus.CANCELLED, response.getStatus());
@@ -135,7 +129,7 @@ class JobServiceTest {
 
         when(jobRepository.findById(jobId)).thenReturn(Optional.of(job));
 
-        assertThrows(JobCancellationException.class, () -> jobService.cancelJob(jobId, null));
+        assertThrows(JobCancellationException.class, () -> jobService.cancelJob(jobId));
         verify(jobRepository, never()).save(any());
     }
 
@@ -171,11 +165,10 @@ class JobServiceTest {
     @Test
     @DisplayName("Should list jobs with pagination")
     void testListJobs() {
-        PageRequest pageRequest = PageRequest.of(0, 10);
         MediaJob job = new MediaJob(UUID.randomUUID(), null, JobType.DOWNLOAD, SourceType.URL, null, "mp4");
-        when(jobRepository.findAll(pageRequest)).thenReturn(new PageImpl<>(List.of(job)));
+        when(jobRepository.findAll(0, 10)).thenReturn(new PageResponse<>(List.of(job), 0, 10, 1));
 
-        Page<JobResponse> result = jobService.listJobs(null, null, pageRequest);
+        PageResponse<JobResponse> result = jobService.listJobs(null, 0, 10);
 
         assertNotNull(result);
         assertEquals(1, result.getTotalElements());

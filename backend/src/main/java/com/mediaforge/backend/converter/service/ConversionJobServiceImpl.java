@@ -12,7 +12,6 @@ import com.mediaforge.backend.entity.ConversionRequest;
 import com.mediaforge.backend.entity.JobEvent;
 import com.mediaforge.backend.entity.MediaFile;
 import com.mediaforge.backend.entity.MediaJob;
-import com.mediaforge.backend.entity.User;
 import com.mediaforge.backend.enums.JobStatus;
 import com.mediaforge.backend.enums.JobType;
 import com.mediaforge.backend.enums.SourceType;
@@ -22,13 +21,11 @@ import com.mediaforge.backend.repository.ConversionRequestRepository;
 import com.mediaforge.backend.repository.JobEventRepository;
 import com.mediaforge.backend.repository.MediaFileRepository;
 import com.mediaforge.backend.repository.MediaJobRepository;
-import com.mediaforge.backend.repository.UserRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -40,7 +37,6 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
 @Service
-@Transactional
 public class ConversionJobServiceImpl implements ConversionJobService {
 
     private static final Logger log = LoggerFactory.getLogger(ConversionJobServiceImpl.class);
@@ -49,7 +45,6 @@ public class ConversionJobServiceImpl implements ConversionJobService {
     private final MediaFileRepository fileRepository;
     private final ConversionRequestRepository conversionRequestRepository;
     private final JobEventRepository eventRepository;
-    private final UserRepository userRepository;
     private final JobMapper jobMapper;
     private final ConversionWorker conversionWorker;
     private final ConversionProgressService progressService;
@@ -60,7 +55,6 @@ public class ConversionJobServiceImpl implements ConversionJobService {
                                   MediaFileRepository fileRepository,
                                   ConversionRequestRepository conversionRequestRepository,
                                   JobEventRepository eventRepository,
-                                  UserRepository userRepository,
                                   JobMapper jobMapper,
                                   ConversionWorker conversionWorker,
                                   ConversionProgressService progressService,
@@ -70,7 +64,6 @@ public class ConversionJobServiceImpl implements ConversionJobService {
         this.fileRepository = fileRepository;
         this.conversionRequestRepository = conversionRequestRepository;
         this.eventRepository = eventRepository;
-        this.userRepository = userRepository;
         this.jobMapper = jobMapper;
         this.conversionWorker = conversionWorker;
         this.progressService = progressService;
@@ -79,7 +72,7 @@ public class ConversionJobServiceImpl implements ConversionJobService {
     }
 
     @Override
-    public ConversionResponse submitJob(ConversionCreateRequest request, UUID requestingUserId) {
+    public ConversionResponse submitJob(ConversionCreateRequest request) {
         if (request == null) {
             throw new IllegalArgumentException("Conversion request cannot be null");
         }
@@ -92,12 +85,6 @@ public class ConversionJobServiceImpl implements ConversionJobService {
 
         if (!mediaConversionService.isFormatSupported(targetFormat)) {
             throw new IllegalArgumentException("Unsupported conversion format: " + targetFormat);
-        }
-
-        User user = null;
-        if (requestingUserId != null) {
-            user = userRepository.findById(requestingUserId)
-                    .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + requestingUserId));
         }
 
         if (request.getInputFileId() == null) {
@@ -117,7 +104,6 @@ public class ConversionJobServiceImpl implements ConversionJobService {
         // 1. Create MediaJob in QUEUED status
         MediaJob job = new MediaJob(
                 UUID.randomUUID(),
-                user,
                 JobType.CONVERSION,
                 SourceType.UPLOAD,
                 inputFormat,
@@ -126,6 +112,7 @@ public class ConversionJobServiceImpl implements ConversionJobService {
         job.setStatus(JobStatus.QUEUED);
         job.setProgress(0);
         job.setBatchId(request.getBatchId());
+        job.setTargetResolution(request.getTargetResolution());
         MediaJob savedJob = jobRepository.save(job);
 
         // 2. Persist ConversionRequest entity
@@ -183,8 +170,6 @@ public class ConversionJobServiceImpl implements ConversionJobService {
 
         conversionWorker.submit(savedJob.getId(), inputFile, targetFormat, options);
 
-        log.info("Conversion job {} successfully queued for {}", savedJob.getId(), inputFile.getOriginalFilename());
-
         JobResponse jobResponse = jobMapper.toResponse(savedJob);
         return new ConversionResponse(
                 savedJob.getId(),
@@ -193,25 +178,22 @@ public class ConversionJobServiceImpl implements ConversionJobService {
                 request.getTargetResolution(),
                 request.getAudioBitrate(),
                 JobStatus.QUEUED.name(),
-                "Conversion job successfully accepted and dispatched to FFmpeg processing queue."
+                "Conversion job queued successfully"
         );
     }
 
     @Override
-    public BatchConversionResponse submitBatch(BatchConversionRequest request, UUID requestingUserId) {
+    public BatchConversionResponse submitBatch(BatchConversionRequest request) {
         if (request == null || request.getItems() == null || request.getItems().isEmpty()) {
-            throw new IllegalArgumentException("Batch conversion request must contain at least one item");
+            throw new IllegalArgumentException("Batch conversion request must contain at least one conversion item");
         }
 
         UUID batchId = UUID.randomUUID();
         List<JobResponse> jobs = new ArrayList<>();
 
         for (ConversionCreateRequest item : request.getItems()) {
-            if ((item.getOutputFormat() == null || item.getOutputFormat().isBlank()) && request.getGlobalOutputFormat() != null) {
-                item.setOutputFormat(request.getGlobalOutputFormat());
-            }
             item.setBatchId(batchId);
-            ConversionResponse resp = submitJob(item, requestingUserId);
+            ConversionResponse resp = submitJob(item);
             jobs.add(resp.getJob());
         }
 
@@ -219,62 +201,52 @@ public class ConversionJobServiceImpl implements ConversionJobService {
                 batchId,
                 jobs.size(),
                 jobs,
-                "QUEUED",
-                String.format("Batch of %d conversion jobs submitted successfully", jobs.size())
+                JobStatus.QUEUED.name(),
+                String.format("Successfully submitted batch of %d conversion jobs", jobs.size())
         );
     }
 
     @Override
-    @Transactional(readOnly = true)
     public ConversionProgressResponse getProgress(UUID jobId) {
-        ConversionProgress cached = progressService.getProgress(jobId);
-
         MediaJob job = jobRepository.findById(jobId)
-                .orElseThrow(() -> new ResourceNotFoundException("Job not found with id: " + jobId));
+                .orElseThrow(() -> new ResourceNotFoundException("Job not found with ID: " + jobId));
 
-        UUID outputFileId = null;
-        Long outputFileSize = null;
-        if (!job.getFiles().isEmpty()) {
-            MediaFile out = job.getFiles().get(0);
-            outputFileId = out.getId();
-            outputFileSize = out.getFileSize();
-        }
-
-        if (cached != null) {
+        ConversionProgress progress = progressService.getProgress(jobId);
+        if (progress != null) {
             return new ConversionProgressResponse(
-                    jobId,
-                    cached.getStatus(),
-                    cached.getProgress(),
-                    cached.getStage(),
-                    cached.getElapsedSeconds(),
-                    cached.getEtaSeconds(),
-                    outputFileSize != null ? outputFileSize : cached.getOutputBytes(),
+                    progress.getJobId(),
+                    progress.getStatus(),
+                    progress.getProgress(),
+                    progress.getStage(),
+                    progress.getElapsedSeconds(),
+                    progress.getEtaSeconds(),
+                    progress.getOutputBytes(),
                     job.getOutputFormat(),
-                    outputFileId,
-                    cached.getErrorMessage()
+                    job.getOutputFileId(),
+                    progress.getErrorMessage()
             );
         }
 
         return new ConversionProgressResponse(
-                jobId,
+                job.getId(),
                 job.getStatus(),
                 job.getProgress(),
-                job.getStatus().name(),
-                0L,
-                0L,
-                outputFileSize,
+                null,
+                null,
+                null,
+                null,
                 job.getOutputFormat(),
-                outputFileId,
+                job.getOutputFileId(),
                 job.getErrorMessage()
         );
     }
 
     @Override
-    public boolean cancelJob(UUID jobId, UUID requestingUserId) {
+    public boolean cancelJob(UUID jobId) {
         MediaJob job = jobRepository.findById(jobId)
-                .orElseThrow(() -> new ResourceNotFoundException("Job not found: " + jobId));
+                .orElseThrow(() -> new ResourceNotFoundException("Job not found with ID: " + jobId));
 
-        if (job.getStatus() == JobStatus.COMPLETED || job.getStatus() == JobStatus.CANCELLED) {
+        if (job.getStatus().isTerminal()) {
             return false;
         }
 
@@ -282,38 +254,54 @@ public class ConversionJobServiceImpl implements ConversionJobService {
     }
 
     @Override
-    @Transactional(readOnly = true)
     public Resource createBatchZip(UUID batchId) throws IOException {
-        List<MediaJob> jobs = jobRepository.findByBatchId(batchId);
-        List<MediaFile> batchFiles = new ArrayList<>();
-
-        for (MediaJob job : jobs) {
-            if (job.getStatus() == JobStatus.COMPLETED && !job.getFiles().isEmpty()) {
-                batchFiles.addAll(job.getFiles());
-            }
+        List<MediaJob> batchJobs = jobRepository.findByBatchId(batchId);
+        if (batchJobs.isEmpty()) {
+            throw new ResourceNotFoundException("No conversion jobs found for batch ID: " + batchId);
         }
 
-        if (batchFiles.isEmpty()) {
-            throw new ResourceNotFoundException("No completed conversion files found for batch ID: " + batchId);
-        }
+        Path zipScratch = Files.createTempFile("batch-" + batchId + "-", ".zip");
+        File zipFile = zipScratch.toFile();
 
-        File tempZip = File.createTempFile("batch_" + batchId + "_", ".zip");
-        tempZip.deleteOnExit();
+        try (ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(zipFile))) {
+            byte[] buffer = new byte[8192];
+            Set<String> entryNames = new HashSet<>();
 
-        try (ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(tempZip))) {
-            for (MediaFile file : batchFiles) {
-                try {
-                    Path path = storageService.resolveFilePath(file);
-                    ZipEntry entry = new ZipEntry(file.getOriginalFilename());
-                    zos.putNextEntry(entry);
-                    Files.copy(path, zos);
+            for (MediaJob job : batchJobs) {
+                if (job.getStatus() == JobStatus.COMPLETED) {
+                    List<MediaFile> files = fileRepository.findByJobId(job.getId());
+                    if (files.isEmpty()) continue;
+
+                    MediaFile outputFile = files.get(0);
+                    Path diskPath = storageService.resolveFilePath(outputFile);
+                    if (!Files.exists(diskPath)) continue;
+
+                    String entryName = outputFile.getOriginalFilename();
+                    if (entryName == null || entryName.isBlank()) {
+                        entryName = outputFile.getStoredFilename();
+                    }
+
+                    int collisionCount = 1;
+                    String baseName = entryName;
+                    while (entryNames.contains(entryName)) {
+                        entryName = collisionCount + "_" + baseName;
+                        collisionCount++;
+                    }
+                    entryNames.add(entryName);
+
+                    ZipEntry zipEntry = new ZipEntry(entryName);
+                    zos.putNextEntry(zipEntry);
+                    try (var is = Files.newInputStream(diskPath)) {
+                        int len;
+                        while ((len = is.read(buffer)) > 0) {
+                            zos.write(buffer, 0, len);
+                        }
+                    }
                     zos.closeEntry();
-                } catch (Exception e) {
-                    log.warn("Could not add file {} to batch ZIP", file.getId(), e);
                 }
             }
         }
 
-        return new FileSystemResource(tempZip);
+        return new FileSystemResource(zipFile);
     }
 }

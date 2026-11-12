@@ -1,79 +1,66 @@
 package com.mediaforge.backend.service.impl;
 
+import com.mediaforge.backend.converter.service.ConversionWorker;
+import com.mediaforge.backend.downloader.service.MediaDownloadService;
 import com.mediaforge.backend.dto.request.JobCreateRequest;
 import com.mediaforge.backend.dto.response.JobResponse;
+import com.mediaforge.backend.dto.response.PageResponse;
 import com.mediaforge.backend.entity.JobEvent;
 import com.mediaforge.backend.entity.MediaJob;
-import com.mediaforge.backend.entity.User;
 import com.mediaforge.backend.enums.JobStatus;
 import com.mediaforge.backend.exception.InvalidJobTransitionException;
 import com.mediaforge.backend.exception.JobCancellationException;
 import com.mediaforge.backend.exception.ResourceNotFoundException;
-import com.mediaforge.backend.exception.UnauthorizedJobAccessException;
 import com.mediaforge.backend.mapper.JobMapper;
 import com.mediaforge.backend.repository.JobEventRepository;
 import com.mediaforge.backend.repository.MediaJobRepository;
-import com.mediaforge.backend.repository.UserRepository;
 import com.mediaforge.backend.service.JobService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @Service
-@Transactional
 public class JobServiceImpl implements JobService {
 
     private static final Logger log = LoggerFactory.getLogger(JobServiceImpl.class);
 
     private final MediaJobRepository jobRepository;
     private final JobEventRepository eventRepository;
-    private final UserRepository userRepository;
     private final JobMapper jobMapper;
-    private final com.mediaforge.backend.downloader.service.MediaDownloadService mediaDownloadService;
-    private final com.mediaforge.backend.converter.service.ConversionWorker conversionWorker;
+    private final MediaDownloadService mediaDownloadService;
+    private final ConversionWorker conversionWorker;
 
     public JobServiceImpl(MediaJobRepository jobRepository,
                           JobEventRepository eventRepository,
-                          UserRepository userRepository,
                           JobMapper jobMapper,
-                          @org.springframework.context.annotation.Lazy com.mediaforge.backend.downloader.service.MediaDownloadService mediaDownloadService) {
-        this(jobRepository, eventRepository, userRepository, jobMapper, mediaDownloadService, null);
-    }
-
-    public JobServiceImpl(MediaJobRepository jobRepository,
-                          JobEventRepository eventRepository,
-                          UserRepository userRepository,
-                          JobMapper jobMapper,
-                          @org.springframework.context.annotation.Lazy com.mediaforge.backend.downloader.service.MediaDownloadService mediaDownloadService,
-                          @org.springframework.context.annotation.Lazy com.mediaforge.backend.converter.service.ConversionWorker conversionWorker) {
+                          @Lazy MediaDownloadService mediaDownloadService,
+                          @Lazy ConversionWorker conversionWorker) {
         this.jobRepository = jobRepository;
         this.eventRepository = eventRepository;
-        this.userRepository = userRepository;
         this.jobMapper = jobMapper;
         this.mediaDownloadService = mediaDownloadService;
         this.conversionWorker = conversionWorker;
     }
 
+    public JobServiceImpl(MediaJobRepository jobRepository,
+                          JobEventRepository eventRepository,
+                          JobMapper jobMapper,
+                          @Lazy MediaDownloadService mediaDownloadService) {
+        this(jobRepository, eventRepository, jobMapper, mediaDownloadService, null);
+    }
+
     @Override
-    public JobResponse createJob(JobCreateRequest request, UUID requestingUserId) {
+    public JobResponse createJob(JobCreateRequest request) {
         log.info("Creating new media job: type={}, source={}, output={}",
                 request.getJobType(), request.getSourceType(), request.getOutputFormat());
 
-        User user = null;
-        if (requestingUserId != null) {
-            user = userRepository.findById(requestingUserId)
-                    .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + requestingUserId));
-        }
-
         MediaJob job = new MediaJob(
                 UUID.randomUUID(),
-                user,
                 request.getJobType(),
                 request.getSourceType(),
                 request.getInputFormat(),
@@ -84,7 +71,6 @@ public class JobServiceImpl implements JobService {
 
         MediaJob savedJob = jobRepository.save(job);
 
-        // Record creation event
         JobEvent event = new JobEvent(UUID.randomUUID(), savedJob, "JOB_CREATED", "Media job created in PENDING status");
         eventRepository.save(event);
 
@@ -92,38 +78,40 @@ public class JobServiceImpl implements JobService {
     }
 
     @Override
-    @Transactional(readOnly = true)
-    public JobResponse getJobById(UUID id, UUID requestingUserId) {
-        MediaJob job = findJobAndValidateAccess(id, requestingUserId);
+    public JobResponse getJobById(UUID id) {
+        MediaJob job = jobRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Media job not found: " + id));
         return jobMapper.toResponse(job);
     }
 
     @Override
-    @Transactional(readOnly = true)
-    public Page<JobResponse> listJobs(JobStatus status, UUID requestingUserId, Pageable pageable) {
-        Page<MediaJob> jobs;
-        if (requestingUserId != null && status != null) {
-            jobs = jobRepository.findByUserIdAndStatus(requestingUserId, status, pageable);
-        } else if (requestingUserId != null) {
-            jobs = jobRepository.findByUserId(requestingUserId, pageable);
-        } else if (status != null) {
-            jobs = jobRepository.findByStatus(status, pageable);
+    public PageResponse<JobResponse> listJobs(JobStatus status, int page, int size) {
+        PageResponse<MediaJob> pagedJobs;
+        if (status != null) {
+            pagedJobs = jobRepository.findByStatus(status, page, size);
         } else {
-            jobs = jobRepository.findAll(pageable);
+            pagedJobs = jobRepository.findAll(page, size);
         }
-        return jobs.map(jobMapper::toResponse);
+
+        List<JobResponse> dtoList = pagedJobs.getContent().stream()
+                .map(jobMapper::toResponse)
+                .toList();
+
+        return new PageResponse<>(dtoList, pagedJobs.getNumber(), pagedJobs.getSize(), pagedJobs.getTotalElements());
     }
 
     @Override
-    public JobResponse cancelJob(UUID id, UUID requestingUserId) {
-        MediaJob job = findJobAndValidateAccess(id, requestingUserId);
+    public JobResponse cancelJob(UUID id) {
+        MediaJob job = jobRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Media job not found: " + id));
 
         if (!job.getStatus().canBeCancelled()) {
             throw new JobCancellationException(job.getStatus());
         }
 
-        // Signal worker thread if download or conversion is currently running
-        mediaDownloadService.cancelActiveDownload(id);
+        if (mediaDownloadService != null) {
+            mediaDownloadService.cancelActiveDownload(id);
+        }
         if (conversionWorker != null) {
             conversionWorker.cancel(id);
         }
@@ -135,7 +123,7 @@ public class JobServiceImpl implements JobService {
         MediaJob updatedJob = jobRepository.save(job);
 
         JobEvent event = new JobEvent(UUID.randomUUID(), updatedJob, "JOB_CANCELLED",
-                String.format("Job cancelled by user from previous status: %s", previousStatus));
+                String.format("Job cancelled from previous status: %s", previousStatus));
         eventRepository.save(event);
 
         log.info("Job {} cancelled successfully", id);
@@ -187,18 +175,5 @@ public class JobServiceImpl implements JobService {
         eventRepository.save(event);
 
         return jobMapper.toResponse(saved);
-    }
-
-    private MediaJob findJobAndValidateAccess(UUID id, UUID requestingUserId) {
-        MediaJob job = jobRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Media job not found: " + id));
-
-        // If job belongs to a registered user, only the owner can access it (unless anonymous public jobs)
-        if (job.getUser() != null && requestingUserId != null) {
-            if (!job.getUser().getId().equals(requestingUserId)) {
-                throw new UnauthorizedJobAccessException("You do not have permission to access job: " + id);
-            }
-        }
-        return job;
     }
 }

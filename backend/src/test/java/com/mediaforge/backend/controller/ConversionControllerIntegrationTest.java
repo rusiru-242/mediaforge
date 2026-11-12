@@ -57,7 +57,7 @@ class ConversionControllerIntegrationTest {
         ConversionResponse response = new ConversionResponse(jobId, jobResponse, "webm", "720p", 192,
                 JobStatus.QUEUED.name(), "Job queued successfully");
 
-        when(conversionService.createConversion(any(ConversionCreateRequest.class), any())).thenReturn(response);
+        when(conversionService.createConversion(any(ConversionCreateRequest.class))).thenReturn(response);
 
         mockMvc.perform(post("/api/v1/conversions")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -77,7 +77,7 @@ class ConversionControllerIntegrationTest {
         BatchConversionRequest batchReq = new BatchConversionRequest(List.of(item));
 
         BatchConversionResponse batchResp = new BatchConversionResponse(batchId, 1, List.of(), "QUEUED", "Batch submitted");
-        when(conversionService.createBatchConversion(any(BatchConversionRequest.class), any())).thenReturn(batchResp);
+        when(conversionService.createBatchConversion(any(BatchConversionRequest.class))).thenReturn(batchResp);
 
         mockMvc.perform(post("/api/v1/conversions/batch")
                         .contentType(MediaType.APPLICATION_JSON)

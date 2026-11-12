@@ -76,11 +76,6 @@ export function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/history" className="hover:text-brand-600 dark:hover:text-brand-400 transition-colors">
-                  Conversion & Job History
-                </Link>
-              </li>
-              <li>
                 <Link href="/about" className="hover:text-brand-600 dark:hover:text-brand-400 transition-colors">
                   About MediaForge
                 </Link>

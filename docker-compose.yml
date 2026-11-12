@@ -1,30 +1,6 @@
 services:
   # ---------------------------------------------------------------------------
-  # PostgreSQL Database Service
-  # ---------------------------------------------------------------------------
-  postgres:
-    image: postgres:16-alpine
-    container_name: mediaforge-postgres
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: ${DB_NAME:-mediaforge_db}
-      POSTGRES_USER: ${DB_USER:-mediaforge_user}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-mediaforge_dev_secret}
-    ports:
-      - "${DB_PORT:-5432}:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-mediaforge_user} -d ${DB_NAME:-mediaforge_db}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-    networks:
-      - mediaforge-network
-
-  # ---------------------------------------------------------------------------
-  # Spring Boot Backend API Service
+  # Spring Boot Backend API Service (Database-Free, In-Memory Ephemeral Engine)
   # ---------------------------------------------------------------------------
   backend:
     build:
@@ -32,16 +8,8 @@ services:
       dockerfile: Dockerfile
     container_name: mediaforge-backend
     restart: unless-stopped
-    depends_on:
-      postgres:
-        condition: service_healthy
     environment:
       PORT: 8080
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_NAME: ${DB_NAME:-mediaforge_db}
-      DB_USER: ${DB_USER:-mediaforge_user}
-      DB_PASSWORD: ${DB_PASSWORD:-mediaforge_dev_secret}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:8080}
       STORAGE_LOCAL_PATH: /app/uploads
       FFMPEG_PATH: /usr/bin/ffmpeg
@@ -58,8 +26,6 @@ services:
       - mediaforge-network
 
 volumes:
-  postgres_data:
-    name: mediaforge_postgres_data
   mediaforge_uploads:
     name: mediaforge_uploads_data
   mediaforge_conversions:

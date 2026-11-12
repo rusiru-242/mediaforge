@@ -136,7 +136,7 @@ class DownloadControllerIntegrationTest {
         DownloadResponse response = new DownloadResponse(jobId, job, "https://example.com/video", "example",
                 "mp4", "720p", "QUEUED", "Queued");
 
-        when(downloadService.createDownload(any(DownloadCreateRequest.class), any())).thenReturn(response);
+        when(downloadService.createDownload(any(DownloadCreateRequest.class))).thenReturn(response);
 
         mockMvc.perform(post("/api/v1/downloads")
                         .contentType(MediaType.APPLICATION_JSON)
