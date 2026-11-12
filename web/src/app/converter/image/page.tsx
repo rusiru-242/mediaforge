@@ -13,15 +13,25 @@ import { Badge } from '@/components/ui/Badge';
 import { JobStatusBadge } from '@/components/feedback/JobStatusBadge';
 import { ErrorAlert } from '@/components/feedback/ErrorAlert';
 import { ProgressBar } from '@/components/ui/ProgressBar';
+import { IMAGE_PRESETS } from '@/utils/presets';
 
 export default function ImageConverterPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [targetFormat, setTargetFormat] = useState('webp');
-  const [quality, setQuality] = useState('85');
+  const [selectedPreset, setSelectedPreset] = useState<string>('balanced');
+  const [quality, setQuality] = useState('75');
   const [resizeMode, setResizeMode] = useState('original');
   const [customWidth, setCustomWidth] = useState('');
   const [customHeight, setCustomHeight] = useState('');
   const [rotateDegrees, setRotateDegrees] = useState('0');
+
+  const handlePresetChange = (presetId: string) => {
+    setSelectedPreset(presetId);
+    const found = IMAGE_PRESETS.find((p) => p.id === presetId);
+    if (found) {
+      setQuality(found.quality.toString());
+    }
+  };
 
   const [stage, setStage] = useState<'IDLE' | 'UPLOADING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'CANCELLED'>('IDLE');
   const [error, setError] = useState<string | null>(null);
@@ -110,6 +120,7 @@ export default function ImageConverterPage() {
         inputFileId: uploadResp.id || uploadResp.fileId,
         inputFormat,
         outputFormat: targetFormat,
+        qualityPreset: selectedPreset !== 'custom' ? selectedPreset : undefined,
         quality: parseInt(quality, 10),
         resizeWidth,
         resizeHeight,
@@ -181,7 +192,20 @@ export default function ImageConverterPage() {
                 <span>Image Optimization Parameters</span>
               </div>
 
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <Select
+                  label="Quality Preset"
+                  value={selectedPreset}
+                  onChange={(e) => handlePresetChange(e.target.value)}
+                  options={[
+                    ...IMAGE_PRESETS.map((p) => ({
+                      label: `${p.label}`,
+                      value: p.id,
+                    })),
+                    { label: 'Custom', value: 'custom' },
+                  ]}
+                />
+
                 <Select
                   label="Target Format"
                   value={targetFormat}

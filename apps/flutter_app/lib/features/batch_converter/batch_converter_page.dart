@@ -12,31 +12,39 @@ import '../../shared/providers/app_providers.dart';
 class BatchItem {
   final String path;
   final String name;
+  final String outputFormat;
   final String? jobId;
   final String status;
   final double progress;
+  final String? errorMessage;
 
   const BatchItem({
     required this.path,
     required this.name,
+    required this.outputFormat,
     this.jobId,
     this.status = 'pending',
     this.progress = 0.0,
+    this.errorMessage,
   });
 
   BatchItem copyWith({
     String? path,
     String? name,
+    String? outputFormat,
     String? jobId,
     String? status,
     double? progress,
+    String? errorMessage,
   }) {
     return BatchItem(
       path: path ?? this.path,
       name: name ?? this.name,
+      outputFormat: outputFormat ?? this.outputFormat,
       jobId: jobId ?? this.jobId,
       status: status ?? this.status,
       progress: progress ?? this.progress,
+      errorMessage: errorMessage ?? this.errorMessage,
     );
   }
 }
@@ -50,7 +58,6 @@ class BatchConverterPage extends ConsumerStatefulWidget {
 
 class _BatchConverterPageState extends ConsumerState<BatchConverterPage> {
   final List<BatchItem> _items = [];
-  String _outputFormat = 'mp4';
   String? _outputFolder;
   bool _isProcessing = false;
   int _completedCount = 0;
@@ -70,7 +77,12 @@ class _BatchConverterPageState extends ConsumerState<BatchConverterPage> {
       setState(() {
         for (final file in result.files) {
           if (file.path != null) {
-            _items.add(BatchItem(path: file.path!, name: file.name));
+            final defFmt = AppConfig.getDefaultOutputFormat(file.name);
+            _items.add(BatchItem(
+              path: file.path!,
+              name: file.name,
+              outputFormat: defFmt,
+            ));
           }
         }
       });
@@ -90,6 +102,42 @@ class _BatchConverterPageState extends ConsumerState<BatchConverterPage> {
         _completedCount = 0;
       });
     }
+  }
+
+  void _applyToAll(String targetFormat) {
+    if (_isProcessing) return;
+    setState(() {
+      for (int i = 0; i < _items.length; i++) {
+        final compatible = AppConfig.getCompatibleOutputFormats(_items[i].name);
+        if (compatible.contains(targetFormat)) {
+          _items[i] = _items[i].copyWith(outputFormat: targetFormat);
+        }
+      }
+    });
+  }
+
+  void _extractAllAudioToMp3() {
+    if (_isProcessing) return;
+    setState(() {
+      for (int i = 0; i < _items.length; i++) {
+        final type = AppConfig.detectMediaType(_items[i].name);
+        if (type == 'video' || type == 'audio') {
+          _items[i] = _items[i].copyWith(outputFormat: 'mp3');
+        }
+      }
+    });
+  }
+
+  void _allImagesToWebp() {
+    if (_isProcessing) return;
+    setState(() {
+      for (int i = 0; i < _items.length; i++) {
+        final type = AppConfig.detectMediaType(_items[i].name);
+        if (type == 'image') {
+          _items[i] = _items[i].copyWith(outputFormat: 'webp');
+        }
+      }
+    });
   }
 
   Future<void> _openFolder(String path) async {
@@ -112,6 +160,10 @@ class _BatchConverterPageState extends ConsumerState<BatchConverterPage> {
 
     for (int i = 0; i < _items.length; i++) {
       if (!_isProcessing) break;
+      if (_items[i].status == 'completed') {
+        _completedCount++;
+        continue;
+      }
 
       final item = _items[i];
       final baseName = p.basenameWithoutExtension(item.path);
@@ -119,23 +171,25 @@ class _BatchConverterPageState extends ConsumerState<BatchConverterPage> {
 
       JobType type;
       if (AppConfig.videoInputFormats.contains(ext)) {
-        type = JobType.videoConversion;
+        type = ['mp3', 'wav', 'aac', 'flac'].contains(item.outputFormat)
+            ? JobType.audioConversion
+            : JobType.videoConversion;
       } else if (AppConfig.audioInputFormats.contains(ext)) {
         type = JobType.audioConversion;
       } else {
         type = JobType.imageConversion;
       }
 
-      final outputPath = p.join(outputDir, '${baseName}_batch.$_outputFormat');
+      final outputPath = AppConfig.getUniqueOutputPath(outputDir, '${baseName}_batch', item.outputFormat);
       final job = MediaJob(
         type: type,
         inputPath: item.path,
         outputPath: outputPath,
-        outputFormat: _outputFormat,
+        outputFormat: item.outputFormat,
       );
       ref.read(jobListProvider.notifier).addJob(job);
       ref.read(jobListProvider.notifier).updateJob(job.id, status: JobStatus.processing, progress: 0.0);
-      setState(() => _items[i] = item.copyWith(jobId: job.id, status: 'processing'));
+      setState(() => _items[i] = item.copyWith(jobId: job.id, status: 'processing', errorMessage: null));
 
       MediaInfo sourceInfo;
       try {
@@ -150,7 +204,7 @@ class _BatchConverterPageState extends ConsumerState<BatchConverterPage> {
           await conversionService.convertVideo(
             job: job,
             sourceInfo: sourceInfo,
-            targetFormat: _outputFormat,
+            targetFormat: item.outputFormat,
             onProgress: (pr) {
               ref.read(jobListProvider.notifier).updateJob(job.id, progress: pr);
               if (mounted) {
@@ -170,7 +224,7 @@ class _BatchConverterPageState extends ConsumerState<BatchConverterPage> {
             onError: (e) {
               ref.read(jobListProvider.notifier).updateJob(job.id, status: JobStatus.failed, errorMessage: e);
               if (mounted) {
-                setState(() => _items[i] = _items[i].copyWith(status: 'failed'));
+                setState(() => _items[i] = _items[i].copyWith(status: 'failed', errorMessage: e));
               }
               completer.complete();
             },
@@ -179,7 +233,7 @@ class _BatchConverterPageState extends ConsumerState<BatchConverterPage> {
           await conversionService.convertAudio(
             job: job,
             sourceInfo: sourceInfo,
-            targetFormat: _outputFormat,
+            targetFormat: item.outputFormat,
             onProgress: (pr) {
               ref.read(jobListProvider.notifier).updateJob(job.id, progress: pr);
               if (mounted) {
@@ -199,7 +253,7 @@ class _BatchConverterPageState extends ConsumerState<BatchConverterPage> {
             onError: (e) {
               ref.read(jobListProvider.notifier).updateJob(job.id, status: JobStatus.failed, errorMessage: e);
               if (mounted) {
-                setState(() => _items[i] = _items[i].copyWith(status: 'failed'));
+                setState(() => _items[i] = _items[i].copyWith(status: 'failed', errorMessage: e));
               }
               completer.complete();
             },
@@ -207,7 +261,7 @@ class _BatchConverterPageState extends ConsumerState<BatchConverterPage> {
         } else {
           await conversionService.convertImage(
             job: job,
-            targetFormat: _outputFormat,
+            targetFormat: item.outputFormat,
             onProgress: (pr) {
               ref.read(jobListProvider.notifier).updateJob(job.id, progress: pr);
               if (mounted) {
@@ -227,7 +281,7 @@ class _BatchConverterPageState extends ConsumerState<BatchConverterPage> {
             onError: (e) {
               ref.read(jobListProvider.notifier).updateJob(job.id, status: JobStatus.failed, errorMessage: e);
               if (mounted) {
-                setState(() => _items[i] = _items[i].copyWith(status: 'failed'));
+                setState(() => _items[i] = _items[i].copyWith(status: 'failed', errorMessage: e));
               }
               completer.complete();
             },
@@ -237,7 +291,7 @@ class _BatchConverterPageState extends ConsumerState<BatchConverterPage> {
       } catch (e) {
         ref.read(jobListProvider.notifier).updateJob(job.id, status: JobStatus.failed, errorMessage: e.toString());
         if (mounted) {
-          setState(() => _items[i] = _items[i].copyWith(status: 'failed'));
+          setState(() => _items[i] = _items[i].copyWith(status: 'failed', errorMessage: e.toString()));
         }
       }
     }
@@ -284,7 +338,7 @@ class _BatchConverterPageState extends ConsumerState<BatchConverterPage> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Convert multiple videos, audio files, or images in sequential order.',
+                      'Convert multiple videos, audio files, or images with intelligent per-file format presets.',
                       style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                     ),
                   ],
@@ -311,26 +365,35 @@ class _BatchConverterPageState extends ConsumerState<BatchConverterPage> {
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16),
-                child: Row(
+                child: Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  alignment: WrapAlignment.spaceBetween,
                   children: [
-                    const Text('Target Output Format: ', style: TextStyle(fontWeight: FontWeight.w600)),
-                    const SizedBox(width: 12),
-                    DropdownButton<String>(
-                      value: _outputFormat,
-                      items: const [
-                        DropdownMenuItem(value: 'mp4', child: Text('MP4 (Video)')),
-                        DropdownMenuItem(value: 'mkv', child: Text('MKV (Video)')),
-                        DropdownMenuItem(value: 'webm', child: Text('WEBM (Video)')),
-                        DropdownMenuItem(value: 'mp3', child: Text('MP3 (Audio)')),
-                        DropdownMenuItem(value: 'wav', child: Text('WAV (Audio)')),
-                        DropdownMenuItem(value: 'flac', child: Text('FLAC (Audio)')),
-                        DropdownMenuItem(value: 'jpg', child: Text('JPG (Image)')),
-                        DropdownMenuItem(value: 'png', child: Text('PNG (Image)')),
-                        DropdownMenuItem(value: 'webp', child: Text('WEBP (Image)')),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        const Text('Quick Presets: ', style: TextStyle(fontWeight: FontWeight.w600)),
+                        ActionChip(
+                          avatar: const Icon(Icons.music_note, size: 16),
+                          label: const Text('Extract All to MP3'),
+                          onPressed: _isProcessing || _items.isEmpty ? null : _extractAllAudioToMp3,
+                        ),
+                        ActionChip(
+                          avatar: const Icon(Icons.image, size: 16),
+                          label: const Text('All Images to WebP'),
+                          onPressed: _isProcessing || _items.isEmpty ? null : _allImagesToWebp,
+                        ),
+                        ActionChip(
+                          avatar: const Icon(Icons.videocam, size: 16),
+                          label: const Text('Videos to MP4'),
+                          onPressed: _isProcessing || _items.isEmpty ? null : () => _applyToAll('mp4'),
+                        ),
                       ],
-                      onChanged: _isProcessing ? null : (v) => setState(() => _outputFormat = v!),
                     ),
-                    const Spacer(),
                     if (_isProcessing)
                       OutlinedButton.icon(
                         onPressed: _cancelBatch,
@@ -384,6 +447,8 @@ class _BatchConverterPageState extends ConsumerState<BatchConverterPage> {
                       separatorBuilder: (_, __) => const SizedBox(height: 8),
                       itemBuilder: (context, index) {
                         final item = _items[index];
+                        final compatibleFormats = AppConfig.getCompatibleOutputFormats(item.name);
+
                         return Card(
                           margin: EdgeInsets.zero,
                           child: ListTile(
@@ -414,13 +479,47 @@ class _BatchConverterPageState extends ConsumerState<BatchConverterPage> {
                                       Text('${(item.progress * 100).toInt()}%', style: const TextStyle(fontSize: 11)),
                                     ],
                                   )
-                                : Text('Status: ${item.status.toUpperCase()}', style: const TextStyle(fontSize: 12)),
-                            trailing: _isProcessing
-                                ? null
-                                : IconButton(
+                                : item.status == 'failed'
+                                    ? Text('Error: ${item.errorMessage ?? "Conversion failed"}',
+                                        style: const TextStyle(fontSize: 11, color: Colors.red))
+                                    : Text('Status: ${item.status.toUpperCase()}', style: const TextStyle(fontSize: 12)),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                DropdownButton<String>(
+                                  value: compatibleFormats.contains(item.outputFormat)
+                                      ? item.outputFormat
+                                      : compatibleFormats.first,
+                                  underline: const SizedBox(),
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: theme.colorScheme.primary,
+                                  ),
+                                  items: compatibleFormats
+                                      .map((f) => DropdownMenuItem(
+                                            value: f,
+                                            child: Text(f.toUpperCase()),
+                                          ))
+                                      .toList(),
+                                  onChanged: _isProcessing || item.status == 'completed'
+                                      ? null
+                                      : (v) {
+                                          if (v != null) {
+                                            setState(() {
+                                              _items[index] = item.copyWith(outputFormat: v);
+                                            });
+                                          }
+                                        },
+                                ),
+                                const SizedBox(width: 8),
+                                if (!_isProcessing)
+                                  IconButton(
                                     icon: const Icon(Icons.close, size: 18),
                                     onPressed: () => _removeItem(index),
                                   ),
+                              ],
+                            ),
                           ),
                         );
                       },
