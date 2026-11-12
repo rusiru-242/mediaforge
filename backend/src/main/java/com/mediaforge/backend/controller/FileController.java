@@ -64,9 +64,10 @@ public class FileController {
     }
 
     @GetMapping("/{id}/download")
-    @Operation(summary = "Download stored media file", description = "Streams the downloaded or converted media file with Content-Disposition headers")
+    @Operation(summary = "Download stored media file", description = "Streams the downloaded or converted media file with Content-Disposition headers. Optional access token validates short-lived download authorization.")
     public ResponseEntity<Resource> downloadFile(
-            @Parameter(description = "UUID of the media file") @PathVariable UUID id) throws IOException {
+            @Parameter(description = "UUID of the media file") @PathVariable UUID id,
+            @Parameter(description = "Optional short-lived access token") @RequestParam(required = false) String token) throws IOException {
         MediaFile file;
         Resource resource;
 
@@ -76,6 +77,12 @@ public class FileController {
         } catch (Exception e) {
             file = downloaderStorageService.getMediaFile(id);
             resource = downloaderStorageService.loadAsResource(id);
+        }
+
+        if (token != null && !token.isBlank() && file.getAccessToken() != null) {
+            if (!file.getAccessToken().equals(token)) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+            }
         }
 
         String filename = file.getOriginalFilename();

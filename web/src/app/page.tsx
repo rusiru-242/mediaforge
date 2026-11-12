@@ -92,15 +92,15 @@ export default function HomePage() {
     },
     {
       icon: Lock,
-      title: 'Zero Account Requirement',
+      title: 'Zero Account & Database Free',
       description:
-        'Start converting instantly as a guest or sign in for persistent cross-device conversion history and sync.',
+        'Start converting instantly with complete privacy. No accounts, no logins, and zero database tracking.',
     },
     {
       icon: Cpu,
       title: 'Spring Boot REST Engine',
       description:
-        'Backed by a high-concurrency Spring Boot 3 backend with OpenAPI 3 documentation, Actuator, and Flyway migrations.',
+        'Backed by a high-concurrency Spring Boot 3 backend with OpenAPI 3 documentation, Actuator, and in-memory job coordination.',
     },
     {
       icon: Layers,
@@ -295,9 +295,9 @@ export default function HomePage() {
                 Start Media Download
               </Button>
             </Link>
-            <Link href="/history">
+            <Link href="/formats">
               <Button size="lg" variant="outline" className="border-white/40 text-white hover:bg-white/10">
-                View Job History
+                Explore Formats
               </Button>
             </Link>
           </div>

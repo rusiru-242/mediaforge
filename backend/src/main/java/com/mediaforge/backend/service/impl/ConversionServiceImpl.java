@@ -9,13 +9,11 @@ import com.mediaforge.backend.dto.response.ConversionResponse;
 import com.mediaforge.backend.service.ConversionService;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
 import java.util.UUID;
 
 @Service
-@Transactional
 public class ConversionServiceImpl implements ConversionService {
 
     private final ConversionJobService conversionJobService;
@@ -25,13 +23,13 @@ public class ConversionServiceImpl implements ConversionService {
     }
 
     @Override
-    public ConversionResponse createConversion(ConversionCreateRequest request, UUID requestingUserId) {
-        return conversionJobService.submitJob(request, requestingUserId);
+    public ConversionResponse createConversion(ConversionCreateRequest request) {
+        return conversionJobService.submitJob(request);
     }
 
     @Override
-    public BatchConversionResponse createBatchConversion(BatchConversionRequest request, UUID requestingUserId) {
-        return conversionJobService.submitBatch(request, requestingUserId);
+    public BatchConversionResponse createBatchConversion(BatchConversionRequest request) {
+        return conversionJobService.submitBatch(request);
     }
 
     @Override
@@ -40,8 +38,8 @@ public class ConversionServiceImpl implements ConversionService {
     }
 
     @Override
-    public void cancelConversion(UUID jobId, UUID requestingUserId) {
-        conversionJobService.cancelJob(jobId, requestingUserId);
+    public void cancelConversion(UUID jobId) {
+        conversionJobService.cancelJob(jobId);
     }
 
     @Override

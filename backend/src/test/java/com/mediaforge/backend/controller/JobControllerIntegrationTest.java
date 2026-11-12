@@ -3,6 +3,7 @@ package com.mediaforge.backend.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mediaforge.backend.dto.request.JobCreateRequest;
 import com.mediaforge.backend.dto.response.JobResponse;
+import com.mediaforge.backend.dto.response.PageResponse;
 import com.mediaforge.backend.enums.JobStatus;
 import com.mediaforge.backend.enums.JobType;
 import com.mediaforge.backend.enums.SourceType;
@@ -14,7 +15,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -58,7 +59,7 @@ class JobControllerIntegrationTest {
         JobResponse response = new JobResponse(jobId, null, JobType.DOWNLOAD, SourceType.URL,
                 JobStatus.PENDING, 0, null, "mp4", null, OffsetDateTime.now(), null, null);
 
-        when(jobService.createJob(any(JobCreateRequest.class), any())).thenReturn(response);
+        when(jobService.createJob(any(JobCreateRequest.class))).thenReturn(response);
 
         mockMvc.perform(post("/api/v1/jobs")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -88,7 +89,7 @@ class JobControllerIntegrationTest {
         JobResponse response = new JobResponse(jobId, null, JobType.CONVERSION, SourceType.UPLOAD,
                 JobStatus.PROCESSING, 45, "avi", "mp4", null, OffsetDateTime.now(), null, null);
 
-        when(jobService.getJobById(eq(jobId), any())).thenReturn(response);
+        when(jobService.getJobById(eq(jobId))).thenReturn(response);
 
         mockMvc.perform(get("/api/v1/jobs/" + jobId))
                 .andExpect(status().isOk())
@@ -101,7 +102,7 @@ class JobControllerIntegrationTest {
     @DisplayName("GET /api/v1/jobs/{id} should return 404 Not Found when missing")
     void testGetJobNotFoundEndpoint() throws Exception {
         UUID jobId = UUID.randomUUID();
-        when(jobService.getJobById(eq(jobId), any())).thenThrow(new ResourceNotFoundException("Job not found: " + jobId));
+        when(jobService.getJobById(eq(jobId))).thenThrow(new ResourceNotFoundException("Job not found: " + jobId));
 
         mockMvc.perform(get("/api/v1/jobs/" + jobId))
                 .andExpect(status().isNotFound())
@@ -115,7 +116,7 @@ class JobControllerIntegrationTest {
         JobResponse response = new JobResponse(jobId, null, JobType.DOWNLOAD, SourceType.URL,
                 JobStatus.CANCELLED, 10, null, "mp4", null, OffsetDateTime.now(), null, OffsetDateTime.now());
 
-        when(jobService.cancelJob(eq(jobId), any())).thenReturn(response);
+        when(jobService.cancelJob(eq(jobId))).thenReturn(response);
 
         mockMvc.perform(post("/api/v1/jobs/" + jobId + "/cancel"))
                 .andExpect(status().isOk())
@@ -129,7 +130,7 @@ class JobControllerIntegrationTest {
         JobResponse response = new JobResponse(jobId, null, JobType.DOWNLOAD, SourceType.URL,
                 JobStatus.QUEUED, 0, null, "mp3", null, OffsetDateTime.now(), null, null);
 
-        when(jobService.listJobs(any(), any(), any())).thenReturn(new PageImpl<>(List.of(response)));
+        when(jobService.listJobs(any(), anyInt(), anyInt())).thenReturn(new PageResponse<>(List.of(response), 0, 10, 1));
 
         mockMvc.perform(get("/api/v1/jobs"))
                 .andExpect(status().isOk())

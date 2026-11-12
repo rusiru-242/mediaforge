@@ -13,7 +13,6 @@ import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.File;
@@ -74,7 +73,6 @@ public class ConversionStorageServiceImpl implements ConversionStorageService {
     }
 
     @Override
-    @Transactional
     public MediaFile storeUploadedFile(MultipartFile file) throws IOException {
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("Cannot upload empty file");
@@ -153,7 +151,6 @@ public class ConversionStorageServiceImpl implements ConversionStorageService {
     }
 
     @Override
-    @Transactional
     public MediaFile promoteToOutputFile(UUID jobId, File scratchFile, String originalFilename, String targetFormat, String mimeType) throws IOException {
         if (!scratchFile.exists() || scratchFile.length() == 0) {
             throw new IOException("Transcoded output scratch file is empty or missing: " + scratchFile.getAbsolutePath());

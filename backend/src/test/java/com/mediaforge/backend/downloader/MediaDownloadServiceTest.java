@@ -21,8 +21,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.support.TransactionTemplate;
 
 import java.io.IOException;
 import java.net.URI;
@@ -57,28 +55,15 @@ class MediaDownloadServiceTest {
     @Mock
     private JobEventRepository eventRepository;
 
-    @Mock
-    private PlatformTransactionManager transactionManager;
-
     private MediaDownloadServiceImpl downloadService;
-    private TransactionTemplate transactionTemplate;
 
     @BeforeEach
     void setUp() {
-        // Simple synchronous transaction template for unit test
-        transactionTemplate = new TransactionTemplate(transactionManager) {
-            @Override
-            public void executeWithoutResult(java.util.function.Consumer<org.springframework.transaction.TransactionStatus> action) {
-                action.accept(null);
-            }
-        };
-
         downloadService = new MediaDownloadServiceImpl(
                 adapterRegistry,
                 storageService,
                 jobRepository,
                 eventRepository,
-                transactionTemplate,
                 2
         );
     }

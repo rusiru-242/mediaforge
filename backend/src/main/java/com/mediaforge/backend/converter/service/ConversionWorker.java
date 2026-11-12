@@ -16,7 +16,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.support.TransactionTemplate;
 
 import java.io.File;
 import java.nio.file.Path;
@@ -38,7 +37,6 @@ public class ConversionWorker {
     private final ConversionStorageService storageService;
     private final ConversionProgressService progressService;
     private final FFmpegProcessExecutor ffmpegExecutor;
-    private final TransactionTemplate transactionTemplate;
 
     private ThreadPoolTaskExecutor taskExecutor;
 
@@ -47,15 +45,13 @@ public class ConversionWorker {
                             MediaConversionService conversionService,
                             ConversionStorageService storageService,
                             ConversionProgressService progressService,
-                            FFmpegProcessExecutor ffmpegExecutor,
-                            TransactionTemplate transactionTemplate) {
+                            FFmpegProcessExecutor ffmpegExecutor) {
         this.jobRepository = jobRepository;
         this.eventRepository = eventRepository;
         this.conversionService = conversionService;
         this.storageService = storageService;
         this.progressService = progressService;
         this.ffmpegExecutor = ffmpegExecutor;
-        this.transactionTemplate = transactionTemplate;
     }
 
     @PostConstruct
@@ -86,26 +82,19 @@ public class ConversionWorker {
     private void processConversionJob(UUID jobId, MediaFile inputFile, String targetFormat, ConversionOptions options) {
         log.info("Worker claiming conversion job {}", jobId);
 
-        // 1. Transition to PROCESSING state in DB
-        Boolean claimed = transactionTemplate.execute(status -> {
-            MediaJob job = jobRepository.findById(jobId).orElse(null);
-            if (job == null || job.getStatus() == JobStatus.CANCELLED) {
-                return false;
-            }
-            job.setStatus(JobStatus.PROCESSING);
-            job.setStartedAt(OffsetDateTime.now());
-            jobRepository.save(job);
-
-            JobEvent event = new JobEvent(UUID.randomUUID(), job, "CONVERSION_STARTED",
-                    "Started transcoding " + inputFile.getOriginalFilename() + " to " + targetFormat);
-            eventRepository.save(event);
-            return true;
-        });
-
-        if (Boolean.FALSE.equals(claimed)) {
+        // 1. Transition to PROCESSING state in in-memory repository
+        MediaJob job = jobRepository.findById(jobId).orElse(null);
+        if (job == null || job.getStatus() == JobStatus.CANCELLED) {
             log.warn("Job {} was not claimable or was cancelled before starting", jobId);
             return;
         }
+        job.setStatus(JobStatus.PROCESSING);
+        job.setStartedAt(OffsetDateTime.now());
+        jobRepository.save(job);
+
+        JobEvent event = new JobEvent(UUID.randomUUID(), job, "CONVERSION_STARTED",
+                "Started transcoding " + inputFile.getOriginalFilename() + " to " + targetFormat);
+        eventRepository.save(event);
 
         File scratchFile = null;
         try {
@@ -122,13 +111,11 @@ public class ConversionWorker {
                     progress -> {
                         // Forward progress updates
                         progressService.updateProgress(jobId, progress);
-                        // Persist progress to DB periodically
+                        // Persist progress to in-memory store periodically
                         if (progress.getProgress() % 5 == 0) {
-                            transactionTemplate.executeWithoutResult(status -> {
-                                jobRepository.findById(jobId).ifPresent(j -> {
-                                    j.setProgress(progress.getProgress());
-                                    jobRepository.save(j);
-                                });
+                            jobRepository.findById(jobId).ifPresent(j -> {
+                                j.setProgress(progress.getProgress());
+                                jobRepository.save(j);
                             });
                         }
                     }
@@ -144,20 +131,19 @@ public class ConversionWorker {
                     result.getMimeType()
             );
 
-            // 3. Complete Job in DB
-            transactionTemplate.executeWithoutResult(status -> {
-                MediaJob job = jobRepository.findById(jobId).orElse(null);
-                if (job != null) {
-                    job.setStatus(JobStatus.COMPLETED);
-                    job.setProgress(100);
-                    job.setCompletedAt(OffsetDateTime.now());
-                    jobRepository.save(job);
+            // 3. Complete Job in in-memory store
+            MediaJob completedJob = jobRepository.findById(jobId).orElse(null);
+            if (completedJob != null) {
+                completedJob.setStatus(JobStatus.COMPLETED);
+                completedJob.setProgress(100);
+                completedJob.setOutputFileId(outputMediaFile.getId());
+                completedJob.setCompletedAt(OffsetDateTime.now());
+                jobRepository.save(completedJob);
 
-                    JobEvent event = new JobEvent(UUID.randomUUID(), job, "CONVERSION_COMPLETED",
-                            "Media successfully converted to " + targetFormat + " (" + outputMediaFile.getFileSize() + " bytes)");
-                    eventRepository.save(event);
-                }
-            });
+                JobEvent completeEvent = new JobEvent(UUID.randomUUID(), completedJob, "CONVERSION_COMPLETED",
+                        "Media successfully converted to " + targetFormat + " (" + outputMediaFile.getFileSize() + " bytes)");
+                eventRepository.save(completeEvent);
+            }
 
             progressService.updateProgress(jobId, new ConversionProgress(
                     jobId,
@@ -189,17 +175,15 @@ public class ConversionWorker {
 
     private void handleJobCancellation(UUID jobId) {
         storageService.deleteScratchFiles(jobId);
-        transactionTemplate.executeWithoutResult(status -> {
-            MediaJob job = jobRepository.findById(jobId).orElse(null);
-            if (job != null && job.getStatus() != JobStatus.COMPLETED) {
-                job.setStatus(JobStatus.CANCELLED);
-                job.setErrorMessage("Conversion was cancelled by user");
-                jobRepository.save(job);
+        MediaJob job = jobRepository.findById(jobId).orElse(null);
+        if (job != null && job.getStatus() != JobStatus.COMPLETED) {
+            job.setStatus(JobStatus.CANCELLED);
+            job.setErrorMessage("Conversion was cancelled by user");
+            jobRepository.save(job);
 
-                JobEvent event = new JobEvent(UUID.randomUUID(), job, "CONVERSION_CANCELLED", "Job cancelled by user request");
-                eventRepository.save(event);
-            }
-        });
+            JobEvent event = new JobEvent(UUID.randomUUID(), job, "CONVERSION_CANCELLED", "Job cancelled by user request");
+            eventRepository.save(event);
+        }
 
         ConversionProgress prog = new ConversionProgress(jobId, JobStatus.CANCELLED, 0, "Cancelled", 0, null, 0);
         prog.setErrorMessage("Job cancelled by user");
@@ -208,18 +192,16 @@ public class ConversionWorker {
 
     private void handleJobFailure(UUID jobId, String errorMessage) {
         storageService.deleteScratchFiles(jobId);
-        transactionTemplate.executeWithoutResult(status -> {
-            MediaJob job = jobRepository.findById(jobId).orElse(null);
-            if (job != null && job.getStatus() != JobStatus.COMPLETED) {
-                job.setStatus(JobStatus.FAILED);
-                job.setErrorMessage(errorMessage != null ? errorMessage : "Media conversion failed during processing");
-                jobRepository.save(job);
+        MediaJob job = jobRepository.findById(jobId).orElse(null);
+        if (job != null && job.getStatus() != JobStatus.COMPLETED) {
+            job.setStatus(JobStatus.FAILED);
+            job.setErrorMessage(errorMessage != null ? errorMessage : "Media conversion failed during processing");
+            jobRepository.save(job);
 
-                JobEvent event = new JobEvent(UUID.randomUUID(), job, "CONVERSION_FAILED",
-                        "Conversion failed: " + job.getErrorMessage());
-                eventRepository.save(event);
-            }
-        });
+            JobEvent event = new JobEvent(UUID.randomUUID(), job, "CONVERSION_FAILED",
+                    "Conversion failed: " + job.getErrorMessage());
+            eventRepository.save(event);
+        }
 
         ConversionProgress prog = new ConversionProgress(jobId, JobStatus.FAILED, 0, "Failed", 0, null, 0);
         prog.setErrorMessage(errorMessage);

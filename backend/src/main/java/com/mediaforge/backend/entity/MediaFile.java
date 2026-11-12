@@ -1,43 +1,28 @@
 package com.mediaforge.backend.entity;
 
-import jakarta.persistence.*;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
-@Entity
-@Table(name = "media_files")
+/**
+ * In-memory representation of a stored media file.
+ */
 public class MediaFile {
 
-    @Id
-    @Column(name = "id", nullable = false, updatable = false)
     private UUID id;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "job_id", nullable = true)
     private MediaJob job;
-
-    @Column(name = "original_filename", nullable = false, length = 255)
     private String originalFilename;
-
-    @Column(name = "stored_filename", nullable = false, length = 255)
     private String storedFilename;
-
-    @Column(name = "storage_key", nullable = false, length = 500)
     private String storageKey;
-
-    @Column(name = "mime_type", nullable = false, length = 100)
     private String mimeType;
-
-    @Column(name = "file_size", nullable = false)
     private Long fileSize;
-
-    @Column(name = "created_at", nullable = false, updatable = false)
+    private String accessToken;
     private OffsetDateTime createdAt;
-
-    @Column(name = "expires_at")
     private OffsetDateTime expiresAt;
 
     public MediaFile() {
+        this.id = UUID.randomUUID();
+        this.createdAt = OffsetDateTime.now();
+        this.accessToken = UUID.randomUUID().toString().replace("-", "");
     }
 
     public MediaFile(UUID id, MediaJob job, String originalFilename, String storedFilename,
@@ -49,17 +34,9 @@ public class MediaFile {
         this.storageKey = storageKey;
         this.mimeType = mimeType;
         this.fileSize = fileSize;
-        this.expiresAt = expiresAt;
-    }
-
-    @PrePersist
-    protected void onCreate() {
-        if (id == null) {
-            id = UUID.randomUUID();
-        }
-        if (createdAt == null) {
-            createdAt = OffsetDateTime.now();
-        }
+        this.createdAt = OffsetDateTime.now();
+        this.accessToken = UUID.randomUUID().toString().replace("-", "");
+        this.expiresAt = expiresAt != null ? expiresAt : this.createdAt.plusHours(24);
     }
 
     public UUID getId() {
@@ -116,6 +93,14 @@ public class MediaFile {
 
     public void setFileSize(Long fileSize) {
         this.fileSize = fileSize;
+    }
+
+    public String getAccessToken() {
+        return accessToken;
+    }
+
+    public void setAccessToken(String accessToken) {
+        this.accessToken = accessToken;
     }
 
     public OffsetDateTime getCreatedAt() {

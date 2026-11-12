@@ -14,22 +14,18 @@ import com.mediaforge.backend.dto.response.MediaMetadataResponse;
 import com.mediaforge.backend.entity.DownloadRequest;
 import com.mediaforge.backend.entity.JobEvent;
 import com.mediaforge.backend.entity.MediaJob;
-import com.mediaforge.backend.entity.User;
 import com.mediaforge.backend.enums.JobStatus;
 import com.mediaforge.backend.enums.JobType;
 import com.mediaforge.backend.enums.SourceType;
-import com.mediaforge.backend.exception.ResourceNotFoundException;
 import com.mediaforge.backend.mapper.JobMapper;
 import com.mediaforge.backend.repository.DownloadRequestRepository;
 import com.mediaforge.backend.repository.JobEventRepository;
 import com.mediaforge.backend.repository.MediaJobRepository;
-import com.mediaforge.backend.repository.UserRepository;
 import com.mediaforge.backend.service.DownloadService;
 import com.mediaforge.backend.validation.UrlSecurityValidator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
 import java.net.URI;
@@ -39,7 +35,6 @@ import java.util.List;
 import java.util.UUID;
 
 @Service
-@Transactional
 public class DownloadServiceImpl implements DownloadService {
 
     private static final Logger log = LoggerFactory.getLogger(DownloadServiceImpl.class);
@@ -50,7 +45,6 @@ public class DownloadServiceImpl implements DownloadService {
     private final MediaJobRepository jobRepository;
     private final DownloadRequestRepository downloadRequestRepository;
     private final JobEventRepository eventRepository;
-    private final UserRepository userRepository;
     private final JobMapper jobMapper;
 
     public DownloadServiceImpl(UrlSecurityValidator urlValidator,
@@ -59,7 +53,6 @@ public class DownloadServiceImpl implements DownloadService {
                                MediaJobRepository jobRepository,
                                DownloadRequestRepository downloadRequestRepository,
                                JobEventRepository eventRepository,
-                               UserRepository userRepository,
                                JobMapper jobMapper) {
         this.urlValidator = urlValidator;
         this.metadataService = metadataService;
@@ -67,12 +60,10 @@ public class DownloadServiceImpl implements DownloadService {
         this.jobRepository = jobRepository;
         this.downloadRequestRepository = downloadRequestRepository;
         this.eventRepository = eventRepository;
-        this.userRepository = userRepository;
         this.jobMapper = jobMapper;
     }
 
     @Override
-    @Transactional(readOnly = true)
     public DownloadValidateResponse validateUrl(DownloadValidateRequest request) {
         URI validatedUri = urlValidator.validate(request.getUrl());
         String platform = urlValidator.extractPlatform(validatedUri);
@@ -112,36 +103,52 @@ public class DownloadServiceImpl implements DownloadService {
     }
 
     @Override
-    @Transactional(readOnly = true)
     public MediaMetadataResponse getMetadata(DownloadValidateRequest request) {
         URI validatedUri = urlValidator.validate(request.getUrl());
         String platform = urlValidator.extractPlatform(validatedUri);
 
         try {
             MediaMetadata meta = metadataService.extractMetadata(request.getUrl());
-            List<MediaFormatOptionDto> formatDtos = new ArrayList<>();
-            if (meta.getAvailableFormats() != null) {
-                for (MediaFormatOption opt : meta.getAvailableFormats()) {
-                    formatDtos.add(new MediaFormatOptionDto(
-                            opt.getFormat(),
-                            opt.getQuality(),
-                            opt.getResolution(),
-                            opt.getMimeType(),
-                            opt.getEstimatedBytes(),
-                            opt.isNativeStream(),
-                            opt.isRequiresConversion(),
-                            opt.getLabel()
-                    ));
-                }
+            if (meta == null) {
+                return new MediaMetadataResponse(
+                        false,
+                        validatedUri.toString(),
+                        platform,
+                        "Unknown Media",
+                        "UNKNOWN",
+                        "application/octet-stream",
+                        "bin",
+                        null,
+                        null,
+                        null,
+                        null,
+                        Collections.emptyList(),
+                        Collections.emptyList(),
+                        false,
+                        "Unable to extract metadata from provided URL"
+                );
             }
 
-            boolean directSupported = meta.getDirectStreamUri() != null && !formatDtos.isEmpty();
+            List<MediaFormatOptionDto> formatDtos = meta.getAvailableFormats().stream()
+                    .map(f -> new MediaFormatOptionDto(
+                            f.getFormat(),
+                            f.getQuality(),
+                            f.getResolution(),
+                            f.getMimeType(),
+                            f.getEstimatedBytes(),
+                            f.isNativeStream(),
+                            f.isRequiresConversion(),
+                            f.getLabel()
+                    ))
+                    .toList();
+
+            boolean directSupported = formatDtos.stream().anyMatch(MediaFormatOptionDto::isNativeStream);
 
             return new MediaMetadataResponse(
                     true,
                     validatedUri.toString(),
-                    meta.getSourceName() != null ? meta.getSourceName() : platform,
-                    meta.getTitle() != null ? meta.getTitle() : "Media Stream",
+                    platform,
+                    meta.getTitle(),
                     meta.getMediaType(),
                     meta.getMimeType(),
                     meta.getContainerFormat(),
@@ -177,7 +184,6 @@ public class DownloadServiceImpl implements DownloadService {
     }
 
     @Override
-    @Transactional(readOnly = true)
     public List<MediaFormatOptionDto> getFormats(String url) {
         if (url == null || url.trim().isEmpty()) {
             return Collections.emptyList();
@@ -187,19 +193,12 @@ public class DownloadServiceImpl implements DownloadService {
     }
 
     @Override
-    public DownloadResponse createDownload(DownloadCreateRequest request, UUID requestingUserId) {
+    public DownloadResponse createDownload(DownloadCreateRequest request) {
         URI validatedUri = urlValidator.validate(request.getUrl());
         String platform = urlValidator.extractPlatform(validatedUri);
 
-        User user = null;
-        if (requestingUserId != null) {
-            user = userRepository.findById(requestingUserId)
-                    .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + requestingUserId));
-        }
-
         MediaJob job = new MediaJob(
                 UUID.randomUUID(),
-                user,
                 JobType.DOWNLOAD,
                 SourceType.URL,
                 null,
@@ -207,6 +206,8 @@ public class DownloadServiceImpl implements DownloadService {
         );
         job.setStatus(JobStatus.PENDING);
         job.setProgress(0);
+        job.setSourceUrl(validatedUri.toString());
+        job.setTargetResolution(request.getSelectedQuality());
         MediaJob savedJob = jobRepository.save(job);
 
         DownloadRequest dlRequest = new DownloadRequest(

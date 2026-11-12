@@ -12,13 +12,22 @@ import java.util.UUID;
 
 public interface ConversionJobService {
 
-    ConversionResponse submitJob(ConversionCreateRequest request, UUID requestingUserId);
+    ConversionResponse submitJob(ConversionCreateRequest request);
+    default ConversionResponse submitJob(ConversionCreateRequest request, UUID unusedUserId) {
+        return submitJob(request);
+    }
 
-    BatchConversionResponse submitBatch(BatchConversionRequest request, UUID requestingUserId);
+    BatchConversionResponse submitBatch(BatchConversionRequest request);
+    default BatchConversionResponse submitBatch(BatchConversionRequest request, UUID unusedUserId) {
+        return submitBatch(request);
+    }
 
     ConversionProgressResponse getProgress(UUID jobId);
 
-    boolean cancelJob(UUID jobId, UUID requestingUserId);
+    boolean cancelJob(UUID jobId);
+    default boolean cancelJob(UUID jobId, UUID unusedUserId) {
+        return cancelJob(jobId);
+    }
 
     Resource createBatchZip(UUID batchId) throws IOException;
 }

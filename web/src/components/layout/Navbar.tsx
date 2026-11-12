@@ -11,7 +11,6 @@ import {
   FileAudio,
   Image as ImageIcon,
   Layers,
-  History,
   Grid,
   Activity,
   Menu,
@@ -47,7 +46,6 @@ export function Navbar() {
     { name: "Image", href: "/converter/image", icon: ImageIcon },
     { name: "Batch", href: "/converter/batch", icon: Layers },
     { name: "Formats", href: "/formats", icon: Grid },
-    { name: "History", href: "/history", icon: History },
   ];
 
   const isActive = (href: string) => {

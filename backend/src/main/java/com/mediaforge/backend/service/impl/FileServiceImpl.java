@@ -7,12 +7,10 @@ import com.mediaforge.backend.mapper.FileMapper;
 import com.mediaforge.backend.repository.MediaFileRepository;
 import com.mediaforge.backend.service.FileService;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
 
 @Service
-@Transactional(readOnly = true)
 public class FileServiceImpl implements FileService {
 
     private final MediaFileRepository fileRepository;

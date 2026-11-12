@@ -113,6 +113,6 @@ class MediaStorageServiceTest {
 
         assertEquals(1, purged);
         assertFalse(Files.exists(expiredFile));
-        verify(mediaFileRepository, times(1)).delete(expiredMediaFile);
+        verify(mediaFileRepository, times(1)).deleteById(expiredId);
     }
 }

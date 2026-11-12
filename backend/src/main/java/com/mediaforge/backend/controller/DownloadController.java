@@ -55,9 +55,9 @@ public class DownloadController {
 
     @PostMapping
     @Operation(summary = "Submit a media download job",
-            description = "Validates the URL, creates a persistent download job, and begins asynchronous downloading")
+            description = "Validates the URL, creates an in-memory download job, and begins asynchronous downloading")
     public ResponseEntity<DownloadResponse> createDownload(@Valid @RequestBody DownloadCreateRequest request) {
-        DownloadResponse response = downloadService.createDownload(request, null);
+        DownloadResponse response = downloadService.createDownload(request);
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
     }
 }

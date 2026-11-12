@@ -16,7 +16,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.support.TransactionTemplate;
 
 import java.net.URI;
 import java.nio.file.Path;
@@ -37,7 +36,6 @@ public class MediaDownloadServiceImpl implements MediaDownloadService {
     private final MediaStorageService storageService;
     private final MediaJobRepository jobRepository;
     private final JobEventRepository eventRepository;
-    private final TransactionTemplate transactionTemplate;
     private final ExecutorService executorService;
     private final Map<UUID, DownloadTask> activeTasks = new ConcurrentHashMap<>();
 
@@ -49,13 +47,11 @@ public class MediaDownloadServiceImpl implements MediaDownloadService {
             MediaStorageService storageService,
             MediaJobRepository jobRepository,
             JobEventRepository eventRepository,
-            TransactionTemplate transactionTemplate,
             @Value("${app.downloader.pool-size:5}") int poolSize) {
         this.adapterRegistry = adapterRegistry;
         this.storageService = storageService;
         this.jobRepository = jobRepository;
         this.eventRepository = eventRepository;
-        this.transactionTemplate = transactionTemplate;
         this.executorService = Executors.newFixedThreadPool(Math.max(2, poolSize));
     }
 
@@ -66,11 +62,9 @@ public class MediaDownloadServiceImpl implements MediaDownloadService {
         activeTasks.put(jobId, task);
 
         // Update to QUEUED status
-        transactionTemplate.executeWithoutResult(status -> {
-            jobRepository.findById(jobId).ifPresent(job -> {
-                job.setStatus(JobStatus.QUEUED);
-                jobRepository.save(job);
-            });
+        jobRepository.findById(jobId).ifPresent(job -> {
+            job.setStatus(JobStatus.QUEUED);
+            jobRepository.save(job);
         });
 
         executorService.submit(() -> executeDownload(task));
@@ -87,15 +81,15 @@ public class MediaDownloadServiceImpl implements MediaDownloadService {
             }
 
             // Transition to PROCESSING
-            transactionTemplate.executeWithoutResult(status -> {
-                jobRepository.findById(jobId).ifPresent(job -> {
-                    job.setStatus(JobStatus.PROCESSING);
-                    job.setStartedAt(OffsetDateTime.now());
-                    jobRepository.save(job);
-                });
-                eventRepository.save(new JobEvent(UUID.randomUUID(), jobRepository.getReferenceById(jobId),
+            MediaJob activeJob = jobRepository.findById(jobId).orElse(null);
+            if (activeJob != null) {
+                activeJob.setStatus(JobStatus.PROCESSING);
+                activeJob.setStartedAt(OffsetDateTime.now());
+                jobRepository.save(activeJob);
+
+                eventRepository.save(new JobEvent(UUID.randomUUID(), activeJob,
                         "DOWNLOAD_STARTED", "Media stream download connection initiated"));
-            });
+            }
 
             MediaSourceAdapter adapter = adapterRegistry.getAdapter(task.getSourceUri());
 
@@ -110,10 +104,8 @@ public class MediaDownloadServiceImpl implements MediaDownloadService {
             }
 
             // Store file into storage and complete job
-            transactionTemplate.executeWithoutResult(status -> {
-                MediaJob job = jobRepository.findById(jobId).orElse(null);
-                if (job == null) return;
-
+            MediaJob job = jobRepository.findById(jobId).orElse(null);
+            if (job != null) {
                 try {
                     MediaFile savedFile = storageService.storeDownloadedFile(
                             job,
@@ -126,6 +118,7 @@ public class MediaDownloadServiceImpl implements MediaDownloadService {
                     job.setStatus(JobStatus.COMPLETED);
                     job.setProgress(100);
                     job.setOutputFormat(downloadedMedia.getContainerFormat());
+                    job.setOutputFileId(savedFile.getId());
                     job.setCompletedAt(OffsetDateTime.now());
                     jobRepository.save(job);
 
@@ -138,7 +131,7 @@ public class MediaDownloadServiceImpl implements MediaDownloadService {
                 } catch (Exception e) {
                     throw new RuntimeException("Failed to store downloaded file: " + e.getMessage(), e);
                 }
-            });
+            }
 
         } catch (Exception ex) {
             if (task.isCancelled()) {
@@ -154,13 +147,11 @@ public class MediaDownloadServiceImpl implements MediaDownloadService {
 
     private void updateProgress(UUID jobId, int percent) {
         try {
-            transactionTemplate.executeWithoutResult(status -> {
-                jobRepository.findById(jobId).ifPresent(job -> {
-                    if (job.getStatus() == JobStatus.PROCESSING && job.getProgress() != percent) {
-                        job.setProgress(percent);
-                        jobRepository.save(job);
-                    }
-                });
+            jobRepository.findById(jobId).ifPresent(job -> {
+                if (job.getStatus() == JobStatus.PROCESSING && job.getProgress() != percent) {
+                    job.setProgress(percent);
+                    jobRepository.save(job);
+                }
             });
         } catch (Exception ex) {
             log.debug("Progress update skipped for job {}: {}", jobId, ex.getMessage());
@@ -169,27 +160,25 @@ public class MediaDownloadServiceImpl implements MediaDownloadService {
 
     private void handleCancellation(UUID jobId) {
         log.info("Handling cancellation for job: {}", jobId);
-        transactionTemplate.executeWithoutResult(status -> {
-            jobRepository.findById(jobId).ifPresent(job -> {
-                job.setStatus(JobStatus.CANCELLED);
-                job.setCompletedAt(OffsetDateTime.now());
-                jobRepository.save(job);
-            });
-            eventRepository.save(new JobEvent(UUID.randomUUID(), jobRepository.getReferenceById(jobId),
+        jobRepository.findById(jobId).ifPresent(job -> {
+            job.setStatus(JobStatus.CANCELLED);
+            job.setCompletedAt(OffsetDateTime.now());
+            jobRepository.save(job);
+
+            eventRepository.save(new JobEvent(UUID.randomUUID(), job,
                     "DOWNLOAD_CANCELLED", "Download job was cancelled by user request"));
         });
     }
 
-    private void handleFailure(UUID jobId, Throwable ex) {
+    private void handleFailure(UUID jobId, Exception ex) {
         log.error("Download failed for job {}: {}", jobId, ex.getMessage());
-        transactionTemplate.executeWithoutResult(status -> {
-            jobRepository.findById(jobId).ifPresent(job -> {
-                job.setStatus(JobStatus.FAILED);
-                job.setErrorMessage(ex.getMessage() != null ? ex.getMessage() : "Unknown download failure");
-                job.setCompletedAt(OffsetDateTime.now());
-                jobRepository.save(job);
-            });
-            eventRepository.save(new JobEvent(UUID.randomUUID(), jobRepository.getReferenceById(jobId),
+        jobRepository.findById(jobId).ifPresent(job -> {
+            job.setStatus(JobStatus.FAILED);
+            job.setErrorMessage(ex.getMessage() != null ? ex.getMessage() : "Unknown download failure");
+            job.setCompletedAt(OffsetDateTime.now());
+            jobRepository.save(job);
+
+            eventRepository.save(new JobEvent(UUID.randomUUID(), job,
                     "DOWNLOAD_FAILED", "Download failed: " + ex.getMessage()));
         });
     }
@@ -199,6 +188,7 @@ public class MediaDownloadServiceImpl implements MediaDownloadService {
         DownloadTask task = activeTasks.get(jobId);
         if (task != null) {
             task.cancel();
+            log.info("Signalled cancellation for active download task {}", jobId);
             return true;
         }
         return false;
@@ -211,7 +201,7 @@ public class MediaDownloadServiceImpl implements MediaDownloadService {
 
     @PreDestroy
     public void shutdown() {
-        log.info("Shutting down media download worker thread pool...");
+        log.info("Shutting down MediaDownloadService executor");
         executorService.shutdown();
         try {
             if (!executorService.awaitTermination(5, TimeUnit.SECONDS)) {

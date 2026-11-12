@@ -13,7 +13,6 @@ import com.mediaforge.backend.mapper.JobMapper;
 import com.mediaforge.backend.repository.DownloadRequestRepository;
 import com.mediaforge.backend.repository.JobEventRepository;
 import com.mediaforge.backend.repository.MediaJobRepository;
-import com.mediaforge.backend.repository.UserRepository;
 import com.mediaforge.backend.service.impl.DownloadServiceImpl;
 import com.mediaforge.backend.validation.UrlSecurityValidator;
 import org.junit.jupiter.api.BeforeEach;
@@ -42,9 +41,6 @@ class DownloadServiceTest {
     private JobEventRepository eventRepository;
 
     @Mock
-    private UserRepository userRepository;
-
-    @Mock
     private MediaMetadataService metadataService;
 
     @Mock
@@ -65,7 +61,6 @@ class DownloadServiceTest {
                 jobRepository,
                 downloadRequestRepository,
                 eventRepository,
-                userRepository,
                 jobMapper
         );
     }
@@ -101,7 +96,7 @@ class DownloadServiceTest {
             return job;
         });
 
-        DownloadResponse response = downloadService.createDownload(request, null);
+        DownloadResponse response = downloadService.createDownload(request);
 
         assertNotNull(response);
         assertNotNull(response.getJobId());
