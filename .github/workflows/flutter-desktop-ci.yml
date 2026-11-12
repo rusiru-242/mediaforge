@@ -156,3 +156,4 @@ jobs:
           name: mediaforge-desktop-linux
           path: apps/flutter_app/build/linux/x64/release/bundle/
           retention-days: 7
+

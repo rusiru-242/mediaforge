@@ -71,3 +71,4 @@ apps/flutter_app/build/linux/x64/release/bundle/
 ├── data/
 └── lib/
 ```
+

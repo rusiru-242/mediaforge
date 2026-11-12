@@ -238,3 +238,4 @@ class InfoRow extends StatelessWidget {
     );
   }
 }
+

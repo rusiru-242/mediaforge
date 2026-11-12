@@ -45,3 +45,4 @@ ffprobe -v error -show_entries format=format_name:stream=codec_name,width,height
 # Verify image transcoding
 ffprobe -v error -show_entries format=format_name:stream=codec_name,width,height sample_image_converted.png
 ```
+

@@ -51,3 +51,4 @@ if (timeMatch != null && totalDuration != null && totalDuration > 0) {
 - FFmpeg is licensed under the **LGPL version 2.1+** or **GPL version 2+** (depending on compiled dependencies like `libx264`, `libx265`).
 - MediaForge executes FFmpeg as an independent external process via standard input/output streams and does not link directly with FFmpeg C libraries.
 - If distributing bundled binaries, distributors must comply with FFmpeg's license by providing build configurations, license texts, or source code for the FFmpeg build used.
+

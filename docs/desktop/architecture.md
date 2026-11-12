@@ -76,3 +76,4 @@ lib/
 - **Safe Process Execution**: Arguments are passed as validated tokenized lists directly to `Process.start` / `Process.run`, avoiding command-line injection vulnerabilities.
 - **Aspect Ratio Preservation**: Video scaling uses FFmpeg's `force_original_aspect_ratio=decrease` to prevent aspect distortion.
 - **Cooperative Cancellation**: Active conversions can be cancelled cleanly at any time by terminating the background process.
+
