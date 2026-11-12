@@ -20,8 +20,9 @@ class _VideoConverterPageState extends ConsumerState<VideoConverterPage> {
   String? _inputPath;
   MediaInfo? _mediaInfo;
   String _outputFormat = 'mp4';
-  String _resolution = 'Original';
-  String _videoBitrate = '';
+  String _selectedPreset = 'balanced';
+  String _resolution = '1280x720';
+  String _videoBitrate = '1200k';
   final String _audioBitrate = '128k';
   final String _frameRate = 'Original';
   String? _outputFolder;
@@ -30,6 +31,20 @@ class _VideoConverterPageState extends ConsumerState<VideoConverterPage> {
   String? _currentJobId;
 
   final _resolutions = const ['Original', '1920x1080', '1280x720', '854x480', '640x360'];
+
+  void _onPresetChanged(String presetId) {
+    setState(() {
+      _selectedPreset = presetId;
+      if (presetId != 'custom') {
+        final found = AppConfig.videoPresets.firstWhere(
+          (p) => p.id == presetId,
+          orElse: () => AppConfig.videoPresets[2],
+        );
+        _resolution = found.resolution;
+        _videoBitrate = found.videoBitrate;
+      }
+    });
+  }
 
   Future<void> _pickFile() async {
     final result = await FilePicker.platform.pickFiles(
@@ -85,7 +100,7 @@ class _VideoConverterPageState extends ConsumerState<VideoConverterPage> {
       outputDir = await PlatformService.getDefaultDownloadDirectory();
     }
     final baseName = p.basenameWithoutExtension(_inputPath!);
-    final outputPath = p.join(outputDir, '${baseName}_converted.$_outputFormat');
+    final outputPath = AppConfig.getUniqueOutputPath(outputDir, '${baseName}_converted', _outputFormat);
 
     final job = MediaJob(
       type: JobType.videoConversion,
@@ -93,6 +108,7 @@ class _VideoConverterPageState extends ConsumerState<VideoConverterPage> {
       outputPath: outputPath,
       outputFormat: _outputFormat,
       settings: {
+        'preset': _selectedPreset,
         'resolution': _resolution,
         'videoBitrate': _videoBitrate,
         'audioBitrate': _audioBitrate,
@@ -206,6 +222,23 @@ class _VideoConverterPageState extends ConsumerState<VideoConverterPage> {
                       style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
                     ),
                     const SizedBox(height: 16),
+                    SettingRow(
+                      label: 'Quality Preset',
+                      helpText: 'Pre-configured resolution & bitrate',
+                      child: DropdownButton<String>(
+                        value: _selectedPreset,
+                        isExpanded: true,
+                        items: [
+                          ...AppConfig.videoPresets.map(
+                            (p) => DropdownMenuItem(value: p.id, child: Text(p.label)),
+                          ),
+                          const DropdownMenuItem(value: 'custom', child: Text('Custom Settings')),
+                        ],
+                        onChanged: (v) {
+                          if (v != null) _onPresetChanged(v);
+                        },
+                      ),
+                    ),
                     SettingRow(
                       label: 'Output Format',
                       helpText: 'Container format',

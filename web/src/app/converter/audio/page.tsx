@@ -13,12 +13,23 @@ import { Badge } from '@/components/ui/Badge';
 import { JobStatusBadge } from '@/components/feedback/JobStatusBadge';
 import { ErrorAlert } from '@/components/feedback/ErrorAlert';
 import { ProgressBar } from '@/components/ui/ProgressBar';
+import { AUDIO_PRESETS } from '@/utils/presets';
 
 export default function AudioConverterPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [targetFormat, setTargetFormat] = useState('mp3');
-  const [bitrate, setBitrate] = useState('320k');
+  const [selectedPreset, setSelectedPreset] = useState<string>('standard');
+  const [bitrate, setBitrate] = useState('192k');
   const [sampleRate, setSampleRate] = useState('44100');
+
+  const handlePresetChange = (presetId: string) => {
+    setSelectedPreset(presetId);
+    const found = AUDIO_PRESETS.find((p) => p.id === presetId);
+    if (found) {
+      setBitrate(found.bitrate);
+      setSampleRate(found.sampleRate.toString());
+    }
+  };
 
   const [stage, setStage] = useState<'IDLE' | 'UPLOADING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'CANCELLED'>('IDLE');
   const [error, setError] = useState<string | null>(null);
@@ -90,6 +101,7 @@ export default function AudioConverterPage() {
         inputFileId: uploadResp.id || uploadResp.fileId,
         inputFormat,
         outputFormat: targetFormat,
+        qualityPreset: selectedPreset !== 'custom' ? selectedPreset : undefined,
         audioBitrate: parseInt(bitrate.replace('k', ''), 10),
         sampleRate: parseInt(sampleRate, 10),
       });
@@ -158,7 +170,20 @@ export default function AudioConverterPage() {
                 <span>Acoustic Parameters</span>
               </div>
 
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <Select
+                  label="Quality Preset"
+                  value={selectedPreset}
+                  onChange={(e) => handlePresetChange(e.target.value)}
+                  options={[
+                    ...AUDIO_PRESETS.map((p) => ({
+                      label: `${p.label}`,
+                      value: p.id,
+                    })),
+                    { label: 'Custom', value: 'custom' },
+                  ]}
+                />
+
                 <Select
                   label="Target Format"
                   value={targetFormat}

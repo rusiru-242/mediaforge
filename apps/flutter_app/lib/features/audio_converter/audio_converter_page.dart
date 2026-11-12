@@ -20,16 +20,32 @@ class _AudioConverterPageState extends ConsumerState<AudioConverterPage> {
   String? _inputPath;
   MediaInfo? _mediaInfo;
   String _outputFormat = 'mp3';
+  String _selectedPreset = 'standard';
   String _bitrate = '192k';
-  String _sampleRate = 'Original';
+  String _sampleRate = '44100';
   String _channels = 'Stereo';
   String? _outputFolder;
   bool _isLoading = false;
   String? _error;
   String? _currentJobId;
 
+  final _bitrates = const ['320k', '256k', '192k', '128k', '96k', '64k'];
   final _sampleRates = const ['Original', '44100', '48000', '22050'];
   final _channelOptions = const ['Stereo', 'Mono'];
+
+  void _onPresetChanged(String presetId) {
+    setState(() {
+      _selectedPreset = presetId;
+      if (presetId != 'custom') {
+        final found = AppConfig.audioPresets.firstWhere(
+          (p) => p.id == presetId,
+          orElse: () => AppConfig.audioPresets[1],
+        );
+        _bitrate = found.bitrate;
+        _sampleRate = found.sampleRate;
+      }
+    });
+  }
 
   Future<void> _pickFile() async {
     // Allow both audio and video files (for audio extraction)
@@ -87,13 +103,19 @@ class _AudioConverterPageState extends ConsumerState<AudioConverterPage> {
       outputDir = await PlatformService.getDefaultDownloadDirectory();
     }
     final baseName = p.basenameWithoutExtension(_inputPath!);
-    final outputPath = p.join(outputDir, '${baseName}_converted.$_outputFormat');
+    final outputPath = AppConfig.getUniqueOutputPath(outputDir, '${baseName}_converted', _outputFormat);
 
     final job = MediaJob(
       type: JobType.audioConversion,
       inputPath: _inputPath!,
       outputPath: outputPath,
       outputFormat: _outputFormat,
+      settings: {
+        'preset': _selectedPreset,
+        'bitrate': _bitrate,
+        'sampleRate': _sampleRate,
+        'channels': _channels,
+      },
     );
     ref.read(jobListProvider.notifier).addJob(job);
     ref.read(jobListProvider.notifier).updateJob(job.id, status: JobStatus.processing, progress: 0.0);
@@ -199,6 +221,23 @@ class _AudioConverterPageState extends ConsumerState<AudioConverterPage> {
                     ),
                     const SizedBox(height: 16),
                     SettingRow(
+                      label: 'Quality Preset',
+                      helpText: 'Pre-configured bitrate & sample rate',
+                      child: DropdownButton<String>(
+                        value: _selectedPreset,
+                        isExpanded: true,
+                        items: [
+                          ...AppConfig.audioPresets.map(
+                            (p) => DropdownMenuItem(value: p.id, child: Text(p.label)),
+                          ),
+                          const DropdownMenuItem(value: 'custom', child: Text('Custom Settings')),
+                        ],
+                        onChanged: (v) {
+                          if (v != null) _onPresetChanged(v);
+                        },
+                      ),
+                    ),
+                    SettingRow(
                       label: 'Output Format',
                       helpText: 'Target audio codec',
                       child: DropdownButton<String>(
@@ -216,7 +255,7 @@ class _AudioConverterPageState extends ConsumerState<AudioConverterPage> {
                       child: DropdownButton<String>(
                         value: _bitrate,
                         isExpanded: true,
-                        items: const ['64k', '96k', '128k', '192k', '256k', '320k']
+                        items: _bitrates
                             .map((b) => DropdownMenuItem(value: b, child: Text(b)))
                             .toList(),
                         onChanged: (v) => setState(() => _bitrate = v!),

@@ -139,4 +139,46 @@ public class ConversionOptions {
     public void setStripMetadata(Boolean stripMetadata) {
         this.stripMetadata = stripMetadata;
     }
+
+    public void normalizePresets() {
+        if (qualityPreset != null && !qualityPreset.isBlank()) {
+            String p = qualityPreset.toLowerCase(java.util.Locale.ROOT).trim();
+            switch (p) {
+                case "high":
+                case "high quality":
+                    if (targetResolution == null || targetResolution.isBlank()) targetResolution = "1080p";
+                    if (videoBitrate == null || videoBitrate.isBlank()) videoBitrate = "2500k";
+                    if (audioBitrate == null) audioBitrate = 256;
+                    if (imageQuality == null) imageQuality = 90;
+                    qualityPreset = "fast";
+                    break;
+                case "balanced":
+                    if (targetResolution == null || targetResolution.isBlank()) targetResolution = "720p";
+                    if (videoBitrate == null || videoBitrate.isBlank()) videoBitrate = "1200k";
+                    if (audioBitrate == null) audioBitrate = 192;
+                    if (imageQuality == null) imageQuality = 75;
+                    qualityPreset = "fast";
+                    break;
+                case "small":
+                case "small file size":
+                case "compression":
+                case "maximum compression":
+                    if (targetResolution == null || targetResolution.isBlank()) targetResolution = "480p";
+                    if (videoBitrate == null || videoBitrate.isBlank()) videoBitrate = "600k";
+                    if (audioBitrate == null) audioBitrate = 128;
+                    if (imageQuality == null) imageQuality = 50;
+                    qualityPreset = "faster";
+                    break;
+                case "original":
+                case "original quality":
+                    if (targetResolution == null || targetResolution.isBlank()) targetResolution = "source";
+                    if (audioBitrate == null) audioBitrate = 256;
+                    qualityPreset = "fast";
+                    break;
+                default:
+                    // retain as ffmpeg preset (ultrafast, superfast, etc.)
+                    break;
+            }
+        }
+    }
 }

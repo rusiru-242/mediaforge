@@ -37,7 +37,10 @@
 - 🔽 **Media Downloader** — Download videos and images from authorized, supported URLs in multiple quality options with strict SSRF defense.
 - 🔄 **Online Media Converter** — Server-side FFmpeg transcoding engine with live progress reporting, resolution scaling, and cooperative cancellation.
 - 💻 **Desktop Application (Flutter)** — Fast, native desktop app (Windows, macOS, Linux) with 100% offline conversion, video-to-audio extraction, image compression, batch processing, and zero external backend required for local files.
-- 📦 **Batch Processing** — Queue and convert multiple audio, video, or image files in parallel.
+- 📦 **Batch Processing** — Queue and convert multiple audio, video, or image files in parallel with intelligent format compatibility detection.
+- 🎛️ **Quality Presets** — Standardized presets across Video (Original, High, Balanced, Small), Audio (320k, 192k, 128k), and Image (90%, 75%, 50%).
+- ⚡ **Enhanced Downloader** — Real-time download speed tracking (KB/s, MB/s), byte counter, ETA estimation, cancellation, and retry recovery.
+- 🛡️ **Smart File Safety** — Collision-free output naming, atomic writes, and automatic cleanup of partial failed downloads.
 - 🔒 **Privacy by Design** — Zero user accounts, zero logins, zero database storage. All jobs are tracked in-memory.
 - 🛡️ **Ephemeral Lifecycle** — Processed files and media caches are automatically purged after 24 hours.
 
@@ -59,15 +62,36 @@ MediaForge is a **monorepo** composed of four primary applications:
 ## 🚀 Features
 
 - ✅ Download from authorized supported video/image sources (with SSRF protection)
-- ✅ Quality selection (1080p, 720p, 480p, 240p, audio-only)
-- ✅ Output formats: MP4, WEBM, MKV, MP3, WAV, FLAC, AAC, M4A, WEBP, PNG, JPEG, GIF
+- ✅ Quality selection presets (Original, High 1080p, Balanced 720p, Small 480p)
+- ✅ Audio presets (High 320k, Standard 192k, Small 128k) & Image presets (90%, 75%, 50%)
+- ✅ Real-time download speed calculation (KB/s, MB/s), byte counter, ETA, and cancellation
+- ✅ Output formats: MP4, WEBM, MKV, MOV, AVI, MP3, WAV, FLAC, AAC, M4A, OGG, WEBP, PNG, JPEG, AVIF
 - ✅ Online conversion (backend-processed via Spring Boot REST APIs)
-- ✅ Offline desktop conversion (runs standalone without Spring Boot or internet)
+- ✅ Offline desktop & mobile conversion (runs standalone without Spring Boot or internet)
 - ✅ Video-to-audio extraction (MP4, MKV, WEBM, MOV -> MP3, WAV, AAC, FLAC)
-- ✅ Batch processing orchestration interface and queue management
+- ✅ Batch processing with per-file compatible format resolution and quick apply shortcuts
+- ✅ Collision avoidance and unique file naming preventing file overwrite
 - ✅ Real-time async progress tracking, cancellation, and polling
+- ✅ Standardized transient error recovery and partial file cleanup
 - ✅ Dark/Light responsive modern theme with persistent toggle
 - ✅ 100% Database-Free and Account-Free architecture
+
+---
+
+## 🗺️ Project Roadmap & Phase Progress
+
+| Phase | Description | Status |
+| :---: | :--- | :---: |
+| **01** | Project Initialization & Repository Setup | ✅ Completed |
+| **02** | Backend Foundation & REST Architecture | ✅ Completed |
+| **03** | Web Application Development (Next.js 15 + React 19) | ✅ Completed |
+| **04** | Media Downloader Engine (SSRF-Protected) | ✅ Completed |
+| **05** | Online Media Converter Engine (FFmpeg) | ✅ Completed |
+| **Refactor** | Database-Free Ephemeral Architecture Migration | ✅ Completed |
+| **06** | Cross-Platform Desktop Application (Windows, macOS, Linux) | ✅ Completed |
+| **07** | Android & iOS Mobile Application (Flutter Responsive) | ✅ Completed |
+| **08** | Advanced Features & Cross-Platform Integration | ✅ Completed |
+| **09** | Cloud Deployment, Containerization & Production Release | ⏳ Next Up |
 
 ---
 

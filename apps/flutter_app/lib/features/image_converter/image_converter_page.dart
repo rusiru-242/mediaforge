@@ -20,12 +20,26 @@ class ImageConverterPage extends ConsumerStatefulWidget {
 class _ImageConverterPageState extends ConsumerState<ImageConverterPage> {
   String? _inputPath;
   MediaInfo? _mediaInfo;
-  String _outputFormat = 'jpg';
-  int _quality = 85;
+  String _outputFormat = 'webp';
+  String _selectedPreset = 'balanced';
+  int _quality = 75;
   String? _outputFolder;
   bool _isLoading = false;
   String? _error;
   String? _currentJobId;
+
+  void _onPresetChanged(String presetId) {
+    setState(() {
+      _selectedPreset = presetId;
+      if (presetId != 'custom') {
+        final found = AppConfig.imagePresets.firstWhere(
+          (p) => p.id == presetId,
+          orElse: () => AppConfig.imagePresets[1],
+        );
+        _quality = found.quality;
+      }
+    });
+  }
 
   Future<void> _pickFile() async {
     final result = await FilePicker.platform.pickFiles(
@@ -78,13 +92,17 @@ class _ImageConverterPageState extends ConsumerState<ImageConverterPage> {
       outputDir = await PlatformService.getDefaultDownloadDirectory();
     }
     final baseName = p.basenameWithoutExtension(_inputPath!);
-    final outputPath = p.join(outputDir, '${baseName}_converted.$_outputFormat');
+    final outputPath = AppConfig.getUniqueOutputPath(outputDir, '${baseName}_converted', _outputFormat);
 
     final job = MediaJob(
       type: JobType.imageConversion,
       inputPath: _inputPath!,
       outputPath: outputPath,
       outputFormat: _outputFormat,
+      settings: {
+        'preset': _selectedPreset,
+        'quality': _quality,
+      },
     );
     ref.read(jobListProvider.notifier).addJob(job);
     ref.read(jobListProvider.notifier).updateJob(job.id, status: JobStatus.processing, progress: 0.0);
@@ -202,6 +220,23 @@ class _ImageConverterPageState extends ConsumerState<ImageConverterPage> {
                       style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
                     ),
                     const SizedBox(height: 16),
+                    SettingRow(
+                      label: 'Quality Preset',
+                      helpText: 'Pre-configured compression level',
+                      child: DropdownButton<String>(
+                        value: _selectedPreset,
+                        isExpanded: true,
+                        items: [
+                          ...AppConfig.imagePresets.map(
+                            (p) => DropdownMenuItem(value: p.id, child: Text(p.label)),
+                          ),
+                          const DropdownMenuItem(value: 'custom', child: Text('Custom Quality')),
+                        ],
+                        onChanged: (v) {
+                          if (v != null) _onPresetChanged(v);
+                        },
+                      ),
+                    ),
                     SettingRow(
                       label: 'Output Format',
                       helpText: 'Target image extension',
