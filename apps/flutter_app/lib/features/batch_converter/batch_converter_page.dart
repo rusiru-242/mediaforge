@@ -3,8 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
 import 'dart:async';
-import 'dart:io';
 import '../../core/config/app_config.dart';
+import '../../core/services/platform_service.dart';
 import '../../shared/models/media_job.dart';
 import '../../shared/models/media_info.dart';
 import '../../shared/providers/app_providers.dart';
@@ -93,13 +93,7 @@ class _BatchConverterPageState extends ConsumerState<BatchConverterPage> {
   }
 
   Future<void> _openFolder(String path) async {
-    if (Platform.isWindows) {
-      await Process.run('explorer', [path]);
-    } else if (Platform.isMacOS) {
-      await Process.run('open', [path]);
-    } else {
-      await Process.run('xdg-open', [path]);
-    }
+    await PlatformService.openFolder(path);
   }
 
   Future<void> _startBatch() async {
@@ -109,7 +103,10 @@ class _BatchConverterPageState extends ConsumerState<BatchConverterPage> {
       _completedCount = 0;
     });
 
-    final outputDir = _outputFolder ?? p.dirname(_items.first.path);
+    String outputDir = _outputFolder ?? p.dirname(_items.first.path);
+    if (PlatformService.isMobile && _outputFolder == null) {
+      outputDir = await PlatformService.getDefaultDownloadDirectory();
+    }
     final conversionService = ref.read(conversionServiceProvider);
     final ffmpegService = ref.read(ffmpegServiceProvider);
 

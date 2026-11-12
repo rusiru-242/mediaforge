@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../shared/providers/app_providers.dart';
+import '../../shared/widgets/common_widgets.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key});
@@ -46,9 +47,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     final settings = ref.watch(settingsServiceProvider);
     final themeMode = ref.watch(themeModeProvider);
 
+    final isMobile = MediaQuery.of(context).size.width < 720;
+    final pagePadding = isMobile ? const EdgeInsets.all(16) : const EdgeInsets.all(24);
+
     return Scaffold(
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+        padding: pagePadding,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -71,25 +75,24 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('Appearance', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        const SizedBox(width: 140, child: Text('Theme Mode')),
-                        DropdownButton<String>(
-                          value: themeMode,
-                          items: const [
-                            DropdownMenuItem(value: 'system', child: Text('System Default')),
-                            DropdownMenuItem(value: 'light', child: Text('Light Mode')),
-                            DropdownMenuItem(value: 'dark', child: Text('Dark Mode')),
-                          ],
-                          onChanged: (v) {
-                            if (v != null) {
-                              ref.read(themeModeProvider.notifier).state = v;
-                              settings.setThemeMode(v);
-                            }
-                          },
-                        ),
-                      ],
+                    const SizedBox(height: 8),
+                    SettingRow(
+                      label: 'Theme Mode',
+                      child: DropdownButton<String>(
+                        isExpanded: true,
+                        value: themeMode,
+                        items: const [
+                          DropdownMenuItem(value: 'system', child: Text('System Default')),
+                          DropdownMenuItem(value: 'light', child: Text('Light Mode')),
+                          DropdownMenuItem(value: 'dark', child: Text('Dark Mode')),
+                        ],
+                        onChanged: (v) {
+                          if (v != null) {
+                            ref.read(themeModeProvider.notifier).state = v;
+                            settings.setThemeMode(v);
+                          }
+                        },
+                      ),
                     ),
                   ],
                 ),
@@ -131,30 +134,36 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       onChanged: (v) => settings.setFfprobePath(v),
                     ),
                     const SizedBox(height: 16),
-                    Row(
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 8,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         ElevatedButton.icon(
                           onPressed: _checkFfmpeg,
                           icon: const Icon(Icons.check_circle_outline, size: 18),
                           label: const Text('Test Executable Paths'),
                         ),
-                        const SizedBox(width: 12),
-                        if (_ffmpegChecked) ...[
-                          Icon(
-                            _ffmpegAvailable == true ? Icons.check_circle : Icons.error,
-                            color: _ffmpegAvailable == true ? Colors.green : Colors.red,
-                            size: 20,
+                        if (_ffmpegChecked)
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                _ffmpegAvailable == true ? Icons.check_circle : Icons.error,
+                                color: _ffmpegAvailable == true ? Colors.green : Colors.red,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                _ffmpegAvailable == true ? 'FFmpeg is verified and ready' : 'FFmpeg binary not reachable',
+                                style: TextStyle(
+                                  color: _ffmpegAvailable == true ? Colors.green : Colors.red,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 6),
-                          Text(
-                            _ffmpegAvailable == true ? 'FFmpeg is verified and ready' : 'FFmpeg binary not reachable',
-                            style: TextStyle(
-                              color: _ffmpegAvailable == true ? Colors.green : Colors.red,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ],
                       ],
                     ),
                   ],
@@ -177,7 +186,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                     ),
                     const SizedBox(height: 12),
-                    Row(
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 8,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         ElevatedButton.icon(
                           onPressed: () async {
@@ -190,8 +202,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                           icon: const Icon(Icons.folder_open, size: 18),
                           label: const Text('Browse Output Folder'),
                         ),
-                        if (settings.outputFolder.isNotEmpty) ...[
-                          const SizedBox(width: 12),
+                        if (settings.outputFolder.isNotEmpty)
                           TextButton(
                             onPressed: () async {
                               await settings.setOutputFolder('');
@@ -199,7 +210,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                             },
                             child: const Text('Reset to Default'),
                           ),
-                        ],
                       ],
                     ),
                   ],
@@ -216,95 +226,86 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text('Default Format & Presets', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        const SizedBox(width: 140, child: Text('Default Video Format')),
-                        DropdownButton<String>(
-                          value: settings.defaultVideoFormat,
-                          items: const ['mp4', 'mkv', 'webm', 'mov', 'avi']
-                              .map((f) => DropdownMenuItem(value: f, child: Text(f.toUpperCase())))
-                              .toList(),
-                          onChanged: (v) {
-                            if (v != null) {
-                              settings.setDefaultVideoFormat(v);
-                              setState(() {});
-                            }
-                          },
-                        ),
-                      ],
+                    const SizedBox(height: 8),
+                    SettingRow(
+                      label: 'Default Video Format',
+                      child: DropdownButton<String>(
+                        isExpanded: true,
+                        value: settings.defaultVideoFormat,
+                        items: const ['mp4', 'mkv', 'webm', 'mov', 'avi']
+                            .map((f) => DropdownMenuItem(value: f, child: Text(f.toUpperCase())))
+                            .toList(),
+                        onChanged: (v) {
+                          if (v != null) {
+                            settings.setDefaultVideoFormat(v);
+                            setState(() {});
+                          }
+                        },
+                      ),
                     ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        const SizedBox(width: 140, child: Text('Default Audio Format')),
-                        DropdownButton<String>(
-                          value: settings.defaultAudioFormat,
-                          items: const ['mp3', 'wav', 'aac', 'flac', 'm4a', 'ogg']
-                              .map((f) => DropdownMenuItem(value: f, child: Text(f.toUpperCase())))
-                              .toList(),
-                          onChanged: (v) {
-                            if (v != null) {
-                              settings.setDefaultAudioFormat(v);
-                              setState(() {});
-                            }
-                          },
-                        ),
-                      ],
+                    SettingRow(
+                      label: 'Default Audio Format',
+                      child: DropdownButton<String>(
+                        isExpanded: true,
+                        value: settings.defaultAudioFormat,
+                        items: const ['mp3', 'wav', 'aac', 'flac', 'm4a', 'ogg']
+                            .map((f) => DropdownMenuItem(value: f, child: Text(f.toUpperCase())))
+                            .toList(),
+                        onChanged: (v) {
+                          if (v != null) {
+                            settings.setDefaultAudioFormat(v);
+                            setState(() {});
+                          }
+                        },
+                      ),
                     ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        const SizedBox(width: 140, child: Text('Default Image Format')),
-                        DropdownButton<String>(
-                          value: settings.defaultImageFormat,
-                          items: const ['jpg', 'png', 'webp']
-                              .map((f) => DropdownMenuItem(value: f, child: Text(f.toUpperCase())))
-                              .toList(),
-                          onChanged: (v) {
-                            if (v != null) {
-                              settings.setDefaultImageFormat(v);
-                              setState(() {});
-                            }
-                          },
-                        ),
-                      ],
+                    SettingRow(
+                      label: 'Default Image Format',
+                      child: DropdownButton<String>(
+                        isExpanded: true,
+                        value: settings.defaultImageFormat,
+                        items: const ['jpg', 'png', 'webp']
+                            .map((f) => DropdownMenuItem(value: f, child: Text(f.toUpperCase())))
+                            .toList(),
+                        onChanged: (v) {
+                          if (v != null) {
+                            settings.setDefaultImageFormat(v);
+                            setState(() {});
+                          }
+                        },
+                      ),
                     ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        const SizedBox(width: 140, child: Text('Default Quality Preset')),
-                        DropdownButton<String>(
-                          value: settings.defaultQuality,
-                          items: const ['High', 'Medium', 'Low']
-                              .map((q) => DropdownMenuItem(value: q, child: Text(q)))
-                              .toList(),
-                          onChanged: (v) {
-                            if (v != null) {
-                              settings.setDefaultQuality(v);
-                              setState(() {});
-                            }
-                          },
-                        ),
-                      ],
+                    SettingRow(
+                      label: 'Default Quality Preset',
+                      child: DropdownButton<String>(
+                        isExpanded: true,
+                        value: settings.defaultQuality,
+                        items: const ['High', 'Medium', 'Low']
+                            .map((q) => DropdownMenuItem(value: q, child: Text(q)))
+                            .toList(),
+                        onChanged: (v) {
+                          if (v != null) {
+                            settings.setDefaultQuality(v);
+                            setState(() {});
+                          }
+                        },
+                      ),
                     ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        const SizedBox(width: 140, child: Text('Max Concurrent Jobs')),
-                        DropdownButton<int>(
-                          value: settings.maxConcurrentJobs,
-                          items: const [1, 2, 3, 4, 8]
-                              .map((n) => DropdownMenuItem(value: n, child: Text('$n workers')))
-                              .toList(),
-                          onChanged: (v) {
-                            if (v != null) {
-                              settings.setMaxConcurrentJobs(v);
-                              setState(() {});
-                            }
-                          },
-                        ),
-                      ],
+                    SettingRow(
+                      label: 'Max Concurrent Jobs',
+                      child: DropdownButton<int>(
+                        isExpanded: true,
+                        value: settings.maxConcurrentJobs,
+                        items: const [1, 2, 3, 4, 8]
+                            .map((n) => DropdownMenuItem(value: n, child: Text('$n workers')))
+                            .toList(),
+                        onChanged: (v) {
+                          if (v != null) {
+                            settings.setMaxConcurrentJobs(v);
+                            setState(() {});
+                          }
+                        },
+                      ),
                     ),
                   ],
                 ),

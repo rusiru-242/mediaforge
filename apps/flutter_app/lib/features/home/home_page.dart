@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
-import 'dart:io';
 import '../../core/config/app_config.dart';
+import '../../core/services/platform_service.dart';
 import '../../shared/models/media_job.dart';
 import '../../shared/providers/app_providers.dart';
 import '../shell/app_shell.dart';
@@ -28,19 +28,9 @@ class _HomePageState extends ConsumerState<HomePage> {
     final settings = ref.read(settingsServiceProvider);
     String target = settings.outputFolder;
     if (target.isEmpty) {
-      if (Platform.environment['USERPROFILE'] != null) {
-        target = p.join(Platform.environment['USERPROFILE']!, 'Downloads');
-      } else {
-        target = Directory.current.path;
-      }
+      target = await PlatformService.getDefaultDownloadDirectory();
     }
-    if (Platform.isWindows) {
-      await Process.run('explorer', [target]);
-    } else if (Platform.isMacOS) {
-      await Process.run('open', [target]);
-    } else {
-      await Process.run('xdg-open', [target]);
-    }
+    await PlatformService.openFolder(target);
   }
 
   Future<void> _handleFileDrop() async {
@@ -71,59 +61,107 @@ class _HomePageState extends ConsumerState<HomePage> {
     final activeJobs = jobs.where((j) => j.status == JobStatus.queued || j.status == JobStatus.processing).toList();
     final recentJobs = jobs.where((j) => j.status == JobStatus.completed || j.status == JobStatus.failed || j.status == JobStatus.cancelled).toList();
 
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 720;
+    final pagePadding = isMobile ? const EdgeInsets.all(16) : const EdgeInsets.all(28);
+    final suiteCardWidth = isMobile ? (screenWidth - 48) / 2 : 170.0;
+
     return Scaffold(
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(28),
+        padding: pagePadding,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Header Branding
-            Row(
-              children: [
-                Expanded(
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [theme.colorScheme.primary, theme.colorScheme.secondary],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Icon(Icons.movie_filter_rounded, color: Colors.white, size: 28),
+            if (isMobile) ...[
+              Row(
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [theme.colorScheme.primary, theme.colorScheme.secondary],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
                       ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'MediaForge Desktop',
-                              style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
-                            ),
-                            Text(
-                              'All-in-one offline media converter & URL downloader (Database-free)',
-                              style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.movie_filter_rounded, color: Colors.white, size: 24),
                   ),
-                ),
-                const SizedBox(width: 16),
-                OutlinedButton.icon(
-                  onPressed: _openOutputFolder,
-                  icon: const Icon(Icons.folder_open, size: 18),
-                  label: const Text('Open Output Folder'),
-                ),
-              ],
-            ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'MediaForge Desktop',
+                          style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                        ),
+                        Text(
+                          'Offline converter & downloader',
+                          style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: _openOutputFolder,
+                icon: const Icon(Icons.folder_open, size: 16),
+                label: const Text('Open Output Folder'),
+              ),
+            ] else ...[
+              Row(
+                children: [
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 48,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [theme.colorScheme.primary, theme.colorScheme.secondary],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(Icons.movie_filter_rounded, color: Colors.white, size: 28),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'MediaForge Desktop',
+                                style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+                              ),
+                              Text(
+                                'All-in-one offline media converter & URL downloader (Database-free)',
+                                style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  OutlinedButton.icon(
+                    onPressed: _openOutputFolder,
+                    icon: const Icon(Icons.folder_open, size: 18),
+                    label: const Text('Open Output Folder'),
+                  ),
+                ],
+              ),
+            ],
             const SizedBox(height: 28),
 
             // Quick Media Downloader Input
@@ -138,30 +176,51 @@ class _HomePageState extends ConsumerState<HomePage> {
                       style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
                     ),
                     const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _quickUrlController,
-                            decoration: const InputDecoration(
-                              hintText: 'Paste video or audio stream URL (https://...)',
-                              prefixIcon: Icon(Icons.link),
+                    if (isMobile) ...[
+                      TextField(
+                        controller: _quickUrlController,
+                        decoration: const InputDecoration(
+                          hintText: 'Paste media stream URL (https://...)',
+                          prefixIcon: Icon(Icons.link),
+                        ),
+                        onSubmitted: (_) {
+                          ref.read(navigationIndexProvider.notifier).state = 1;
+                        },
+                      ),
+                      const SizedBox(height: 10),
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          ref.read(navigationIndexProvider.notifier).state = 1;
+                        },
+                        icon: const Icon(Icons.download),
+                        label: const Text('Go to Downloader'),
+                      ),
+                    ] else ...[
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _quickUrlController,
+                              decoration: const InputDecoration(
+                                hintText: 'Paste video or audio stream URL (https://...)',
+                                prefixIcon: Icon(Icons.link),
+                              ),
+                              onSubmitted: (_) {
+                                ref.read(navigationIndexProvider.notifier).state = 1;
+                              },
                             ),
-                            onSubmitted: (_) {
+                          ),
+                          const SizedBox(width: 12),
+                          ElevatedButton.icon(
+                            onPressed: () {
                               ref.read(navigationIndexProvider.notifier).state = 1;
                             },
+                            icon: const Icon(Icons.download),
+                            label: const Text('Go to Downloader'),
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        ElevatedButton.icon(
-                          onPressed: () {
-                            ref.read(navigationIndexProvider.notifier).state = 1;
-                          },
-                          icon: const Icon(Icons.download),
-                          label: const Text('Go to Downloader'),
-                        ),
-                      ],
-                    ),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -222,6 +281,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                   label: 'Video Converter',
                   desc: 'MP4, MKV, WEBM, MOV, AVI',
                   color: Colors.blue,
+                  width: suiteCardWidth,
                   onTap: () => ref.read(navigationIndexProvider.notifier).state = 2,
                 ),
                 _SuiteCard(
@@ -229,6 +289,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                   label: 'Audio & Extraction',
                   desc: 'MP3, WAV, AAC, FLAC, M4A',
                   color: Colors.green,
+                  width: suiteCardWidth,
                   onTap: () => ref.read(navigationIndexProvider.notifier).state = 3,
                 ),
                 _SuiteCard(
@@ -236,6 +297,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                   label: 'Image Converter',
                   desc: 'JPG, PNG, WEBP, AVIF',
                   color: Colors.orange,
+                  width: suiteCardWidth,
                   onTap: () => ref.read(navigationIndexProvider.notifier).state = 4,
                 ),
                 _SuiteCard(
@@ -243,6 +305,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                   label: 'Batch Converter',
                   desc: 'Multiple files queue',
                   color: Colors.purple,
+                  width: suiteCardWidth,
                   onTap: () => ref.read(navigationIndexProvider.notifier).state = 5,
                 ),
               ],
@@ -316,6 +379,7 @@ class _SuiteCard extends StatelessWidget {
   final String desc;
   final Color color;
   final VoidCallback onTap;
+  final double? width;
 
   const _SuiteCard({
     required this.icon,
@@ -323,6 +387,7 @@ class _SuiteCard extends StatelessWidget {
     required this.desc,
     required this.color,
     required this.onTap,
+    this.width,
   });
 
   @override
@@ -331,7 +396,7 @@ class _SuiteCard extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
       child: Container(
-        width: 170,
+        width: width ?? 170,
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
@@ -444,19 +509,23 @@ class _RecentJobCard extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
         ),
         trailing: isCompleted
-            ? IconButton(
-                icon: const Icon(Icons.folder_open, size: 20),
-                tooltip: 'Open Output Directory',
-                onPressed: () {
-                  final dir = p.dirname(job.outputPath);
-                  if (Platform.isWindows) {
-                    Process.run('explorer', [dir]);
-                  } else if (Platform.isMacOS) {
-                    Process.run('open', [dir]);
-                  } else {
-                    Process.run('xdg-open', [dir]);
-                  }
-                },
+            ? Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.share, size: 20),
+                    tooltip: 'Share Converted File',
+                    onPressed: () => PlatformService.shareFile(job.outputPath),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.folder_open, size: 20),
+                    tooltip: 'Open Output Directory',
+                    onPressed: () {
+                      final dir = p.dirname(job.outputPath);
+                      PlatformService.openFolder(dir);
+                    },
+                  ),
+                ],
               )
             : null,
       ),
