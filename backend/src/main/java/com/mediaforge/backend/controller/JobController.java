@@ -1,8 +1,11 @@
 package com.mediaforge.backend.controller;
 
+import com.mediaforge.backend.converter.service.ConversionProgressService;
 import com.mediaforge.backend.dto.request.JobCreateRequest;
+import com.mediaforge.backend.dto.response.ConversionProgressResponse;
 import com.mediaforge.backend.dto.response.JobResponse;
 import com.mediaforge.backend.enums.JobStatus;
+import com.mediaforge.backend.service.ConversionService;
 import com.mediaforge.backend.service.JobService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -12,8 +15,10 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.UUID;
 
@@ -23,9 +28,15 @@ import java.util.UUID;
 public class JobController {
 
     private final JobService jobService;
+    private final ConversionService conversionService;
+    private final ConversionProgressService progressService;
 
-    public JobController(JobService jobService) {
+    public JobController(JobService jobService,
+                         ConversionService conversionService,
+                         ConversionProgressService progressService) {
         this.jobService = jobService;
+        this.conversionService = conversionService;
+        this.progressService = progressService;
     }
 
     @PostMapping
@@ -43,6 +54,21 @@ public class JobController {
         return ResponseEntity.ok(response);
     }
 
+    @GetMapping("/{id}/progress")
+    @Operation(summary = "Get live conversion progress by ID", description = "Retrieves detailed progress, elapsed time, stage, and ETA for a job")
+    public ResponseEntity<ConversionProgressResponse> getJobProgress(
+            @Parameter(description = "UUID of the media job") @PathVariable UUID id) {
+        ConversionProgressResponse response = conversionService.getConversionProgress(id);
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping(value = "/{id}/progress/sse", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @Operation(summary = "Subscribe to live job progress via Server-Sent Events", description = "Streams real-time FFmpeg progress percentages and stage updates")
+    public SseEmitter subscribeJobProgress(
+            @Parameter(description = "UUID of the media job") @PathVariable UUID id) {
+        return progressService.subscribe(id);
+    }
+
     @GetMapping
     @Operation(summary = "List media jobs with pagination", description = "Returns a paginated list of media jobs, optionally filtered by status")
     public ResponseEntity<Page<JobResponse>> listJobs(
@@ -58,7 +84,7 @@ public class JobController {
     }
 
     @PostMapping("/{id}/cancel")
-    @Operation(summary = "Cancel an in-progress or queued job", description = "Transitions an active or pending job to CANCELLED")
+    @Operation(summary = "Cancel an in-progress or queued job", description = "Transitions an active or pending job to CANCELLED and halts background processing")
     public ResponseEntity<JobResponse> cancelJob(
             @Parameter(description = "UUID of the job to cancel") @PathVariable UUID id) {
         JobResponse response = jobService.cancelJob(id, null);

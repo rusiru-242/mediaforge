@@ -44,6 +44,12 @@ class JobControllerIntegrationTest {
     @MockitoBean
     private JobService jobService;
 
+    @MockitoBean
+    private com.mediaforge.backend.service.ConversionService conversionService;
+
+    @MockitoBean
+    private com.mediaforge.backend.converter.service.ConversionProgressService progressService;
+
     @Test
     @DisplayName("POST /api/v1/jobs should create and return 201 Created")
     void testCreateJobEndpoint() throws Exception {

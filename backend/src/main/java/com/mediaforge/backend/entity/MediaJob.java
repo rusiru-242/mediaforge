@@ -45,6 +45,9 @@ public class MediaJob {
     @Column(name = "error_message", columnDefinition = "TEXT")
     private String errorMessage;
 
+    @Column(name = "batch_id")
+    private UUID batchId;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
 
@@ -194,5 +197,13 @@ public class MediaJob {
 
     public void setFiles(List<MediaFile> files) {
         this.files = files;
+    }
+
+    public UUID getBatchId() {
+        return batchId;
+    }
+
+    public void setBatchId(UUID batchId) {
+        this.batchId = batchId;
     }
 }

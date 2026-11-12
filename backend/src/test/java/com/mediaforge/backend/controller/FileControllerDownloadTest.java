@@ -1,5 +1,6 @@
 package com.mediaforge.backend.controller;
 
+import com.mediaforge.backend.converter.service.ConversionStorageService;
 import com.mediaforge.backend.downloader.service.MediaStorageService;
 import com.mediaforge.backend.entity.MediaFile;
 import com.mediaforge.backend.security.SecurityConfig;
@@ -35,6 +36,9 @@ class FileControllerDownloadTest {
     @MockitoBean
     private MediaStorageService storageService;
 
+    @MockitoBean
+    private ConversionStorageService conversionStorageService;
+
     @Test
     @DisplayName("GET /api/v1/files/{id}/download should stream file with Content-Disposition")
     void testDownloadFile() throws Exception {
@@ -53,8 +57,8 @@ class FileControllerDownloadTest {
         byte[] content = "video-sample".getBytes();
         ByteArrayResource resource = new ByteArrayResource(content);
 
-        when(storageService.getMediaFile(fileId)).thenReturn(mediaFile);
-        when(storageService.loadAsResource(fileId)).thenReturn(resource);
+        when(conversionStorageService.getMediaFile(fileId)).thenReturn(mediaFile);
+        when(conversionStorageService.loadAsResource(fileId)).thenReturn(resource);
 
         mockMvc.perform(get("/api/v1/files/{id}/download", fileId))
                 .andExpect(status().isOk())

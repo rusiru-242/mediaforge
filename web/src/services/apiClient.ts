@@ -1,12 +1,16 @@
 import {
   ApiErrorResponse,
+  BatchConversionRequest,
+  BatchConversionResponse,
   ConversionCreateRequest,
+  ConversionProgressResponse,
   ConversionResponse,
   DownloadCreateRequest,
   DownloadResponse,
   DownloadValidateRequest,
   DownloadValidateResponse,
   FileMetadataResponse,
+  FileUploadResponse,
   FormatListResponse,
   HealthResponse,
   JobResponse,
@@ -128,9 +132,18 @@ export const apiClient = {
       method: 'POST',
       body: JSON.stringify(req),
     }),
+  createBatchConversion: (req: BatchConversionRequest) =>
+    request<BatchConversionResponse>('/conversions/batch', {
+      method: 'POST',
+      body: JSON.stringify(req),
+    }),
+  getConversionFormats: () =>
+    request<{ videoFormats: string[]; audioFormats: string[]; imageFormats: string[] }>('/conversions/formats'),
+  getBatchZipUrl: (batchId: string) => `${API_BASE_URL}/conversions/batch/${batchId}/zip`,
 
   // Jobs
   getJobById: (id: string) => request<JobResponse>(`/jobs/${id}`),
+  getJobProgress: (id: string) => request<ConversionProgressResponse>(`/jobs/${id}/progress`),
 
   listJobs: (
     optionsOrStatus?: { page?: number; size?: number; status?: JobStatus } | JobStatus,
@@ -165,7 +178,39 @@ export const apiClient = {
     }),
 
   // Files
+  uploadFile: async (file: File): Promise<FileUploadResponse> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const url = `${API_BASE_URL}/files/upload`;
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        body: formData,
+      });
+      if (!res.ok) {
+        let errorData: any = null;
+        try {
+          errorData = await res.json();
+        } catch {
+          // Non-JSON error
+        }
+        const errorMsg =
+          errorData?.detail || errorData?.message || errorData?.error || res.statusText || 'Upload failed';
+        const errorCode = errorData?.code || 'UPLOAD_FAILED';
+        throw new ApiError(res.status, errorCode, errorMsg, errorData?.validationErrors || errorData?.errors);
+      }
+      return (await res.json()) as FileUploadResponse;
+    } catch (err: unknown) {
+      if (err instanceof ApiError) {
+        throw err;
+      }
+      const message = err instanceof Error ? err.message : 'Network failure during upload';
+      throw new ApiError(0, 'UPLOAD_NETWORK_ERROR', `Failed to upload file to backend. (${message})`);
+    }
+  },
+
   getFileMetadata: (id: string) => request<FileMetadataResponse>(`/files/${id}/metadata`),
+  getFileDownloadUrl: (fileId: string) => `${API_BASE_URL}/files/${fileId}/download`,
 };
 
 export const api = apiClient;
