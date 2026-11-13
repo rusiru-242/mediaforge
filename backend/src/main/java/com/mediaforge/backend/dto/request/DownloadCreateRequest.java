@@ -9,11 +9,11 @@ public class DownloadCreateRequest {
     private String url;
 
     @NotBlank(message = "selectedFormat is required")
-    @Size(max = 20, message = "selectedFormat cannot exceed 20 characters")
+    @Size(max = 32, message = "selectedFormat cannot exceed 32 characters")
     private String selectedFormat;
 
     @NotBlank(message = "selectedQuality is required")
-    @Size(max = 20, message = "selectedQuality cannot exceed 20 characters")
+    @Size(max = 64, message = "selectedQuality cannot exceed 64 characters")
     private String selectedQuality;
 
     public DownloadCreateRequest() {

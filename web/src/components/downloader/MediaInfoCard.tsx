@@ -52,7 +52,7 @@ export function MediaInfoCard({ metadata }: MediaInfoCardProps) {
               </span>
             ) : (
               <span className="inline-flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
-                <AlertCircle className="h-3.5 w-3.5" /> Policy Restricted
+                <AlertCircle className="h-3.5 w-3.5" /> Direct Download Unavailable
               </span>
             )}
           </div>
@@ -92,10 +92,10 @@ export function MediaInfoCard({ metadata }: MediaInfoCardProps) {
             <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
             <div className="space-y-1 text-xs text-amber-900 dark:text-amber-200">
               <p className="font-semibold">
-                Direct Stream Extraction Restricted
+                Direct Stream Unavailable
               </p>
               <p className="text-amber-800/90 dark:text-amber-300/80 leading-relaxed">
-                {metadata.message || `In compliance with ${metadata.platform || 'platform'} Terms of Service and copyright protection, direct stream scraping is restricted. Public oEmbed metadata has been verified.`}
+                {metadata.message || `This media cannot be downloaded directly because the source server requires authentication, DRM credentials, or restricts automated downloads.`}
               </p>
             </div>
           </div>

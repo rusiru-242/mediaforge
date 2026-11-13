@@ -20,6 +20,7 @@ public class MediaMetadata {
     private List<String> availableQualities = new ArrayList<>();
     private boolean requiresConversion;
     private String directStreamUri;
+    private String message;
 
     public MediaMetadata() {
     }
@@ -152,5 +153,13 @@ public class MediaMetadata {
 
     public void setDirectStreamUri(String directStreamUri) {
         this.directStreamUri = directStreamUri;
+    }
+
+    public String getMessage() {
+        return message;
+    }
+
+    public void setMessage(String message) {
+        this.message = message;
     }
 }

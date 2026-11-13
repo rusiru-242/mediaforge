@@ -38,6 +38,7 @@ public class MediaDownloadServiceImpl implements MediaDownloadService {
     private final JobEventRepository eventRepository;
     private final ExecutorService executorService;
     private final Map<UUID, DownloadTask> activeTasks = new ConcurrentHashMap<>();
+    private final YtDlpProcessExecutor ytDlpExecutor;
 
     @Value("${app.downloader.max-file-size-bytes:524288000}")
     private long maxFileSizeBytes;
@@ -48,10 +49,22 @@ public class MediaDownloadServiceImpl implements MediaDownloadService {
             MediaJobRepository jobRepository,
             JobEventRepository eventRepository,
             @Value("${app.downloader.pool-size:5}") int poolSize) {
+        this(adapterRegistry, storageService, jobRepository, eventRepository, poolSize, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public MediaDownloadServiceImpl(
+            MediaSourceAdapterRegistry adapterRegistry,
+            MediaStorageService storageService,
+            MediaJobRepository jobRepository,
+            JobEventRepository eventRepository,
+            @Value("${app.downloader.pool-size:5}") int poolSize,
+            @org.springframework.lang.Nullable YtDlpProcessExecutor ytDlpExecutor) {
         this.adapterRegistry = adapterRegistry;
         this.storageService = storageService;
         this.jobRepository = jobRepository;
         this.eventRepository = eventRepository;
+        this.ytDlpExecutor = ytDlpExecutor;
         this.executorService = Executors.newFixedThreadPool(Math.max(2, poolSize));
     }
 
@@ -188,6 +201,9 @@ public class MediaDownloadServiceImpl implements MediaDownloadService {
         DownloadTask task = activeTasks.get(jobId);
         if (task != null) {
             task.cancel();
+            if (ytDlpExecutor != null) {
+                ytDlpExecutor.cancel(jobId);
+            }
             log.info("Signalled cancellation for active download task {}", jobId);
             return true;
         }

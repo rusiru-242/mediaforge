@@ -144,6 +144,17 @@ public class DownloadServiceImpl implements DownloadService {
 
             boolean directSupported = formatDtos.stream().anyMatch(MediaFormatOptionDto::isNativeStream);
 
+            String responseMsg;
+            if (directSupported) {
+                responseMsg = meta.getMessage() != null && !meta.getMessage().isBlank()
+                        ? meta.getMessage()
+                        : "Media stream inspected successfully — ready for download";
+            } else if (meta.getMessage() != null && !meta.getMessage().isBlank()) {
+                responseMsg = meta.getMessage();
+            } else {
+                responseMsg = "Direct stream download is currently unavailable for this media source.";
+            }
+
             return new MediaMetadataResponse(
                     true,
                     validatedUri.toString(),
@@ -159,7 +170,7 @@ public class DownloadServiceImpl implements DownloadService {
                     formatDtos,
                     meta.getAvailableQualities(),
                     directSupported,
-                    directSupported ? "Media stream inspected successfully" : "Source recognized but direct stream download requires credentials or conversion"
+                    responseMsg
             );
         } catch (IOException e) {
             log.warn("Failed to extract metadata for URL {}: {}", request.getUrl(), e.getMessage());

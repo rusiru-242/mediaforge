@@ -6,8 +6,10 @@ import com.mediaforge.backend.downloader.model.DownloadTask;
 import com.mediaforge.backend.downloader.model.DownloadedMedia;
 import com.mediaforge.backend.downloader.model.MediaMetadata;
 import com.mediaforge.backend.downloader.model.ProgressCallback;
+import com.mediaforge.backend.downloader.service.YtDlpProcessExecutor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
@@ -40,13 +42,20 @@ public class PlatformMediaSourceAdapter implements MediaSourceAdapter {
 
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
+    private final YtDlpProcessExecutor ytDlpExecutor;
 
     public PlatformMediaSourceAdapter() {
-        this(new ObjectMapper());
+        this(new ObjectMapper(), null);
     }
 
     public PlatformMediaSourceAdapter(ObjectMapper objectMapper) {
+        this(objectMapper, null);
+    }
+
+    @Autowired
+    public PlatformMediaSourceAdapter(ObjectMapper objectMapper, @org.springframework.lang.Nullable YtDlpProcessExecutor ytDlpExecutor) {
         this.objectMapper = objectMapper != null ? objectMapper : new ObjectMapper();
+        this.ytDlpExecutor = ytDlpExecutor;
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(5))
                 .followRedirects(HttpClient.Redirect.NORMAL)
@@ -55,7 +64,7 @@ public class PlatformMediaSourceAdapter implements MediaSourceAdapter {
 
     @Override
     public String getSourceName() {
-        return "Third-Party Social Platform (Policy-Protected)";
+        return "Third-Party Social Platform";
     }
 
     @Override
@@ -71,8 +80,28 @@ public class PlatformMediaSourceAdapter implements MediaSourceAdapter {
         String host = uri.getHost() != null ? uri.getHost().toLowerCase(Locale.ROOT) : "platform";
         String platformName = identifyPlatform(host);
 
+        // 1. Attempt dynamic inspection via YtDlpProcessExecutor if available
+        if (ytDlpExecutor != null && ytDlpExecutor.isAvailable()) {
+            MediaMetadata meta = ytDlpExecutor.extractMetadata(uri);
+            if (meta != null && meta.getAvailableFormats() != null && !meta.getAvailableFormats().isEmpty()) {
+                return meta;
+            }
+            // If extractor returned specific error message, attempt oEmbed fallback to get title/thumbnail
+            if (meta != null && meta.getMessage() != null && !meta.getMessage().isBlank()) {
+                MediaMetadata fallback = createBasicMetadata(uri, platformName);
+                fallback.setMessage(meta.getMessage());
+                return fallback;
+            }
+        }
+
+        // 2. Fallback to public oEmbed
+        return createBasicMetadata(uri, platformName);
+    }
+
+    private MediaMetadata createBasicMetadata(URI uri, String platformName) {
+        String host = uri.getHost() != null ? uri.getHost().toLowerCase(Locale.ROOT) : "platform";
         MediaMetadata metadata = new MediaMetadata();
-        metadata.setTitle(platformName + " Stream (Protected)");
+        metadata.setTitle(platformName + " Stream");
         metadata.setSourceName(platformName);
         metadata.setMediaType("VIDEO");
         metadata.setMimeType("video/mp4");
@@ -162,10 +191,14 @@ public class PlatformMediaSourceAdapter implements MediaSourceAdapter {
 
     @Override
     public DownloadedMedia download(DownloadTask task, ProgressCallback progressCallback) throws IOException {
+        if (ytDlpExecutor != null && ytDlpExecutor.isAvailable()) {
+            return ytDlpExecutor.download(task, progressCallback);
+        }
+
         String host = task.getSourceUri().getHost() != null ? task.getSourceUri().getHost().toLowerCase(Locale.ROOT) : "Platform";
         String platformName = identifyPlatform(host);
         throw new UnsupportedOperationException(String.format(
-                "Direct downloading from %s requires official developer API credentials. In accordance with platform Terms of Service and DRM compliance, unauthorized stream scraping is disabled.",
+                "Direct downloading from %s is currently unavailable: media extractor is not configured on this host.",
                 platformName
         ));
     }

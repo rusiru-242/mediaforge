@@ -40,7 +40,7 @@ describe('MediaInfoCard component', () => {
     expect(screen.getByText(/15 MB/i)).toBeDefined();
   });
 
-  it('shows policy restriction badge when directDownloadSupported is false', () => {
+  it('shows unavailable badge when directDownloadSupported is false', () => {
     const restrictedMetadata: MediaMetadataResponse = {
       ...sampleMetadata,
       platform: 'YouTube',
@@ -48,6 +48,6 @@ describe('MediaInfoCard component', () => {
     };
 
     render(<MediaInfoCard metadata={restrictedMetadata} />);
-    expect(screen.getByText('Policy Restricted')).toBeDefined();
+    expect(screen.getByText('Direct Download Unavailable')).toBeDefined();
   });
 });
