@@ -85,6 +85,22 @@ export function MediaInfoCard({ metadata }: MediaInfoCardProps) {
           </div>
         </div>
       </div>
+
+      {!metadata.directDownloadSupported && (
+        <div className="mt-4 rounded-xl border border-amber-200/80 bg-amber-50/80 p-3.5 text-left dark:border-amber-900/60 dark:bg-amber-950/30">
+          <div className="flex items-start gap-2.5">
+            <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            <div className="space-y-1 text-xs text-amber-900 dark:text-amber-200">
+              <p className="font-semibold">
+                Direct Stream Extraction Restricted
+              </p>
+              <p className="text-amber-800/90 dark:text-amber-300/80 leading-relaxed">
+                {metadata.message || `In compliance with ${metadata.platform || 'platform'} Terms of Service and copyright protection, direct stream scraping is restricted. Public oEmbed metadata has been verified.`}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

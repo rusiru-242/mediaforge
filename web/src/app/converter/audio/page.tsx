@@ -52,17 +52,28 @@ export default function AudioConverterPage() {
 
   const startPolling = (jobId: string) => {
     cleanupPolling();
+    if (!jobId || jobId === 'undefined') {
+      setStage('FAILED');
+      setError('Unable to track conversion: No valid Job ID was received from the server.');
+      return;
+    }
+    let consecutiveErrors = 0;
     pollIntervalRef.current = setInterval(async () => {
       try {
         const prog = await apiClient.getJobProgress(jobId);
         setProgress(prog);
+        consecutiveErrors = 0;
 
         if (prog.completed || prog.status === 'COMPLETED') {
           cleanupPolling();
           setStage('COMPLETED');
-          const updatedJob = await apiClient.getJobById(jobId);
-          setCurrentJob(updatedJob);
-          setOutputFileId(updatedJob.outputFileId || jobId);
+          try {
+            const updatedJob = await apiClient.getJobById(jobId);
+            setCurrentJob(updatedJob);
+            setOutputFileId(updatedJob.outputFileId || jobId);
+          } catch {
+            setOutputFileId(jobId);
+          }
         } else if (prog.failed || prog.status === 'FAILED') {
           cleanupPolling();
           setStage('FAILED');
@@ -72,7 +83,12 @@ export default function AudioConverterPage() {
           setStage('CANCELLED');
         }
       } catch (err: unknown) {
-        // Polling transient errors
+        consecutiveErrors++;
+        if (consecutiveErrors > 15) {
+          cleanupPolling();
+          setStage('FAILED');
+          setError('Lost connection while polling audio conversion progress.');
+        }
       }
     }, 1000);
   };
@@ -106,8 +122,13 @@ export default function AudioConverterPage() {
         sampleRate: parseInt(sampleRate, 10),
       });
 
+      const effectiveJobId = job.id || (job as any).jobId;
+      if (!effectiveJobId) {
+        throw new Error('Backend accepted conversion but did not return a valid Job ID.');
+      }
+      job.id = effectiveJobId;
       setCurrentJob(job);
-      startPolling(job.id);
+      startPolling(effectiveJobId);
     } catch (err: any) {
       setStage('FAILED');
       setError(err.message || 'Failed to process audio conversion.');

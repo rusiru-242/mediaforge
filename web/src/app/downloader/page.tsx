@@ -219,48 +219,84 @@ export default function DownloaderPage() {
           <div className="space-y-6 pt-2 animate-in fade-in-50 duration-300">
             <MediaInfoCard metadata={metadata} />
 
-            <form onSubmit={handleStartDownload} className="space-y-6">
-              {/* Format Selection */}
-              <MediaFormatSelector
-                formats={metadata.availableFormats || []}
-                selectedFormat={selectedFormat}
-                onSelectFormat={setSelectedFormat}
-                disabled={isSubmitting || isJobRunning}
-              />
+            {!metadata.directDownloadSupported ? (
+              <div className="space-y-4 pt-2">
+                <div className="rounded-xl border border-violet-200 bg-violet-50/60 p-4 text-left dark:border-violet-900/60 dark:bg-violet-950/30">
+                  <h4 className="text-sm font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+                    Recommended Alternative: MediaForge Converter
+                  </h4>
+                  <p className="mt-1 text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                    If you have an authorized local file from this media or recording, you can use the MediaForge Converter to transcode, extract MP3 audio, downscale resolutions, or change container formats with full FFmpeg speed.
+                  </p>
+                </div>
 
-              {/* Quality Selection */}
-              {metadata.availableQualities && metadata.availableQualities.length > 0 && (
-                <MediaQualitySelector
-                  qualities={metadata.availableQualities}
-                  selectedQuality={selectedQuality}
-                  onSelectQuality={setSelectedQuality}
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <Link href="/converter/video" className="flex-1">
+                    <Button
+                      type="button"
+                      variant="primary"
+                      size="lg"
+                      className="w-full bg-violet-600 hover:bg-violet-700 text-white"
+                      leftIcon={<Sparkles className="h-5 w-5" />}
+                    >
+                      Transcode in MediaForge Converter
+                    </Button>
+                  </Link>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="lg"
+                    onClick={handleReset}
+                    leftIcon={<RefreshCw className="h-4 w-4" />}
+                  >
+                    Inspect Another URL
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleStartDownload} className="space-y-6">
+                {/* Format Selection */}
+                <MediaFormatSelector
+                  formats={metadata.availableFormats || []}
+                  selectedFormat={selectedFormat}
+                  onSelectFormat={setSelectedFormat}
                   disabled={isSubmitting || isJobRunning}
                 />
-              )}
 
-              {/* Job / Submission Error */}
-              {jobError && (
-                <DownloadError
-                  error={jobError}
-                  onDismiss={() => setJobError(null)}
-                />
-              )}
+                {/* Quality Selection */}
+                {metadata.availableQualities && metadata.availableQualities.length > 0 && (
+                  <MediaQualitySelector
+                    qualities={metadata.availableQualities}
+                    selectedQuality={selectedQuality}
+                    onSelectQuality={setSelectedQuality}
+                    disabled={isSubmitting || isJobRunning}
+                  />
+                )}
 
-              {/* Action Buttons */}
-              <div className="flex flex-col gap-3 sm:flex-row">
-                <Button
-                  type="submit"
-                  variant="primary"
-                  size="lg"
-                  className="flex-1"
-                  isLoading={isSubmitting}
-                  disabled={!metadata.directDownloadSupported || isJobRunning}
-                  leftIcon={<DownloadCloud className="h-5 w-5" />}
-                >
-                  {isJobRunning ? 'Download in Progress...' : 'Start Download Job'}
-                </Button>
+                {/* Job / Submission Error */}
+                {jobError && (
+                  <DownloadError
+                    error={jobError}
+                    onDismiss={() => setJobError(null)}
+                  />
+                )}
 
-                {metadata && (
+                {/* Action Buttons */}
+                <div className="flex flex-col gap-3 sm:flex-row">
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    size="lg"
+                    className="flex-1"
+                    isLoading={isSubmitting}
+                    disabled={isJobRunning}
+                    leftIcon={<DownloadCloud className="h-5 w-5" />}
+                  >
+                    {isJobRunning ? 'Download in Progress...' : 'Start Download Job'}
+                  </Button>
+
                   <Button
                     type="button"
                     variant="outline"
@@ -271,9 +307,9 @@ export default function DownloaderPage() {
                   >
                     Reset
                   </Button>
-                )}
-              </div>
-            </form>
+                </div>
+              </form>
+            )}
           </div>
         )}
 

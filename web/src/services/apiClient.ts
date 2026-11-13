@@ -109,11 +109,17 @@ export const apiClient = {
     return request<import('@/types/api').MediaFormatOptionDto[]>(`/downloads/formats${query}`);
   },
 
-  createDownloadJob: (req: DownloadCreateRequest) =>
-    request<JobResponse>('/downloads', {
+  createDownloadJob: async (req: DownloadCreateRequest): Promise<JobResponse> => {
+    const res = await request<any>('/downloads', {
       method: 'POST',
       body: JSON.stringify(req),
-    }),
+    });
+    const job: JobResponse = res.job || res;
+    if (!job.id && res.jobId) {
+      job.id = res.jobId;
+    }
+    return job;
+  },
   createDownload: (req: DownloadCreateRequest) =>
     request<DownloadResponse>('/downloads', {
       method: 'POST',
@@ -121,11 +127,17 @@ export const apiClient = {
     }),
 
   // Converter
-  createConversionJob: (req: ConversionCreateRequest) =>
-    request<JobResponse>('/conversions', {
+  createConversionJob: async (req: ConversionCreateRequest): Promise<JobResponse> => {
+    const res = await request<any>('/conversions', {
       method: 'POST',
       body: JSON.stringify(req),
-    }),
+    });
+    const job: JobResponse = res.job || res;
+    if (!job.id && res.jobId) {
+      job.id = res.jobId;
+    }
+    return job;
+  },
   createConversion: (req: ConversionCreateRequest) =>
     request<ConversionResponse>('/conversions', {
       method: 'POST',
@@ -141,8 +153,18 @@ export const apiClient = {
   getBatchZipUrl: (batchId: string) => `${API_BASE_URL}/conversions/batch/${batchId}/zip`,
 
   // Jobs
-  getJobById: (id: string) => request<JobResponse>(`/jobs/${id}`),
-  getJobProgress: (id: string) => request<ConversionProgressResponse>(`/jobs/${id}/progress`),
+  getJobById: (id: string) => {
+    if (!id || id === 'undefined' || id === 'null') {
+      return Promise.reject(new Error('Invalid job ID provided for job lookup'));
+    }
+    return request<JobResponse>(`/jobs/${id}`);
+  },
+  getJobProgress: (id: string) => {
+    if (!id || id === 'undefined' || id === 'null') {
+      return Promise.reject(new Error('Invalid job ID provided for progress lookup'));
+    }
+    return request<ConversionProgressResponse>(`/jobs/${id}/progress`);
+  },
 
   listJobs: (
     optionsOrStatus?: { page?: number; size?: number; status?: JobStatus } | JobStatus,
