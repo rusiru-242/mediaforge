@@ -1,6 +1,6 @@
 name: mediaforge_desktop
 description: MediaForge - Cross-platform desktop media downloader and converter
-version: 0.1.0+1
+version: 1.0.0+1
 publish_to: 'none'
 
 environment:

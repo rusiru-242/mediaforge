@@ -13,7 +13,7 @@
 
     <groupId>com.mediaforge</groupId>
     <artifactId>mediaforge-backend</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>1.0.0</version>
     <name>mediaforge-backend</name>
     <description>MediaForge Backend API and Processing Service</description>
     <packaging>jar</packaging>
