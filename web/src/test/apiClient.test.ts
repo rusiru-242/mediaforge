@@ -7,7 +7,7 @@ describe('apiClient', () => {
   });
 
   it('checkHealth returns backend health payload when OK', async () => {
-    const mockHealth = { status: 'UP', service: 'mediaforge-backend', version: '0.1.0-SNAPSHOT' };
+    const mockHealth = { status: 'UP', service: 'mediaforge-backend', version: '1.0.0' };
     vi.spyOn(global, 'fetch').mockResolvedValueOnce({
       ok: true,
       status: 200,

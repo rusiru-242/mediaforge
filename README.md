@@ -221,6 +221,19 @@ npm run dev
 
 ---
 
+## 🚀 Release & Deployment Documentation
+
+- 📦 [Release Notes v1.0.0](docs/release/v1.0.0.md) — Comprehensive feature matrix, checksums, and sign-offs.
+- ⚙️ [Installation & Setup](docs/release/installation.md) — Guides for Docker, Desktop, and Mobile.
+- 🌐 [Production Deployment](docs/release/deployment.md) — Nginx reverse proxy, systemd services, and resource sizing.
+- 🔧 [Troubleshooting & Operations](docs/release/troubleshooting.md) — Common runtime fixes, FFmpeg configurations, and health checks.
+- 💻 [Platform Support Matrix](docs/release/platform-support.md) — Detailed capability breakdown across all 6 targets.
+- 🔒 [Production Security Architecture](docs/release/security.md) — Zero-database design, SSRF defense, and process isolation.
+- 📋 [Release Checklist](docs/release/release-checklist.md) — Production verification gates for v1.0.0.
+- ⚠️ [Known Limitations](docs/release/known-limitations.md) — In-memory job state, DRM boundaries, and retention parameters.
+
+---
+
 ## 🤝 Contributing
 
 Please read [CONTRIBUTING.md](CONTRIBUTING.md) before submitting pull requests.
