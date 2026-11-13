@@ -59,3 +59,4 @@
 - **PNG:** Lossless PNG with transparency channel preservation
 - **WebP:** Modern web image format supporting lossy and lossless modes
 - **AVIF:** Next-generation AV1-based image format
+

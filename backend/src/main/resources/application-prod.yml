@@ -14,3 +14,4 @@ logging:
     com.mediaforge.backend: INFO
     org.springframework.web: WARN
     org.springframework.security: WARN
+

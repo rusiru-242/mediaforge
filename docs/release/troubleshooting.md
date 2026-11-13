@@ -76,3 +76,4 @@
 | `GET /api/v1/health` | Service and version health | `{"status":"UP","service":"mediaforge-backend","version":"1.0.0"}` |
 | `GET /actuator/health` | Spring Boot Actuator probe | `{"status":"UP"}` |
 | `GET /v3/api-docs` | OpenAPI specification schema | Full JSON OpenAPI 3.0 schema |
+

@@ -50,3 +50,4 @@ MediaForge was specifically designed to eliminate data breach vectors by elimina
 ## 3. Vulnerability Disclosure Policy
 
 Security issues and vulnerability reports should be responsibly disclosed by submitting a private security advisory through the [MediaForge GitHub Repository Security Tab](https://github.com/rusiru-242/mediaforge/security/advisories) or emailing the core maintainers.
+

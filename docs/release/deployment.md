@@ -157,3 +157,4 @@ WantedBy=multi-user.target
 | **Small (Entry)** | 2 Concurrent Transcodes | 2 vCPU | 2 GB | 20 GB |
 | **Medium (Production)** | 4 Concurrent Transcodes | 4 vCPU | 4 GB | 50 GB |
 | **Large (High Concurrency)**| 8 Concurrent Transcodes | 8 vCPU | 8 GB | 100 GB |
+
