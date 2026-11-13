@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Download, FileCheck, ExternalLink, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
+import { API_BASE_URL } from '@/config/api';
 
 interface DownloadResultProps {
   jobId: string;
@@ -14,9 +15,8 @@ interface DownloadResultProps {
 }
 
 export function DownloadResult({ jobId, outputFileId, targetFormat, targetQuality }: DownloadResultProps) {
-  const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080/api/v1';
   const downloadUrl = outputFileId
-    ? `${apiBase}/files/${outputFileId}/download`
+    ? `${API_BASE_URL}/files/${outputFileId}/download`
     : null;
 
   return (

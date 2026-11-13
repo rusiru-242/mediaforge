@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { SWAGGER_DOCS_URL } from '@/config/api';
 
 export default function AboutPage() {
   return (
@@ -54,7 +55,7 @@ export default function AboutPage() {
               Spring Boot 3 Core Backend
             </h3>
             <p className="mt-2 text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-              Implemented in Java 21 with Spring Boot 3.5, Spring Security, PostgreSQL persistence, Flyway schema migrations, and Springdoc OpenAPI 3. Built for concurrent async job dispatch and strict SSRF defenses.
+              Implemented in Java 21 with Spring Boot 3.4.x, Spring Security, FFmpeg processing engine, and Springdoc OpenAPI 3. Built for database-free in-memory job processing, concurrent async transcoding, and strict SSRF defenses.
             </p>
           </Card>
 
@@ -110,7 +111,7 @@ export default function AboutPage() {
             </p>
           </div>
           <a
-            href="http://localhost:8080/swagger-ui.html"
+            href={SWAGGER_DOCS_URL}
             target="_blank"
             rel="noopener noreferrer"
           >

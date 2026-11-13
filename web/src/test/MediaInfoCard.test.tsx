@@ -6,6 +6,8 @@ import { MediaMetadataResponse } from '@/types/api';
 
 describe('MediaInfoCard component', () => {
   const sampleMetadata: MediaMetadataResponse = {
+    success: true,
+    url: 'https://example.com/video.mp4',
     title: 'Big Buck Bunny 1080p Stream',
     platform: 'Direct Media',
     mediaType: 'VIDEO',
@@ -14,6 +16,8 @@ describe('MediaInfoCard component', () => {
     duration: 596,
     fileSize: 15728640,
     mimeType: 'video/mp4',
+    availableFormats: [],
+    availableQualities: ['1080p'],
     directDownloadSupported: true,
   };
 

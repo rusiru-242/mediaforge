@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { api } from "@/services/apiClient";
+import { BACKEND_PORT } from "@/config/api";
 import {
   Download,
   FileVideo,
@@ -101,7 +102,7 @@ export function Navbar() {
             <div
               title={
                 backendUp === true
-                  ? "Backend API Connected (Port 8080)"
+                  ? `Backend API Connected (Port ${BACKEND_PORT})`
                   : backendUp === false
                   ? "Backend API Disconnected / Offline"
                   : "Checking Backend API Connection..."

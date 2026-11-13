@@ -14,6 +14,7 @@ import {
   Info,
 } from 'lucide-react';
 import { apiClient } from '@/services/apiClient';
+import { API_BASE_URL } from '@/config/api';
 import { JobResponse, FileMetadataResponse } from '@/types/api';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -210,7 +211,7 @@ export default function JobDetailPage({
 
                   {job.outputFileId && (
                     <a
-                      href={`${process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080/api/v1'}/files/${job.outputFileId}/download`}
+                      href={`${API_BASE_URL}/files/${job.outputFileId}/download`}
                       target="_blank"
                       rel="noopener noreferrer"
                     >
@@ -228,7 +229,7 @@ export default function JobDetailPage({
               <div className="mt-8 flex items-start gap-2.5 rounded-xl border border-slate-200 bg-slate-50/80 p-4 text-xs text-slate-600 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-300">
                 <Info className="h-4 w-4 shrink-0 text-violet-500 mt-0.5" />
                 <span>
-                  <strong>Backend Queue Notice:</strong> This job has been persisted in PostgreSQL via Spring Data JPA and Flyway migration V1. The actual media processing worker (FFmpeg daemon and download engine) will be implemented in <strong>Phase 04 (Downloader)</strong> and <strong>Phase 05 (Converter)</strong>.
+                  <strong>Backend Queue Notice:</strong> This job is being processed in-memory using MediaForge&apos;s ephemeral transcoding engine. Temporary output artifacts are stored locally and purged automatically after 24 hours.
                 </span>
               </div>
             )}

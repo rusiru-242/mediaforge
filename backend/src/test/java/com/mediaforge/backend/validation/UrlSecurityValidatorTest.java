@@ -47,6 +47,7 @@ class UrlSecurityValidatorTest {
     @ValueSource(strings = {
             "http://localhost/video",
             "http://localhost:8080/test",
+            "http://localhost:8081/test",
             "http://127.0.0.1/test",
             "http://0.0.0.0/test",
             "http://metadata.google.internal/computeMetadata/v1",
