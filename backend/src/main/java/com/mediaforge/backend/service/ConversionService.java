@@ -2,9 +2,11 @@ package com.mediaforge.backend.service;
 
 import com.mediaforge.backend.dto.request.BatchConversionRequest;
 import com.mediaforge.backend.dto.request.ConversionCreateRequest;
+import com.mediaforge.backend.dto.request.SizeEstimationRequest;
 import com.mediaforge.backend.dto.response.BatchConversionResponse;
 import com.mediaforge.backend.dto.response.ConversionProgressResponse;
 import com.mediaforge.backend.dto.response.ConversionResponse;
+import com.mediaforge.backend.dto.response.SizeEstimationResponse;
 import org.springframework.core.io.Resource;
 
 import java.io.IOException;
@@ -30,4 +32,6 @@ public interface ConversionService {
     }
 
     Resource createBatchZipResource(UUID batchId) throws IOException;
+
+    SizeEstimationResponse estimateSize(SizeEstimationRequest request);
 }

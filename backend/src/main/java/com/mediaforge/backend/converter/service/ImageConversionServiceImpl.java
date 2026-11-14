@@ -47,12 +47,16 @@ public class ImageConversionServiceImpl implements ImageConversionService {
 
         MediaProbeResult probeResult = probeService.probe(inputFile);
 
-        // Decompression bomb check
         int inWidth = probeResult.getWidth();
         int inHeight = probeResult.getHeight();
+
+        // Decompression bomb check
         if (inWidth > MAX_DIMENSION || inHeight > MAX_DIMENSION || ((long) inWidth * inHeight) > MAX_PIXELS) {
-            throw new SecurityException(String.format("Image dimensions (%dx%d) exceed safe decompression threshold", inWidth, inHeight));
+            throw new SecurityException(String.format(Locale.ROOT, "Image dimensions (%dx%d) exceed safe decompression threshold", inWidth, inHeight));
         }
+
+        // Validate Cropping
+        validateCropping(options, inWidth, inHeight);
 
         List<String> args = new ArrayList<>();
         args.add("-i");
@@ -61,7 +65,16 @@ public class ImageConversionServiceImpl implements ImageConversionService {
         // Build filter graph
         List<String> filters = new ArrayList<>();
 
-        // Rotation
+        // 1. Crop
+        if (options != null && options.hasCrop()) {
+            int cropX = options.getCropX() != null ? options.getCropX() : 0;
+            int cropY = options.getCropY() != null ? options.getCropY() : 0;
+            int cropW = options.getCropWidth();
+            int cropH = options.getCropHeight();
+            filters.add(String.format(Locale.ROOT, "crop=%d:%d:%d:%d", cropW, cropH, cropX, cropY));
+        }
+
+        // 2. Rotation
         if (options != null && options.getImageRotation() != null) {
             int rot = options.getImageRotation() % 360;
             if (rot == 90) {
@@ -73,22 +86,44 @@ public class ImageConversionServiceImpl implements ImageConversionService {
             }
         }
 
-        // Resize with aspect ratio preservation
+        // 3. Flips
+        if (options != null && Boolean.TRUE.equals(options.getFlipHorizontal())) {
+            filters.add("hflip");
+        }
+        if (options != null && Boolean.TRUE.equals(options.getFlipVertical())) {
+            filters.add("vflip");
+        }
+
+        // 4. Brightness & Contrast
+        if (options != null && (options.getBrightness() != null || options.getContrast() != null)) {
+            double b = options.getBrightness() != null ? Math.max(-1.0, Math.min(1.0, options.getBrightness())) : 0.0;
+            double c = options.getContrast() != null ? Math.max(0.0, Math.min(2.0, options.getContrast())) : 1.0;
+            filters.add(String.format(Locale.ROOT, "eq=brightness=%.2f:contrast=%.2f", b, c));
+        }
+
+        // 5. Resize
         if (options != null && (options.getImageWidth() != null || options.getImageHeight() != null)) {
             Integer targetW = options.getImageWidth();
             Integer targetH = options.getImageHeight();
-            if (targetW != null && targetH != null) {
-                filters.add(String.format("scale='min(%d,iw)':-1", targetW));
-            } else if (targetW != null) {
-                filters.add(String.format("scale='min(%d,iw)':-1", targetW));
+            boolean keepAspect = !Boolean.FALSE.equals(options.getPreserveAspectRatio());
+
+            if (keepAspect) {
+                if (targetW != null && targetH != null) {
+                    filters.add(String.format(Locale.ROOT, "scale='min(%d,iw)':-1", targetW));
+                } else if (targetW != null) {
+                    filters.add(String.format(Locale.ROOT, "scale='min(%d,iw)':-1", targetW));
+                } else {
+                    filters.add(String.format(Locale.ROOT, "scale=-1:'min(%d,ih)'", targetH));
+                }
             } else {
-                filters.add(String.format("scale=-1:'min(%d,ih)'", targetH));
+                int w = targetW != null ? targetW : inWidth;
+                int h = targetH != null ? targetH : inHeight;
+                filters.add(String.format(Locale.ROOT, "scale=%d:%d", w, h));
             }
         }
 
         // Target is JPEG -> flatten transparency onto white background
         if ("jpg".equalsIgnoreCase(format) || "jpeg".equalsIgnoreCase(format)) {
-            // Apply background or pixel format for JPEG
             args.add("-pix_fmt");
             args.add("yuvj420p");
         }
@@ -98,26 +133,30 @@ public class ImageConversionServiceImpl implements ImageConversionService {
             args.add(String.join(",", filters));
         }
 
-        // Strip metadata for privacy
+        // Strip metadata for privacy if requested
         if (options == null || Boolean.TRUE.equals(options.getStripMetadata())) {
             args.add("-map_metadata");
             args.add("-1");
         }
 
         // Quality and compression parameters
+        int quality = (options != null && options.getImageQuality() != null) ? options.getImageQuality() : 85;
+
         if ("webp".equalsIgnoreCase(format)) {
-            int q = (options != null && options.getImageQuality() != null) ? options.getImageQuality() : 85;
             args.add("-quality");
-            args.add(String.valueOf(q));
+            args.add(String.valueOf(quality));
         } else if ("jpg".equalsIgnoreCase(format) || "jpeg".equalsIgnoreCase(format)) {
-            int q = (options != null && options.getImageQuality() != null) ? options.getImageQuality() : 85;
             // FFmpeg JPEG scale: 2 (high) to 31 (low)
-            int qscale = Math.max(2, Math.min(31, (int) Math.round(31 - (q * 0.29))));
+            int qscale = Math.max(2, Math.min(31, (int) Math.round(31 - (quality * 0.29))));
             args.add("-q:v");
             args.add(String.valueOf(qscale));
         } else if ("png".equalsIgnoreCase(format)) {
             args.add("-compression_level");
             args.add("6");
+        } else if ("avif".equalsIgnoreCase(format)) {
+            int crf = Math.max(10, Math.min(50, (int) Math.round(50 - (quality * 0.4))));
+            args.add("-crf");
+            args.add(String.valueOf(crf));
         }
 
         // Output destination
@@ -131,6 +170,28 @@ public class ImageConversionServiceImpl implements ImageConversionService {
 
         log.info("Image conversion finished for job {}: format={}, size={} bytes", jobId, format, fileSize);
         return ConversionResult.success(outputFile, format, 0.0, fileSize, mimeType);
+    }
+
+    private void validateCropping(ConversionOptions options, int inWidth, int inHeight) {
+        if (options == null || !options.hasCrop()) return;
+
+        int cropX = options.getCropX() != null ? options.getCropX() : 0;
+        int cropY = options.getCropY() != null ? options.getCropY() : 0;
+        int cropW = options.getCropWidth();
+        int cropH = options.getCropHeight();
+
+        if (cropX < 0 || cropY < 0) {
+            throw new IllegalArgumentException("Crop coordinates cannot be negative: x=" + cropX + ", y=" + cropY);
+        }
+        if (cropW < 2 || cropH < 2) {
+            throw new IllegalArgumentException("Crop dimensions must be at least 2 pixels: w=" + cropW + ", h=" + cropH);
+        }
+        if (inWidth > 0 && (cropX + cropW > inWidth)) {
+            throw new IllegalArgumentException("Crop area exceeds image width: " + (cropX + cropW) + " > " + inWidth);
+        }
+        if (inHeight > 0 && (cropY + cropH > inHeight)) {
+            throw new IllegalArgumentException("Crop area exceeds image height: " + (cropY + cropH) + " > " + inHeight);
+        }
     }
 
     private String getMimeType(String format) {

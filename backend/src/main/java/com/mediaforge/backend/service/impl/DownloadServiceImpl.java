@@ -243,12 +243,22 @@ public class DownloadServiceImpl implements DownloadService {
         log.info("Download job created: {} for platform: {}", savedJob.getId(), platform);
 
         // Submit to asynchronous download worker engine
-        mediaDownloadService.submitDownloadJob(
-                savedJob.getId(),
-                validatedUri,
-                request.getSelectedFormat().toLowerCase(),
-                request.getSelectedQuality()
-        );
+        if (request.hasEditOptions()) {
+            mediaDownloadService.submitDownloadJob(
+                    savedJob.getId(),
+                    validatedUri,
+                    request.getSelectedFormat().toLowerCase(),
+                    request.getSelectedQuality(),
+                    request.toConversionOptions()
+            );
+        } else {
+            mediaDownloadService.submitDownloadJob(
+                    savedJob.getId(),
+                    validatedUri,
+                    request.getSelectedFormat().toLowerCase(),
+                    request.getSelectedQuality()
+            );
+        }
 
         JobResponse jobResponse = jobMapper.toResponse(savedJob);
         return new DownloadResponse(

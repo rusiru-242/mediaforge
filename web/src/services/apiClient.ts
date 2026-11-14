@@ -127,6 +127,12 @@ export const apiClient = {
     }),
 
   // Converter
+  estimateOutputSize: (req: import('@/types/api').SizeEstimationRequest) =>
+    request<import('@/types/api').SizeEstimationResponse>('/conversions/estimate-size', {
+      method: 'POST',
+      body: JSON.stringify(req),
+    }),
+
   createConversionJob: async (req: ConversionCreateRequest): Promise<JobResponse> => {
     const res = await request<any>('/conversions', {
       method: 'POST',
