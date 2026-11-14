@@ -12,6 +12,7 @@ describe('MediaFormatSelector component', () => {
       resolution: '1920x1080',
       nativeStream: true,
       requiresConversion: false,
+      label: 'MP4 1080p',
     },
     {
       format: 'webm',
@@ -19,12 +20,14 @@ describe('MediaFormatSelector component', () => {
       resolution: '1920x1080',
       nativeStream: true,
       requiresConversion: false,
+      label: 'WebM 1080p',
     },
     {
       format: 'mp3',
       quality: 'Audio',
       nativeStream: false,
       requiresConversion: true,
+      label: 'MP3 Audio',
     },
   ];
 

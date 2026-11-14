@@ -30,6 +30,10 @@ public class ConversionResponse {
         return jobId;
     }
 
+    public UUID getId() {
+        return jobId;
+    }
+
     public void setJobId(UUID jobId) {
         this.jobId = jobId;
     }

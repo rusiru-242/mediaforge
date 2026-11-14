@@ -206,6 +206,10 @@ public class FFmpegProcessExecutor {
         return false;
     }
 
+    public boolean cancel(UUID jobId) {
+        return cancelProcess(jobId);
+    }
+
     public boolean isRunning(UUID jobId) {
         Process process = activeProcesses.get(jobId);
         return process != null && process.isAlive();

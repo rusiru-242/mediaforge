@@ -2,8 +2,10 @@ package com.mediaforge.backend.controller;
 
 import com.mediaforge.backend.dto.request.BatchConversionRequest;
 import com.mediaforge.backend.dto.request.ConversionCreateRequest;
+import com.mediaforge.backend.dto.request.SizeEstimationRequest;
 import com.mediaforge.backend.dto.response.BatchConversionResponse;
 import com.mediaforge.backend.dto.response.ConversionResponse;
+import com.mediaforge.backend.dto.response.SizeEstimationResponse;
 import com.mediaforge.backend.service.ConversionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -46,6 +48,14 @@ public class ConversionController {
     public ResponseEntity<BatchConversionResponse> createBatchConversion(@Valid @RequestBody BatchConversionRequest request) {
         BatchConversionResponse response = conversionService.createBatchConversion(request);
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
+    }
+
+    @PostMapping("/estimate-size")
+    @Operation(summary = "Estimate output file size",
+            description = "Calculates realistic output file size and range based on bitrate, duration, resolution, quality, and container overhead")
+    public ResponseEntity<SizeEstimationResponse> estimateSize(@RequestBody SizeEstimationRequest request) {
+        SizeEstimationResponse response = conversionService.estimateSize(request);
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/formats")

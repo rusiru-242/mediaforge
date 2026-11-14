@@ -132,10 +132,32 @@ public class ConversionJobServiceImpl implements ConversionJobService {
         convRequest.setAudioChannels(request.getAudioChannels());
         convRequest.setQualityPreset(request.getQualityPreset());
         convRequest.setRemoveAudio(request.getRemoveAudio());
+        convRequest.setCrf(request.getCrf());
+        convRequest.setStartTime(request.getStartTime());
+        convRequest.setEndTime(request.getEndTime());
+        if (request.getRemoveSegments() != null) {
+            convRequest.setRemoveSegments(request.getRemoveSegments().stream()
+                    .map(dto -> new com.mediaforge.backend.converter.model.TimeRange(dto.getStart(), dto.getEnd()))
+                    .collect(java.util.stream.Collectors.toList()));
+        }
+        convRequest.setCropX(request.getCropX());
+        convRequest.setCropY(request.getCropY());
+        convRequest.setCropWidth(request.getCropWidth());
+        convRequest.setCropHeight(request.getCropHeight());
+        convRequest.setAspectRatio(request.getAspectRatio());
+        convRequest.setVolume(request.getVolume());
+        convRequest.setRemoveSilence(request.getRemoveSilence());
+        convRequest.setFadeInDuration(request.getFadeInDuration());
+        convRequest.setFadeOutDuration(request.getFadeOutDuration());
         convRequest.setImageWidth(request.getImageWidth());
         convRequest.setImageHeight(request.getImageHeight());
         convRequest.setImageQuality(request.getImageQuality());
         convRequest.setImageRotation(request.getImageRotation());
+        convRequest.setPreserveAspectRatio(request.getPreserveAspectRatio());
+        convRequest.setFlipHorizontal(request.getFlipHorizontal());
+        convRequest.setFlipVertical(request.getFlipVertical());
+        convRequest.setBrightness(request.getBrightness());
+        convRequest.setContrast(request.getContrast());
         convRequest.setStripMetadata(request.getStripMetadata());
 
         conversionRequestRepository.save(convRequest);
@@ -162,10 +184,32 @@ public class ConversionJobServiceImpl implements ConversionJobService {
         options.setAudioChannels(request.getAudioChannels());
         options.setQualityPreset(request.getQualityPreset());
         options.setRemoveAudio(request.getRemoveAudio());
+        options.setCrf(request.getCrf());
+        options.setStartTime(request.getStartTime());
+        options.setEndTime(request.getEndTime());
+        if (request.getRemoveSegments() != null) {
+            options.setRemoveSegments(request.getRemoveSegments().stream()
+                    .map(dto -> new com.mediaforge.backend.converter.model.TimeRange(dto.getStart(), dto.getEnd()))
+                    .collect(java.util.stream.Collectors.toList()));
+        }
+        options.setCropX(request.getCropX());
+        options.setCropY(request.getCropY());
+        options.setCropWidth(request.getCropWidth());
+        options.setCropHeight(request.getCropHeight());
+        options.setAspectRatio(request.getAspectRatio());
+        options.setVolume(request.getVolume());
+        options.setRemoveSilence(request.getRemoveSilence());
+        options.setFadeInDuration(request.getFadeInDuration());
+        options.setFadeOutDuration(request.getFadeOutDuration());
         options.setImageWidth(request.getImageWidth());
         options.setImageHeight(request.getImageHeight());
         options.setImageQuality(request.getImageQuality());
         options.setImageRotation(request.getImageRotation());
+        options.setPreserveAspectRatio(request.getPreserveAspectRatio());
+        options.setFlipHorizontal(request.getFlipHorizontal());
+        options.setFlipVertical(request.getFlipVertical());
+        options.setBrightness(request.getBrightness());
+        options.setContrast(request.getContrast());
         options.setStripMetadata(request.getStripMetadata());
         options.normalizePresets();
 

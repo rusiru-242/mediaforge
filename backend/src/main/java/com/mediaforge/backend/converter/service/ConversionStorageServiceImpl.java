@@ -8,6 +8,7 @@ import com.mediaforge.backend.repository.MediaJobRepository;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
@@ -33,13 +34,13 @@ public class ConversionStorageServiceImpl implements ConversionStorageService {
     private static final Logger log = LoggerFactory.getLogger(ConversionStorageServiceImpl.class);
 
     @Value("${app.storage.base-path:./mediaforge_data/conversions}")
-    private String basePathStr;
+    private String basePathStr = "./mediaforge_data/conversions";
 
     @Value("${app.storage.retention-hours:24}")
-    private int retentionHours;
+    private int retentionHours = 24;
 
     @Value("${app.converter.max-file-size-bytes:524288000}") // 500 MB
-    private long maxFileSizeBytes;
+    private long maxFileSizeBytes = 524288000L;
 
     private final MediaFileRepository fileRepository;
     private final MediaJobRepository jobRepository;
@@ -49,9 +50,15 @@ public class ConversionStorageServiceImpl implements ConversionStorageService {
     private Path outputsPath;
     private Path scratchPath;
 
+    @Autowired
     public ConversionStorageServiceImpl(MediaFileRepository fileRepository, MediaJobRepository jobRepository) {
+        this(fileRepository, jobRepository, "./mediaforge_data/conversions");
+    }
+
+    public ConversionStorageServiceImpl(MediaFileRepository fileRepository, MediaJobRepository jobRepository, String basePathStr) {
         this.fileRepository = fileRepository;
         this.jobRepository = jobRepository;
+        this.basePathStr = (basePathStr != null && !basePathStr.isBlank()) ? basePathStr : "./mediaforge_data/conversions";
     }
 
     @PostConstruct

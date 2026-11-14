@@ -32,6 +32,10 @@ public class DownloadResponse {
         return jobId;
     }
 
+    public UUID getId() {
+        return jobId;
+    }
+
     public void setJobId(UUID jobId) {
         this.jobId = jobId;
     }

@@ -43,12 +43,73 @@ export interface DownloadValidateResponse {
 
 export type DownloadValidationResponse = DownloadValidateResponse;
 
+export interface TimeRangeDto {
+  start: number;
+  end: number;
+}
+
+export interface SizeEstimationRequest {
+  inputFileId?: string;
+  mediaType?: 'video' | 'audio' | 'image' | string;
+  sourceDuration?: number;
+  sourceWidth?: number;
+  sourceHeight?: number;
+  sourceBitrate?: number;
+  sourceFileSize?: number;
+  outputFormat?: string;
+  targetResolution?: string;
+  videoBitrate?: string;
+  audioBitrate?: number;
+  qualityPreset?: string;
+  crf?: number;
+  stripAudio?: boolean;
+  startTime?: number;
+  endTime?: number;
+  removeSegments?: TimeRangeDto[];
+  imageWidth?: number;
+  imageHeight?: number;
+  imageQuality?: number;
+  cropWidth?: number;
+  cropHeight?: number;
+}
+
+export interface SizeEstimationResponse {
+  estimatedBytes: number;
+  minBytes: number;
+  maxBytes: number;
+  formattedEstimate: string;
+  formattedRange: string;
+  effectiveDurationSeconds: number;
+  estimationMethod: string;
+  disclaimer: string;
+}
+
 export interface DownloadCreateRequest {
   url: string;
   selectedFormat?: string;
   selectedQuality?: string;
   targetFormat?: string;
   targetQuality?: string;
+
+  // Editing options
+  startTime?: number;
+  endTime?: number;
+  removeSegments?: TimeRangeDto[];
+  targetResolution?: string;
+  videoBitrate?: string;
+  audioBitrate?: number;
+  qualityPreset?: string;
+  crf?: number;
+  stripAudio?: boolean;
+  cropX?: number;
+  cropY?: number;
+  cropWidth?: number;
+  cropHeight?: number;
+  aspectRatio?: string;
+  volume?: number;
+  removeSilence?: boolean;
+  fadeInDuration?: number;
+  fadeOutDuration?: number;
 }
 
 export interface DownloadResponse {
@@ -71,6 +132,7 @@ export interface ConversionCreateRequest {
   videoBitrate?: string;
   frameRate?: number;
   sampleRate?: number;
+  audioChannels?: number;
   quality?: number;
   stripAudio?: boolean;
   videoCodec?: string;
@@ -79,6 +141,31 @@ export interface ConversionCreateRequest {
   resizeHeight?: number;
   rotateDegrees?: number;
   qualityPreset?: string;
+
+  // Advanced video & editing controls
+  crf?: number;
+  startTime?: number;
+  endTime?: number;
+  removeSegments?: TimeRangeDto[];
+  cropX?: number;
+  cropY?: number;
+  cropWidth?: number;
+  cropHeight?: number;
+  aspectRatio?: string;
+  volume?: number;
+  removeSilence?: boolean;
+  fadeInDuration?: number;
+  fadeOutDuration?: number;
+  preserveAspectRatio?: boolean;
+  flipHorizontal?: boolean;
+  flipVertical?: boolean;
+  brightness?: number;
+  contrast?: number;
+  imageWidth?: number;
+  imageHeight?: number;
+  imageQuality?: number;
+  imageRotation?: number;
+  stripMetadata?: boolean;
 
   // Frontend helper fields
   sourceFileId?: string;

@@ -1,14 +1,26 @@
 package com.mediaforge.backend.downloader.adapter;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mediaforge.backend.downloader.model.DownloadTask;
 import com.mediaforge.backend.downloader.model.DownloadedMedia;
 import com.mediaforge.backend.downloader.model.MediaMetadata;
 import com.mediaforge.backend.downloader.model.ProgressCallback;
+import com.mediaforge.backend.downloader.service.YtDlpProcessExecutor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.net.URI;
+import java.net.URLEncoder;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Collections;
 import java.util.Locale;
 import java.util.Set;
@@ -16,6 +28,8 @@ import java.util.Set;
 @Component
 @Order(30)
 public class PlatformMediaSourceAdapter implements MediaSourceAdapter {
+
+    private static final Logger log = LoggerFactory.getLogger(PlatformMediaSourceAdapter.class);
 
     private static final Set<String> SOCIAL_PLATFORMS = Set.of(
             "youtube.com", "youtu.be",
@@ -26,9 +40,31 @@ public class PlatformMediaSourceAdapter implements MediaSourceAdapter {
             "vimeo.com"
     );
 
+    private final ObjectMapper objectMapper;
+    private final HttpClient httpClient;
+    private final YtDlpProcessExecutor ytDlpExecutor;
+
+    public PlatformMediaSourceAdapter() {
+        this(new ObjectMapper(), null);
+    }
+
+    public PlatformMediaSourceAdapter(ObjectMapper objectMapper) {
+        this(objectMapper, null);
+    }
+
+    @Autowired
+    public PlatformMediaSourceAdapter(ObjectMapper objectMapper, @org.springframework.lang.Nullable YtDlpProcessExecutor ytDlpExecutor) {
+        this.objectMapper = objectMapper != null ? objectMapper : new ObjectMapper();
+        this.ytDlpExecutor = ytDlpExecutor;
+        this.httpClient = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(5))
+                .followRedirects(HttpClient.Redirect.NORMAL)
+                .build();
+    }
+
     @Override
     public String getSourceName() {
-        return "Third-Party Social Platform (Policy-Protected)";
+        return "Third-Party Social Platform";
     }
 
     @Override
@@ -44,8 +80,28 @@ public class PlatformMediaSourceAdapter implements MediaSourceAdapter {
         String host = uri.getHost() != null ? uri.getHost().toLowerCase(Locale.ROOT) : "platform";
         String platformName = identifyPlatform(host);
 
+        // 1. Attempt dynamic inspection via YtDlpProcessExecutor if available
+        if (ytDlpExecutor != null && ytDlpExecutor.isAvailable()) {
+            MediaMetadata meta = ytDlpExecutor.extractMetadata(uri);
+            if (meta != null && meta.getAvailableFormats() != null && !meta.getAvailableFormats().isEmpty()) {
+                return meta;
+            }
+            // If extractor returned specific error message, attempt oEmbed fallback to get title/thumbnail
+            if (meta != null && meta.getMessage() != null && !meta.getMessage().isBlank()) {
+                MediaMetadata fallback = createBasicMetadata(uri, platformName);
+                fallback.setMessage(meta.getMessage());
+                return fallback;
+            }
+        }
+
+        // 2. Fallback to public oEmbed
+        return createBasicMetadata(uri, platformName);
+    }
+
+    private MediaMetadata createBasicMetadata(URI uri, String platformName) {
+        String host = uri.getHost() != null ? uri.getHost().toLowerCase(Locale.ROOT) : "platform";
         MediaMetadata metadata = new MediaMetadata();
-        metadata.setTitle(platformName + " Stream Request");
+        metadata.setTitle(platformName + " Stream");
         metadata.setSourceName(platformName);
         metadata.setMediaType("VIDEO");
         metadata.setMimeType("video/mp4");
@@ -55,16 +111,94 @@ public class PlatformMediaSourceAdapter implements MediaSourceAdapter {
         metadata.setRequiresConversion(false);
         metadata.setDirectStreamUri(null);
 
-        // Explicit legal / terms warning
+        // Attempt public oEmbed query for supported platforms (e.g. YouTube, Vimeo)
+        if (host.contains("youtube") || host.contains("youtu.be")) {
+            fetchYoutubeOembed(uri, metadata);
+        } else if (host.contains("vimeo")) {
+            fetchVimeoOembed(uri, metadata);
+        }
+
         return metadata;
+    }
+
+    private void fetchYoutubeOembed(URI uri, MediaMetadata metadata) {
+        try {
+            String endpoint = "https://www.youtube.com/oembed?url=" +
+                    URLEncoder.encode(uri.toString(), StandardCharsets.UTF_8) + "&format=json";
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(endpoint))
+                    .timeout(Duration.ofSeconds(5))
+                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) MediaForge/1.0")
+                    .GET()
+                    .build();
+
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() == 200) {
+                JsonNode root = objectMapper.readTree(response.body());
+                String title = root.path("title").asText(null);
+                String author = root.path("author_name").asText(null);
+                String thumbnail = root.path("thumbnail_url").asText(null);
+
+                if (title != null && !title.isBlank()) {
+                    metadata.setTitle(title);
+                }
+                if (author != null && !author.isBlank()) {
+                    metadata.setSourceName("YouTube (" + author + ")");
+                }
+                if (thumbnail != null && !thumbnail.isBlank()) {
+                    metadata.setThumbnailUri(thumbnail);
+                }
+            } else {
+                log.warn("YouTube oEmbed returned HTTP {}", response.statusCode());
+            }
+        } catch (Exception ex) {
+            log.warn("Failed to fetch YouTube oEmbed metadata for {}: {}", uri, ex.getMessage());
+        }
+    }
+
+    private void fetchVimeoOembed(URI uri, MediaMetadata metadata) {
+        try {
+            String endpoint = "https://vimeo.com/api/oembed.json?url=" +
+                    URLEncoder.encode(uri.toString(), StandardCharsets.UTF_8);
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(endpoint))
+                    .timeout(Duration.ofSeconds(5))
+                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) MediaForge/1.0")
+                    .GET()
+                    .build();
+
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() == 200) {
+                JsonNode root = objectMapper.readTree(response.body());
+                String title = root.path("title").asText(null);
+                String author = root.path("author_name").asText(null);
+                String thumbnail = root.path("thumbnail_url").asText(null);
+
+                if (title != null && !title.isBlank()) {
+                    metadata.setTitle(title);
+                }
+                if (author != null && !author.isBlank()) {
+                    metadata.setSourceName("Vimeo (" + author + ")");
+                }
+                if (thumbnail != null && !thumbnail.isBlank()) {
+                    metadata.setThumbnailUri(thumbnail);
+                }
+            }
+        } catch (Exception ex) {
+            log.warn("Failed to fetch Vimeo oEmbed metadata for {}: {}", uri, ex.getMessage());
+        }
     }
 
     @Override
     public DownloadedMedia download(DownloadTask task, ProgressCallback progressCallback) throws IOException {
+        if (ytDlpExecutor != null && ytDlpExecutor.isAvailable()) {
+            return ytDlpExecutor.download(task, progressCallback);
+        }
+
         String host = task.getSourceUri().getHost() != null ? task.getSourceUri().getHost().toLowerCase(Locale.ROOT) : "Platform";
         String platformName = identifyPlatform(host);
         throw new UnsupportedOperationException(String.format(
-                "Direct downloading from %s requires official developer API credentials. In accordance with platform Terms of Service and DRM compliance, unauthorized stream scraping is disabled.",
+                "Direct downloading from %s is currently unavailable: media extractor is not configured on this host.",
                 platformName
         ));
     }

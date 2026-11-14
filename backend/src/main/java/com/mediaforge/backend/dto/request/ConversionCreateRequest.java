@@ -1,7 +1,14 @@
 package com.mediaforge.backend.dto.request;
 
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 public class ConversionCreateRequest {
@@ -36,6 +43,51 @@ public class ConversionCreateRequest {
 
     private Boolean removeAudio = false;
 
+    // Advanced video quality
+    @Min(value = 0, message = "CRF cannot be negative")
+    @Max(value = 51, message = "CRF cannot exceed 51")
+    private Integer crf;
+
+    // Trimming & Cutting
+    @DecimalMin(value = "0.0", message = "startTime cannot be negative")
+    private Double startTime;
+
+    @DecimalMin(value = "0.0", message = "endTime cannot be negative")
+    private Double endTime;
+
+    @Valid
+    private List<TimeRangeDto> removeSegments = new ArrayList<>();
+
+    // Cropping
+    @Min(value = 0, message = "cropX cannot be negative")
+    private Integer cropX;
+
+    @Min(value = 0, message = "cropY cannot be negative")
+    private Integer cropY;
+
+    @Min(value = 2, message = "cropWidth must be at least 2")
+    private Integer cropWidth;
+
+    @Min(value = 2, message = "cropHeight must be at least 2")
+    private Integer cropHeight;
+
+    @Size(max = 20, message = "aspectRatio cannot exceed 20 characters")
+    private String aspectRatio;
+
+    // Audio editing
+    @DecimalMin(value = "0.0", message = "volume cannot be negative")
+    @DecimalMax(value = "5.0", message = "volume factor cannot exceed 5.0")
+    private Double volume;
+
+    private Boolean removeSilence = false;
+
+    @DecimalMin(value = "0.0", message = "fadeInDuration cannot be negative")
+    private Double fadeInDuration;
+
+    @DecimalMin(value = "0.0", message = "fadeOutDuration cannot be negative")
+    private Double fadeOutDuration;
+
+    // Image options
     private Integer imageWidth;
 
     private Integer imageHeight;
@@ -43,6 +95,16 @@ public class ConversionCreateRequest {
     private Integer imageQuality;
 
     private Integer imageRotation;
+
+    private Boolean preserveAspectRatio = true;
+
+    private Boolean flipHorizontal = false;
+
+    private Boolean flipVertical = false;
+
+    private Double brightness;
+
+    private Double contrast;
 
     private Boolean stripMetadata = true;
 
@@ -165,6 +227,110 @@ public class ConversionCreateRequest {
         this.removeAudio = removeAudio;
     }
 
+    public Integer getCrf() {
+        return crf;
+    }
+
+    public void setCrf(Integer crf) {
+        this.crf = crf;
+    }
+
+    public Double getStartTime() {
+        return startTime;
+    }
+
+    public void setStartTime(Double startTime) {
+        this.startTime = startTime;
+    }
+
+    public Double getEndTime() {
+        return endTime;
+    }
+
+    public void setEndTime(Double endTime) {
+        this.endTime = endTime;
+    }
+
+    public List<TimeRangeDto> getRemoveSegments() {
+        return removeSegments;
+    }
+
+    public void setRemoveSegments(List<TimeRangeDto> removeSegments) {
+        this.removeSegments = removeSegments != null ? removeSegments : new ArrayList<>();
+    }
+
+    public Integer getCropX() {
+        return cropX;
+    }
+
+    public void setCropX(Integer cropX) {
+        this.cropX = cropX;
+    }
+
+    public Integer getCropY() {
+        return cropY;
+    }
+
+    public void setCropY(Integer cropY) {
+        this.cropY = cropY;
+    }
+
+    public Integer getCropWidth() {
+        return cropWidth;
+    }
+
+    public void setCropWidth(Integer cropWidth) {
+        this.cropWidth = cropWidth;
+    }
+
+    public Integer getCropHeight() {
+        return cropHeight;
+    }
+
+    public void setCropHeight(Integer cropHeight) {
+        this.cropHeight = cropHeight;
+    }
+
+    public String getAspectRatio() {
+        return aspectRatio;
+    }
+
+    public void setAspectRatio(String aspectRatio) {
+        this.aspectRatio = aspectRatio;
+    }
+
+    public Double getVolume() {
+        return volume;
+    }
+
+    public void setVolume(Double volume) {
+        this.volume = volume;
+    }
+
+    public Boolean getRemoveSilence() {
+        return removeSilence;
+    }
+
+    public void setRemoveSilence(Boolean removeSilence) {
+        this.removeSilence = removeSilence;
+    }
+
+    public Double getFadeInDuration() {
+        return fadeInDuration;
+    }
+
+    public void setFadeInDuration(Double fadeInDuration) {
+        this.fadeInDuration = fadeInDuration;
+    }
+
+    public Double getFadeOutDuration() {
+        return fadeOutDuration;
+    }
+
+    public void setFadeOutDuration(Double fadeOutDuration) {
+        this.fadeOutDuration = fadeOutDuration;
+    }
+
     public Integer getImageWidth() {
         return imageWidth;
     }
@@ -195,6 +361,46 @@ public class ConversionCreateRequest {
 
     public void setImageRotation(Integer imageRotation) {
         this.imageRotation = imageRotation;
+    }
+
+    public Boolean getPreserveAspectRatio() {
+        return preserveAspectRatio;
+    }
+
+    public void setPreserveAspectRatio(Boolean preserveAspectRatio) {
+        this.preserveAspectRatio = preserveAspectRatio;
+    }
+
+    public Boolean getFlipHorizontal() {
+        return flipHorizontal;
+    }
+
+    public void setFlipHorizontal(Boolean flipHorizontal) {
+        this.flipHorizontal = flipHorizontal;
+    }
+
+    public Boolean getFlipVertical() {
+        return flipVertical;
+    }
+
+    public void setFlipVertical(Boolean flipVertical) {
+        this.flipVertical = flipVertical;
+    }
+
+    public Double getBrightness() {
+        return brightness;
+    }
+
+    public void setBrightness(Double brightness) {
+        this.brightness = brightness;
+    }
+
+    public Double getContrast() {
+        return contrast;
+    }
+
+    public void setContrast(Double contrast) {
+        this.contrast = contrast;
     }
 
     public Boolean getStripMetadata() {

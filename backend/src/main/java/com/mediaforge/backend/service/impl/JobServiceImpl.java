@@ -1,3 +1,4 @@
+
 package com.mediaforge.backend.service.impl;
 
 import com.mediaforge.backend.converter.service.ConversionWorker;
@@ -15,8 +16,11 @@ import com.mediaforge.backend.mapper.JobMapper;
 import com.mediaforge.backend.repository.JobEventRepository;
 import com.mediaforge.backend.repository.MediaJobRepository;
 import com.mediaforge.backend.service.JobService;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
@@ -35,11 +39,14 @@ public class JobServiceImpl implements JobService {
     private final MediaDownloadService mediaDownloadService;
     private final ConversionWorker conversionWorker;
 
-    public JobServiceImpl(MediaJobRepository jobRepository,
-                          JobEventRepository eventRepository,
-                          JobMapper jobMapper,
-                          @Lazy MediaDownloadService mediaDownloadService,
-                          @Lazy ConversionWorker conversionWorker) {
+    // Primary constructor for Spring Dependency Injection
+    @Autowired
+    public JobServiceImpl(
+            MediaJobRepository jobRepository,
+            JobEventRepository eventRepository,
+            JobMapper jobMapper,
+            @Lazy MediaDownloadService mediaDownloadService,
+            @Lazy ConversionWorker conversionWorker) {
         this.jobRepository = jobRepository;
         this.eventRepository = eventRepository;
         this.jobMapper = jobMapper;
@@ -47,131 +54,231 @@ public class JobServiceImpl implements JobService {
         this.conversionWorker = conversionWorker;
     }
 
-    public JobServiceImpl(MediaJobRepository jobRepository,
-                          JobEventRepository eventRepository,
-                          JobMapper jobMapper,
-                          @Lazy MediaDownloadService mediaDownloadService) {
-        this(jobRepository, eventRepository, jobMapper, mediaDownloadService, null);
+    // Secondary constructor for compatibility
+    public JobServiceImpl(
+            MediaJobRepository jobRepository,
+            JobEventRepository eventRepository,
+            JobMapper jobMapper,
+            @Lazy MediaDownloadService mediaDownloadService) {
+        this(
+                jobRepository,
+                eventRepository,
+                jobMapper,
+                mediaDownloadService,
+                null);
     }
+
+    // ==========================================
+    // CREATE JOB
+    // ==========================================
 
     @Override
     public JobResponse createJob(JobCreateRequest request) {
-        log.info("Creating new media job: type={}, source={}, output={}",
-                request.getJobType(), request.getSourceType(), request.getOutputFormat());
+
+        log.info(
+                "Creating new media job: type={}, source={}, output={}",
+                request.getJobType(),
+                request.getSourceType(),
+                request.getOutputFormat());
 
         MediaJob job = new MediaJob(
                 UUID.randomUUID(),
                 request.getJobType(),
                 request.getSourceType(),
                 request.getInputFormat(),
-                request.getOutputFormat()
-        );
+                request.getOutputFormat());
+
         job.setStatus(JobStatus.PENDING);
         job.setProgress(0);
 
         MediaJob savedJob = jobRepository.save(job);
 
-        JobEvent event = new JobEvent(UUID.randomUUID(), savedJob, "JOB_CREATED", "Media job created in PENDING status");
+        JobEvent event = new JobEvent(
+                UUID.randomUUID(),
+                savedJob,
+                "JOB_CREATED",
+                "Media job created in PENDING status");
+
         eventRepository.save(event);
 
         return jobMapper.toResponse(savedJob);
     }
 
+    // ==========================================
+    // GET JOB BY ID
+    // ==========================================
+
     @Override
     public JobResponse getJobById(UUID id) {
+
         MediaJob job = jobRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Media job not found: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Media job not found: " + id));
+
         return jobMapper.toResponse(job);
     }
 
+    // ==========================================
+    // LIST JOBS
+    // ==========================================
+
     @Override
-    public PageResponse<JobResponse> listJobs(JobStatus status, int page, int size) {
+    public PageResponse<JobResponse> listJobs(
+            JobStatus status,
+            int page,
+            int size) {
+
         PageResponse<MediaJob> pagedJobs;
+
         if (status != null) {
-            pagedJobs = jobRepository.findByStatus(status, page, size);
+            pagedJobs = jobRepository.findByStatus(
+                    status,
+                    page,
+                    size);
         } else {
-            pagedJobs = jobRepository.findAll(page, size);
+            pagedJobs = jobRepository.findAll(
+                    page,
+                    size);
         }
 
-        List<JobResponse> dtoList = pagedJobs.getContent().stream()
+        List<JobResponse> dtoList = pagedJobs
+                .getContent()
+                .stream()
                 .map(jobMapper::toResponse)
                 .toList();
 
-        return new PageResponse<>(dtoList, pagedJobs.getNumber(), pagedJobs.getSize(), pagedJobs.getTotalElements());
+        return new PageResponse<>(
+                dtoList,
+                pagedJobs.getNumber(),
+                pagedJobs.getSize(),
+                pagedJobs.getTotalElements());
     }
+
+    // ==========================================
+    // CANCEL JOB
+    // ==========================================
 
     @Override
     public JobResponse cancelJob(UUID id) {
+
         MediaJob job = jobRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Media job not found: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Media job not found: " + id));
 
         if (!job.getStatus().canBeCancelled()) {
-            throw new JobCancellationException(job.getStatus());
+            throw new JobCancellationException(
+                    job.getStatus());
         }
 
         if (mediaDownloadService != null) {
             mediaDownloadService.cancelActiveDownload(id);
         }
+
         if (conversionWorker != null) {
             conversionWorker.cancel(id);
         }
 
         JobStatus previousStatus = job.getStatus();
+
         job.setStatus(JobStatus.CANCELLED);
         job.setCompletedAt(OffsetDateTime.now());
 
         MediaJob updatedJob = jobRepository.save(job);
 
-        JobEvent event = new JobEvent(UUID.randomUUID(), updatedJob, "JOB_CANCELLED",
-                String.format("Job cancelled from previous status: %s", previousStatus));
+        JobEvent event = new JobEvent(
+                UUID.randomUUID(),
+                updatedJob,
+                "JOB_CANCELLED",
+                String.format(
+                        "Job cancelled from previous status: %s",
+                        previousStatus));
+
         eventRepository.save(event);
 
-        log.info("Job {} cancelled successfully", id);
+        log.info(
+                "Job {} cancelled successfully",
+                id);
+
         return jobMapper.toResponse(updatedJob);
     }
 
+    // ==========================================
+    // UPDATE JOB PROGRESS
+    // ==========================================
+
     @Override
-    public JobResponse updateProgress(UUID id, int progress) {
+    public JobResponse updateProgress(
+            UUID id,
+            int progress) {
+
         if (progress < 0 || progress > 100) {
-            throw new IllegalArgumentException("Progress must be between 0 and 100, received: " + progress);
+            throw new IllegalArgumentException(
+                    "Progress must be between 0 and 100, received: "
+                            + progress);
         }
 
         MediaJob job = jobRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Media job not found: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Media job not found: " + id));
 
         if (job.getStatus().isTerminal()) {
-            throw new InvalidJobTransitionException(job.getStatus(), job.getStatus());
+            throw new InvalidJobTransitionException(
+                    job.getStatus(),
+                    job.getStatus());
         }
 
         job.setProgress(progress);
+
         MediaJob saved = jobRepository.save(job);
+
         return jobMapper.toResponse(saved);
     }
 
+    // ==========================================
+    // UPDATE JOB STATUS
+    // ==========================================
+
     @Override
-    public JobResponse updateStatus(UUID id, JobStatus newStatus, String errorMessage) {
+    public JobResponse updateStatus(
+            UUID id,
+            JobStatus newStatus,
+            String errorMessage) {
+
         MediaJob job = jobRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Media job not found: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Media job not found: " + id));
 
         if (!job.getStatus().canTransitionTo(newStatus)) {
-            throw new InvalidJobTransitionException(job.getStatus(), newStatus);
+            throw new InvalidJobTransitionException(
+                    job.getStatus(),
+                    newStatus);
         }
 
         job.setStatus(newStatus);
+
         if (errorMessage != null) {
             job.setErrorMessage(errorMessage);
         }
 
-        if (newStatus == JobStatus.PROCESSING && job.getStartedAt() == null) {
+        if (newStatus == JobStatus.PROCESSING
+                && job.getStartedAt() == null) {
             job.setStartedAt(OffsetDateTime.now());
-        } else if (newStatus.isTerminal() && job.getCompletedAt() == null) {
+
+        } else if (newStatus.isTerminal()
+                && job.getCompletedAt() == null) {
             job.setCompletedAt(OffsetDateTime.now());
         }
 
         MediaJob saved = jobRepository.save(job);
 
-        JobEvent event = new JobEvent(UUID.randomUUID(), saved, "STATUS_CHANGED",
-                String.format("Status transitioned to %s", newStatus));
+        JobEvent event = new JobEvent(
+                UUID.randomUUID(),
+                saved,
+                "STATUS_CHANGED",
+                String.format(
+                        "Status transitioned to %s",
+                        newStatus));
+
         eventRepository.save(event);
 
         return jobMapper.toResponse(saved);

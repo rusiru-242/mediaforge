@@ -41,3 +41,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **DevOps & CI/CD:**
   - Hardened GitHub Actions workflows for Backend, Web, Desktop, Mobile, and Release automation.
   - Production multi-stage Dockerfiles and `docker-compose.prod.yml` configuration.
+

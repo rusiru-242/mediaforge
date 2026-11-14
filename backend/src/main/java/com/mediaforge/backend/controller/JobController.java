@@ -85,4 +85,12 @@ public class JobController {
         JobResponse response = jobService.cancelJob(id);
         return ResponseEntity.ok(response);
     }
+
+    @DeleteMapping("/{id}")
+    @Operation(summary = "Cancel an in-progress or queued job via DELETE", description = "Transitions an active or pending job to CANCELLED")
+    public ResponseEntity<JobResponse> cancelJobDelete(
+            @Parameter(description = "UUID of the job to cancel") @PathVariable UUID id) {
+        JobResponse response = jobService.cancelJob(id);
+        return ResponseEntity.ok(response);
+    }
 }

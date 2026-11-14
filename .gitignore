@@ -121,6 +121,7 @@ web/.next/
 web/out/
 web/dist/
 web/build/
+*.tsbuildinfo
 web/.pnp
 web/.pnp.js
 web/.yarn/cache
