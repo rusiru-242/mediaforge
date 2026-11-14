@@ -287,3 +287,4 @@ jobs:
           generate_release_notes: true
           files: |
             release-artifacts/*
+

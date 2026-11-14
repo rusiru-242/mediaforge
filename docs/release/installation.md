@@ -117,3 +117,4 @@ java -Dspring.profiles.active=prod \
 2. Transfer the APK to your Android device or download directly through a mobile browser.
 3. Open the APK and enable "Install from unknown sources" if prompted by Android security settings.
 4. Complete installation and grant storage/media permissions when requested.
+

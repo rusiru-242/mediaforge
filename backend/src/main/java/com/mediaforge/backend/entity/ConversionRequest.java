@@ -1,10 +1,13 @@
 package com.mediaforge.backend.entity;
 
+import com.mediaforge.backend.converter.model.TimeRange;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 /**
- * In-memory representation of media conversion request parameters.
+ * In-memory representation of media conversion request parameters and advanced editing options.
  */
 public class ConversionRequest {
 
@@ -22,11 +25,40 @@ public class ConversionRequest {
     private Integer audioChannels;
     private String qualityPreset;
     private Boolean removeAudio = false;
+
+    // Advanced video quality
+    private Integer crf;
+
+    // Trimming & Cutting
+    private Double startTime;
+    private Double endTime;
+    private List<TimeRange> removeSegments = new ArrayList<>();
+
+    // Cropping
+    private Integer cropX;
+    private Integer cropY;
+    private Integer cropWidth;
+    private Integer cropHeight;
+    private String aspectRatio;
+
+    // Audio editing
+    private Double volume;
+    private Boolean removeSilence = false;
+    private Double fadeInDuration;
+    private Double fadeOutDuration;
+
+    // Image options
     private Integer imageWidth;
     private Integer imageHeight;
     private Integer imageQuality;
     private Integer imageRotation;
+    private Boolean preserveAspectRatio = true;
+    private Boolean flipHorizontal = false;
+    private Boolean flipVertical = false;
+    private Double brightness;
+    private Double contrast;
     private Boolean stripMetadata = false;
+
     private OffsetDateTime createdAt;
 
     public ConversionRequest() {
@@ -157,6 +189,110 @@ public class ConversionRequest {
         this.removeAudio = removeAudio;
     }
 
+    public Integer getCrf() {
+        return crf;
+    }
+
+    public void setCrf(Integer crf) {
+        this.crf = crf;
+    }
+
+    public Double getStartTime() {
+        return startTime;
+    }
+
+    public void setStartTime(Double startTime) {
+        this.startTime = startTime;
+    }
+
+    public Double getEndTime() {
+        return endTime;
+    }
+
+    public void setEndTime(Double endTime) {
+        this.endTime = endTime;
+    }
+
+    public List<TimeRange> getRemoveSegments() {
+        return removeSegments;
+    }
+
+    public void setRemoveSegments(List<TimeRange> removeSegments) {
+        this.removeSegments = removeSegments != null ? removeSegments : new ArrayList<>();
+    }
+
+    public Integer getCropX() {
+        return cropX;
+    }
+
+    public void setCropX(Integer cropX) {
+        this.cropX = cropX;
+    }
+
+    public Integer getCropY() {
+        return cropY;
+    }
+
+    public void setCropY(Integer cropY) {
+        this.cropY = cropY;
+    }
+
+    public Integer getCropWidth() {
+        return cropWidth;
+    }
+
+    public void setCropWidth(Integer cropWidth) {
+        this.cropWidth = cropWidth;
+    }
+
+    public Integer getCropHeight() {
+        return cropHeight;
+    }
+
+    public void setCropHeight(Integer cropHeight) {
+        this.cropHeight = cropHeight;
+    }
+
+    public String getAspectRatio() {
+        return aspectRatio;
+    }
+
+    public void setAspectRatio(String aspectRatio) {
+        this.aspectRatio = aspectRatio;
+    }
+
+    public Double getVolume() {
+        return volume;
+    }
+
+    public void setVolume(Double volume) {
+        this.volume = volume;
+    }
+
+    public Boolean getRemoveSilence() {
+        return removeSilence;
+    }
+
+    public void setRemoveSilence(Boolean removeSilence) {
+        this.removeSilence = removeSilence;
+    }
+
+    public Double getFadeInDuration() {
+        return fadeInDuration;
+    }
+
+    public void setFadeInDuration(Double fadeInDuration) {
+        this.fadeInDuration = fadeInDuration;
+    }
+
+    public Double getFadeOutDuration() {
+        return fadeOutDuration;
+    }
+
+    public void setFadeOutDuration(Double fadeOutDuration) {
+        this.fadeOutDuration = fadeOutDuration;
+    }
+
     public Integer getImageWidth() {
         return imageWidth;
     }
@@ -187,6 +323,46 @@ public class ConversionRequest {
 
     public void setImageRotation(Integer imageRotation) {
         this.imageRotation = imageRotation;
+    }
+
+    public Boolean getPreserveAspectRatio() {
+        return preserveAspectRatio;
+    }
+
+    public void setPreserveAspectRatio(Boolean preserveAspectRatio) {
+        this.preserveAspectRatio = preserveAspectRatio;
+    }
+
+    public Boolean getFlipHorizontal() {
+        return flipHorizontal;
+    }
+
+    public void setFlipHorizontal(Boolean flipHorizontal) {
+        this.flipHorizontal = flipHorizontal;
+    }
+
+    public Boolean getFlipVertical() {
+        return flipVertical;
+    }
+
+    public void setFlipVertical(Boolean flipVertical) {
+        this.flipVertical = flipVertical;
+    }
+
+    public Double getBrightness() {
+        return brightness;
+    }
+
+    public void setBrightness(Double brightness) {
+        this.brightness = brightness;
+    }
+
+    public Double getContrast() {
+        return contrast;
+    }
+
+    public void setContrast(Double contrast) {
+        this.contrast = contrast;
     }
 
     public Boolean getStripMetadata() {

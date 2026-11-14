@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Sparkles, Github, Shield, Terminal, BookOpen, Heart } from "lucide-react";
+import { SWAGGER_DOCS_URL } from "@/config/api";
 
 export function Footer() {
   return (
@@ -82,7 +83,7 @@ export function Footer() {
               </li>
               <li>
                 <a
-                  href="http://localhost:8080/swagger-ui.html"
+                  href={SWAGGER_DOCS_URL}
                   target="_blank"
                   rel="noreferrer"
                   className="inline-flex items-center space-x-1 hover:text-brand-600 dark:hover:text-brand-400 transition-colors"

@@ -4,6 +4,7 @@ import com.mediaforge.backend.converter.model.ConversionOptions;
 import com.mediaforge.backend.converter.model.ConversionProgress;
 import com.mediaforge.backend.converter.model.ConversionResult;
 import com.mediaforge.backend.converter.model.MediaProbeResult;
+import com.mediaforge.backend.converter.model.TimeRange;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -46,14 +47,48 @@ public class AudioConversionServiceImpl implements AudioConversionService {
             throw new IllegalArgumentException("Source file does not contain an audio stream to convert");
         }
 
-        double duration = probeResult.getDurationSeconds();
+        double sourceDuration = probeResult.getDurationSeconds();
+
+        // 1. Validate Trimming & Cutting
+        validateTrimming(options, sourceDuration);
+        validateCutting(options, sourceDuration);
+
+        double effectiveDuration = options != null ? options.calculateEffectiveDuration(sourceDuration) : sourceDuration;
+        if (effectiveDuration <= 0.05) {
+            throw new IllegalArgumentException("Effective audio duration after trimming/cutting is too short (< 0.1s)");
+        }
 
         List<String> args = new ArrayList<>();
         args.add("-i");
         args.add(inputFile.getAbsolutePath());
 
-        // 1. Strip video stream completely
+        // Strip any video stream
         args.add("-vn");
+
+        boolean hasCut = options != null && options.hasCut();
+        boolean hasTrim = options != null && options.hasTrim();
+
+        List<TimeRange> keptSegments = calculateKeptSegments(options, sourceDuration);
+
+        if (!keptSegments.isEmpty() && (hasCut || keptSegments.size() > 1)) {
+            // Build filter_complex with atrim + concat + audio filters
+            buildAudioFilterComplex(args, keptSegments, options, effectiveDuration);
+        } else {
+            if (!keptSegments.isEmpty() && hasTrim) {
+                TimeRange single = keptSegments.get(0);
+                args.add("-ss");
+                args.add(String.format(Locale.ROOT, "%.3f", single.getStart()));
+                args.add("-to");
+                args.add(String.format(Locale.ROOT, "%.3f", single.getEnd()));
+            }
+
+            // Audio Filters (volume, silence removal, fade)
+            List<String> audioFilters = buildAudioFilters(options, effectiveDuration);
+            if (!audioFilters.isEmpty()) {
+                args.add("-af");
+                args.add(String.join(",", audioFilters));
+            }
+        }
 
         // 2. Select Audio Codec
         String aCodec = resolveAudioCodec(format, options != null ? options.getAudioCodec() : null);
@@ -77,7 +112,7 @@ public class AudioConversionServiceImpl implements AudioConversionService {
             args.add(String.valueOf(options.getSampleRate()));
         }
 
-        // 5. Audio Channels
+        // 5. Audio Channels (Mono / Stereo)
         if (options != null && options.getAudioChannels() != null && options.getAudioChannels() > 0) {
             args.add("-ac");
             args.add(String.valueOf(options.getAudioChannels()));
@@ -93,13 +128,162 @@ public class AudioConversionServiceImpl implements AudioConversionService {
         args.add(outputFile.getAbsolutePath());
 
         // Execute conversion
-        ffmpegExecutor.execute(jobId, args, duration, progressConsumer);
+        ffmpegExecutor.execute(jobId, args, effectiveDuration, progressConsumer);
 
         long fileSize = Files.size(outputFile.toPath());
         String mimeType = getMimeType(format);
 
-        log.info("Audio conversion finished for job {}: format={}, size={} bytes", jobId, format, fileSize);
-        return ConversionResult.success(outputFile, format, duration, fileSize, mimeType);
+        log.info("Audio conversion finished for job {}: format={}, effectiveDuration={}s, size={} bytes",
+                jobId, format, effectiveDuration, fileSize);
+        return ConversionResult.success(outputFile, format, effectiveDuration, fileSize, mimeType);
+    }
+
+    private void validateTrimming(ConversionOptions options, double sourceDuration) {
+        if (options == null) return;
+        Double start = options.getStartTime();
+        Double end = options.getEndTime();
+
+        if (start != null) {
+            if (start < 0) {
+                throw new IllegalArgumentException("Trim start time cannot be negative: " + start);
+            }
+            if (sourceDuration > 0 && start >= sourceDuration) {
+                throw new IllegalArgumentException("Trim start time (" + start + "s) exceeds source duration (" + sourceDuration + "s)");
+            }
+        }
+
+        if (end != null) {
+            if (end <= 0) {
+                throw new IllegalArgumentException("Trim end time must be greater than zero: " + end);
+            }
+            if (sourceDuration > 0 && end > sourceDuration + 1.0) {
+                throw new IllegalArgumentException("Trim end time (" + end + "s) exceeds source duration (" + sourceDuration + "s)");
+            }
+        }
+
+        if (start != null && end != null && start >= end) {
+            throw new IllegalArgumentException("Trim start time (" + start + "s) must be strictly less than end time (" + end + "s)");
+        }
+    }
+
+    private void validateCutting(ConversionOptions options, double sourceDuration) {
+        if (options == null || options.getRemoveSegments() == null) return;
+
+        for (TimeRange seg : options.getRemoveSegments()) {
+            if (seg.getStart() == null || seg.getEnd() == null) {
+                throw new IllegalArgumentException("Cut removal segment must specify both start and end time");
+            }
+            if (seg.getStart() < 0) {
+                throw new IllegalArgumentException("Cut segment start time cannot be negative: " + seg.getStart());
+            }
+            if (seg.getEnd() <= seg.getStart()) {
+                throw new IllegalArgumentException("Cut segment end time (" + seg.getEnd() + "s) must be greater than start (" + seg.getStart() + "s)");
+            }
+            if (sourceDuration > 0 && seg.getStart() >= sourceDuration) {
+                throw new IllegalArgumentException("Cut segment starts after source end: " + seg.getStart() + "s >= " + sourceDuration + "s");
+            }
+        }
+    }
+
+    private List<TimeRange> calculateKeptSegments(ConversionOptions options, double sourceDuration) {
+        if (options == null) return Collections.emptyList();
+
+        double totalDuration = sourceDuration > 0 ? sourceDuration : 3600.0;
+        double rangeStart = options.getStartTime() != null ? Math.max(0.0, options.getStartTime()) : 0.0;
+        double rangeEnd = options.getEndTime() != null ? Math.min(totalDuration, options.getEndTime()) : totalDuration;
+
+        if (!options.hasCut()) {
+            if (options.hasTrim()) {
+                return List.of(new TimeRange(rangeStart, rangeEnd));
+            }
+            return Collections.emptyList();
+        }
+
+        List<TimeRange> sortedRemovals = new ArrayList<>(options.getRemoveSegments());
+        sortedRemovals.sort(Comparator.comparingDouble(TimeRange::getStart));
+
+        List<TimeRange> kept = new ArrayList<>();
+        double current = rangeStart;
+
+        for (TimeRange rem : sortedRemovals) {
+            double remStart = Math.max(rangeStart, rem.getStart());
+            double remEnd = Math.min(rangeEnd, rem.getEnd());
+
+            if (remStart > current) {
+                kept.add(new TimeRange(current, remStart));
+            }
+            current = Math.max(current, remEnd);
+        }
+
+        if (current < rangeEnd) {
+            kept.add(new TimeRange(current, rangeEnd));
+        }
+
+        return kept;
+    }
+
+    private void buildAudioFilterComplex(List<String> args, List<TimeRange> segments, ConversionOptions options, double effectiveDuration) {
+        StringBuilder fc = new StringBuilder();
+        int n = segments.size();
+
+        for (int i = 0; i < n; i++) {
+            TimeRange seg = segments.get(i);
+            fc.append(String.format(Locale.ROOT, "[0:a]atrim=start=%.3f:end=%.3f,asetpts=PTS-STARTPTS[a%d];", seg.getStart(), seg.getEnd(), i));
+        }
+
+        for (int i = 0; i < n; i++) {
+            fc.append("[a").append(i).append("]");
+        }
+
+        fc.append(String.format(Locale.ROOT, "concat=n=%d:v=0:a=1[acat];", n));
+
+        List<String> aFilters = buildAudioFilters(options, effectiveDuration);
+        if (!aFilters.isEmpty()) {
+            fc.append("[acat]").append(String.join(",", aFilters)).append("[aout]");
+        }
+
+        String filterGraph = fc.toString();
+        if (filterGraph.endsWith(";")) {
+            filterGraph = filterGraph.substring(0, filterGraph.length() - 1);
+        }
+
+        args.add("-filter_complex");
+        args.add(filterGraph);
+
+        args.add("-map");
+        if (!aFilters.isEmpty()) {
+            args.add("[aout]");
+        } else {
+            args.add("[acat]");
+        }
+    }
+
+    private List<String> buildAudioFilters(ConversionOptions options, double effectiveDuration) {
+        List<String> filters = new ArrayList<>();
+        if (options == null) return filters;
+
+        // 1. Volume adjustment
+        if (options.getVolume() != null && options.getVolume() > 0.0 && Math.abs(options.getVolume() - 1.0) > 0.01) {
+            filters.add(String.format(Locale.ROOT, "volume=%.2f", options.getVolume()));
+        }
+
+        // 2. Silence removal
+        if (Boolean.TRUE.equals(options.getRemoveSilence())) {
+            filters.add("silenceremove=start_periods=1:stop_periods=1:stop_duration=1:stop_threshold=-50dB");
+        }
+
+        // 3. Fade in
+        if (options.getFadeInDuration() != null && options.getFadeInDuration() > 0.0) {
+            filters.add(String.format(Locale.ROOT, "afade=t=in:ss=0:d=%.2f", options.getFadeInDuration()));
+        }
+
+        // 4. Fade out
+        if (options.getFadeOutDuration() != null && options.getFadeOutDuration() > 0.0) {
+            double fadeStart = Math.max(0.0, effectiveDuration - options.getFadeOutDuration());
+            filters.add(String.format(Locale.ROOT, "afade=t=out:st=%.2f:d=%.2f", fadeStart, options.getFadeOutDuration()));
+        }
+
+        return filters;
     }
 
     private String resolveAudioCodec(String format, String requestedCodec) {

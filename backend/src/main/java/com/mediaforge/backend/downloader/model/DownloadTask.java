@@ -1,5 +1,6 @@
 package com.mediaforge.backend.downloader.model;
 
+import com.mediaforge.backend.converter.model.ConversionOptions;
 import java.net.URI;
 import java.nio.file.Path;
 import java.util.UUID;
@@ -12,6 +13,7 @@ public class DownloadTask {
     private String targetQuality;
     private long maxSizeBytes;
     private Path outputPath;
+    private ConversionOptions editOptions;
     private volatile boolean cancelled = false;
 
     public DownloadTask() {
@@ -19,12 +21,18 @@ public class DownloadTask {
 
     public DownloadTask(UUID jobId, URI sourceUri, String targetFormat, String targetQuality,
                         long maxSizeBytes, Path outputPath) {
+        this(jobId, sourceUri, targetFormat, targetQuality, maxSizeBytes, outputPath, null);
+    }
+
+    public DownloadTask(UUID jobId, URI sourceUri, String targetFormat, String targetQuality,
+                        long maxSizeBytes, Path outputPath, ConversionOptions editOptions) {
         this.jobId = jobId;
         this.sourceUri = sourceUri;
         this.targetFormat = targetFormat;
         this.targetQuality = targetQuality;
         this.maxSizeBytes = maxSizeBytes;
         this.outputPath = outputPath;
+        this.editOptions = editOptions;
     }
 
     public UUID getJobId() {
@@ -73,6 +81,14 @@ public class DownloadTask {
 
     public void setOutputPath(Path outputPath) {
         this.outputPath = outputPath;
+    }
+
+    public ConversionOptions getEditOptions() {
+        return editOptions;
+    }
+
+    public void setEditOptions(ConversionOptions editOptions) {
+        this.editOptions = editOptions;
     }
 
     public boolean isCancelled() {

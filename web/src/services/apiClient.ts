@@ -18,8 +18,7 @@ import {
   PageResponse,
   SupportedFormatsResponse,
 } from '@/types/api';
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080/api/v1';
+import { API_BASE_URL } from '@/config/api';
 
 export class ApiError extends Error {
   status: number;
@@ -110,11 +109,17 @@ export const apiClient = {
     return request<import('@/types/api').MediaFormatOptionDto[]>(`/downloads/formats${query}`);
   },
 
-  createDownloadJob: (req: DownloadCreateRequest) =>
-    request<JobResponse>('/downloads', {
+  createDownloadJob: async (req: DownloadCreateRequest): Promise<JobResponse> => {
+    const res = await request<any>('/downloads', {
       method: 'POST',
       body: JSON.stringify(req),
-    }),
+    });
+    const job: JobResponse = res.job || res;
+    if (!job.id && res.jobId) {
+      job.id = res.jobId;
+    }
+    return job;
+  },
   createDownload: (req: DownloadCreateRequest) =>
     request<DownloadResponse>('/downloads', {
       method: 'POST',
@@ -122,11 +127,23 @@ export const apiClient = {
     }),
 
   // Converter
-  createConversionJob: (req: ConversionCreateRequest) =>
-    request<JobResponse>('/conversions', {
+  estimateOutputSize: (req: import('@/types/api').SizeEstimationRequest) =>
+    request<import('@/types/api').SizeEstimationResponse>('/conversions/estimate-size', {
       method: 'POST',
       body: JSON.stringify(req),
     }),
+
+  createConversionJob: async (req: ConversionCreateRequest): Promise<JobResponse> => {
+    const res = await request<any>('/conversions', {
+      method: 'POST',
+      body: JSON.stringify(req),
+    });
+    const job: JobResponse = res.job || res;
+    if (!job.id && res.jobId) {
+      job.id = res.jobId;
+    }
+    return job;
+  },
   createConversion: (req: ConversionCreateRequest) =>
     request<ConversionResponse>('/conversions', {
       method: 'POST',
@@ -142,8 +159,18 @@ export const apiClient = {
   getBatchZipUrl: (batchId: string) => `${API_BASE_URL}/conversions/batch/${batchId}/zip`,
 
   // Jobs
-  getJobById: (id: string) => request<JobResponse>(`/jobs/${id}`),
-  getJobProgress: (id: string) => request<ConversionProgressResponse>(`/jobs/${id}/progress`),
+  getJobById: (id: string) => {
+    if (!id || id === 'undefined' || id === 'null') {
+      return Promise.reject(new Error('Invalid job ID provided for job lookup'));
+    }
+    return request<JobResponse>(`/jobs/${id}`);
+  },
+  getJobProgress: (id: string) => {
+    if (!id || id === 'undefined' || id === 'null') {
+      return Promise.reject(new Error('Invalid job ID provided for progress lookup'));
+    }
+    return request<ConversionProgressResponse>(`/jobs/${id}/progress`);
+  },
 
   listJobs: (
     optionsOrStatus?: { page?: number; size?: number; status?: JobStatus } | JobStatus,
