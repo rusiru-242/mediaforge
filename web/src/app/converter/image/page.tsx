@@ -4,33 +4,33 @@ import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import {
   Image as ImageIcon,
-  ArrowRight,
-  Settings,
-  Download,
-  XCircle,
-  RefreshCw,
-  CheckCircle,
+  RotateCcw,
   RotateCw,
-  Crop,
+  Crop as CropIcon,
   Sliders,
+  Download,
+  Upload,
+  RefreshCw,
+  CheckCircle2,
+  AlertCircle,
+  Shield,
+  Layers,
   ChevronDown,
-  ChevronUp,
-  Info,
-  AlertTriangle,
+  Trash2,
+  Plus,
+  TrendingDown,
+  Sparkles,
   FlipHorizontal,
   FlipVertical,
-  Sun
+  Sun,
+  Eye,
+  AlertTriangle,
+  ZoomIn,
+  ZoomOut,
+  Maximize2,
 } from 'lucide-react';
 import { apiClient } from '@/services/apiClient';
 import { JobResponse, ConversionProgressResponse, SizeEstimationResponse } from '@/types/api';
-import { FileDropzone } from '@/components/feedback/FileDropzone';
-import { Button } from '@/components/ui/Button';
-import { Select } from '@/components/ui/Select';
-import { Card } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
-import { JobStatusBadge } from '@/components/feedback/JobStatusBadge';
-import { ErrorAlert } from '@/components/feedback/ErrorAlert';
-import { ProgressBar } from '@/components/ui/ProgressBar';
 import { IMAGE_PRESETS } from '@/utils/presets';
 
 export default function ImageConverterPage() {
@@ -38,6 +38,7 @@ export default function ImageConverterPage() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [naturalWidth, setNaturalWidth] = useState<number>(0);
   const [naturalHeight, setNaturalHeight] = useState<number>(0);
+  const [zoomLevel, setZoomLevel] = useState<number>(100);
 
   // Conversion Parameters
   const [targetFormat, setTargetFormat] = useState('webp');
@@ -45,28 +46,25 @@ export default function ImageConverterPage() {
   const [quality, setQuality] = useState('85');
 
   // Resize
-  const [resizeMode, setResizeMode] = useState('original');
   const [customWidth, setCustomWidth] = useState('');
   const [customHeight, setCustomHeight] = useState('');
   const [preserveAspectRatio, setPreserveAspectRatio] = useState(true);
 
-  // Crop
+  // Active Tab & Tool
+  const [activeTab, setActiveTab] = useState<'light' | 'transform'>('light');
   const [showCrop, setShowCrop] = useState(false);
-  const [cropAspectRatio, setCropAspectRatio] = useState<string>('custom');
+  const [cropAspectRatio, setCropAspectRatio] = useState<string>('16:9');
   const [cropX, setCropX] = useState<number>(0);
   const [cropY, setCropY] = useState<number>(0);
   const [cropWidth, setCropWidth] = useState<number>(0);
   const [cropHeight, setCropHeight] = useState<number>(0);
 
   // Rotations & Visual Enhancements
-  const [rotateDegrees, setRotateDegrees] = useState('0');
-  const [flipH, setFlipH] = useState(false);
-  const [flipV, setFlipV] = useState(false);
-  const [brightness, setBrightness] = useState<number>(0); // -1.0 to 1.0 (displayed -100 to 100)
-  const [contrast, setContrast] = useState<number>(1.0); // 0.0 to 2.0 (displayed 0 to 200)
-
-  // Advanced panel
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [rotateDegrees, setRotateDegrees] = useState<number>(0);
+  const [flipH, setFlipH] = useState<boolean>(false);
+  const [flipV, setFlipV] = useState<boolean>(false);
+  const [brightness, setBrightness] = useState<number>(0); // -1.0 to 1.0 (displayed as -100 to 100)
+  const [contrast, setContrast] = useState<number>(1.0); // 0.0 to 2.0 (displayed as 0 to 200)
 
   // Output Size Estimation
   const [sizeEstimate, setSizeEstimate] = useState<SizeEstimationResponse | null>(null);
@@ -79,6 +77,7 @@ export default function ImageConverterPage() {
   const [progress, setProgress] = useState<ConversionProgressResponse | null>(null);
   const [outputFileId, setOutputFileId] = useState<string | null>(null);
 
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const estimateTimerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -117,6 +116,7 @@ export default function ImageConverterPage() {
 
   const handleAspectRatioPreset = (preset: string) => {
     setCropAspectRatio(preset);
+    setShowCrop(true);
     if (!naturalWidth || !naturalHeight) return;
 
     let targetW = naturalWidth;
@@ -155,8 +155,22 @@ export default function ImageConverterPage() {
     setCropY(startY);
   };
 
-  // Check transparency conversion warning
-  const isLossOfAlpha = (selectedFile?.name.toLowerCase().endsWith('.png') || selectedFile?.name.toLowerCase().endsWith('.webp')) &&
+  const handleResolutionScale = (scalePercent: number) => {
+    if (!naturalWidth || !naturalHeight) return;
+    if (scalePercent === 100) {
+      setCustomWidth('');
+      setCustomHeight('');
+    } else {
+      const scaledW = Math.round((naturalWidth * scalePercent) / 100);
+      const scaledH = Math.round((naturalHeight * scalePercent) / 100);
+      setCustomWidth(scaledW.toString());
+      setCustomHeight(scaledH.toString());
+    }
+  };
+
+  // Alpha transparency warning
+  const isLossOfAlpha =
+    (selectedFile?.name.toLowerCase().endsWith('.png') || selectedFile?.name.toLowerCase().endsWith('.webp')) &&
     (targetFormat === 'jpg' || targetFormat === 'jpeg');
 
   // Debounced Size Estimation
@@ -168,8 +182,8 @@ export default function ImageConverterPage() {
     estimateTimerRef.current = setTimeout(async () => {
       try {
         setIsEstimating(true);
-        const w = customWidth ? parseInt(customWidth, 10) : (showCrop && cropWidth > 0 ? cropWidth : naturalWidth);
-        const h = customHeight ? parseInt(customHeight, 10) : (showCrop && cropHeight > 0 ? cropHeight : naturalHeight);
+        const w = customWidth ? parseInt(customWidth, 10) : showCrop && cropWidth > 0 ? cropWidth : naturalWidth;
+        const h = customHeight ? parseInt(customHeight, 10) : showCrop && cropHeight > 0 ? cropHeight : naturalHeight;
 
         const est = await apiClient.estimateOutputSize({
           mediaType: 'image',
@@ -222,7 +236,7 @@ export default function ImageConverterPage() {
     cleanupPolling();
     if (!jobId || jobId === 'undefined') {
       setStage('FAILED');
-      setError('Unable to track conversion: No valid Job ID was received from the server.');
+      setError('Unable to track conversion: No valid Job ID was received.');
       return;
     }
     let consecutiveErrors = 0;
@@ -255,14 +269,13 @@ export default function ImageConverterPage() {
         if (consecutiveErrors > 15) {
           cleanupPolling();
           setStage('FAILED');
-          setError('Lost connection while polling image conversion progress.');
+          setError('Lost connection while polling image conversion.');
         }
       }
     }, 1000);
   };
 
-  const handleConvert = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleConvert = async () => {
     if (!selectedFile) {
       setError('Please select or drop an image file to convert.');
       return;
@@ -281,7 +294,10 @@ export default function ImageConverterPage() {
 
       const widthNum = customWidth ? parseInt(customWidth, 10) : undefined;
       const heightNum = customHeight ? parseInt(customHeight, 10) : undefined;
-      const hasCropConfig = showCrop && cropWidth > 0 && cropHeight > 0 &&
+      const hasCropConfig =
+        showCrop &&
+        cropWidth > 0 &&
+        cropHeight > 0 &&
         (cropWidth !== naturalWidth || cropHeight !== naturalHeight || cropX > 0 || cropY > 0);
 
       const job = await apiClient.createConversionJob({
@@ -292,7 +308,7 @@ export default function ImageConverterPage() {
         imageWidth: widthNum,
         imageHeight: heightNum,
         preserveAspectRatio,
-        imageRotation: parseInt(rotateDegrees, 10) || undefined,
+        imageRotation: rotateDegrees !== 0 ? rotateDegrees : undefined,
         cropX: hasCropConfig ? cropX : undefined,
         cropY: hasCropConfig ? cropY : undefined,
         cropWidth: hasCropConfig ? cropWidth : undefined,
@@ -328,494 +344,577 @@ export default function ImageConverterPage() {
     }
   };
 
-  const handleReset = () => {
-    cleanupPolling();
-    setSelectedFile(null);
-    setStage('IDLE');
-    setError(null);
-    setCurrentJob(null);
-    setProgress(null);
-    setOutputFileId(null);
+  const handleResetAdjustments = () => {
+    setBrightness(0);
+    setContrast(1.0);
+    setRotateDegrees(0);
+    setFlipH(false);
+    setFlipV(false);
+    setShowCrop(false);
+    setCustomWidth('');
+    setCustomHeight('');
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setSelectedFile(e.target.files[0]);
+      setStage('IDLE');
+      setError(null);
+    }
   };
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 lg:px-8">
-      {/* Header */}
-      <div className="text-center space-y-3">
-        <div className="inline-flex items-center gap-2 rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
-          <ImageIcon className="h-3.5 w-3.5" />
-          <span>Advanced Image Processing & Studio</span>
+    <div className="w-full max-w-7xl mx-auto px-gutter py-space-md flex flex-col gap-space-md">
+      {/* Top Workspace Status Bar */}
+      <div className="w-full bg-surface-container-lowest dark:bg-slate-900 rounded-2xl p-space-md shadow-sm border border-outline-variant/30 flex flex-wrap items-center justify-between gap-space-sm">
+        <div className="flex items-center gap-space-sm min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="w-8 h-8 rounded-full bg-primary-fixed dark:bg-slate-800 text-primary flex items-center justify-center font-bold">
+              <ImageIcon className="w-4 h-4" />
+            </span>
+            <Link href="/" className="text-xs text-on-surface-variant hover:text-on-surface font-semibold">
+              Image Editor
+            </Link>
+            <span className="text-outline-variant text-xs">/</span>
+            <span className="text-sm font-bold text-on-surface truncate max-w-[280px] sm:max-w-md">
+              {selectedFile ? selectedFile.name : 'No image loaded'}
+            </span>
+          </div>
+          {selectedFile && naturalWidth > 0 && (
+            <div className="hidden lg:flex items-center gap-2 px-3 py-1 rounded-full bg-surface-container-low dark:bg-slate-800 text-on-surface-variant font-mono text-xs">
+              <span className="w-1.5 h-1.5 rounded-full bg-tertiary-container animate-pulse" />
+              <span>
+                {naturalWidth} × {naturalHeight} · 24-bit RGB · {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB
+              </span>
+            </div>
+          )}
         </div>
-        <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100 sm:text-4xl">
-          Convert & Optimize Images
-        </h1>
-        <p className="mx-auto max-w-xl text-sm text-slate-600 dark:text-slate-400">
-          Crop, resize, flip, rotate, adjust brightness and convert between JPG, PNG, WebP, and AVIF with transparency preservation.
-        </p>
+
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleResetAdjustments}
+            disabled={!selectedFile}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-container-low dark:bg-slate-800 text-on-surface-variant hover:bg-surface-container font-semibold text-xs disabled:opacity-40"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Revert</span>
+          </button>
+          <label className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-primary-fixed text-on-primary-fixed-variant dark:bg-slate-800 dark:text-primary font-semibold text-xs cursor-pointer shadow-xs">
+            <Upload className="w-3.5 h-3.5" />
+            <span>{selectedFile ? 'Replace File' : 'Import Image'}</span>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*,.png,.jpg,.jpeg,.webp,.avif,.bmp,.tiff,.gif"
+              onChange={handleFileChange}
+              className="hidden"
+            />
+          </label>
+        </div>
       </div>
 
-      <Card className="mt-8 p-6 sm:p-8">
-        {stage === 'IDLE' && (
-          <form onSubmit={handleConvert} className="space-y-6">
-            <FileDropzone
-              accept="image/*,.jpg,.jpeg,.png,.webp,.avif,.bmp,.gif"
-              selectedFile={selectedFile}
-              onFileSelect={setSelectedFile}
-              label="Upload Image"
-              description="Drop PNG, JPG, WebP, or AVIF image (up to 50MB)"
-            />
+      {/* Main Grid: 8-col Viewport & Deck + 4-col Export Inspector */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-space-lg items-start">
+        {/* Left Workspace (8 cols) */}
+        <div className="lg:col-span-8 flex flex-col gap-space-md min-w-0">
+          {/* Viewport Card */}
+          <div className="relative bg-inverse-surface rounded-3xl overflow-hidden shadow-xl aspect-[16/10] flex items-center justify-center group select-none border border-outline-variant/30">
+            {previewUrl ? (
+              <div className="relative w-full h-full flex items-center justify-center overflow-hidden p-4">
+                <img
+                  src={previewUrl}
+                  alt={selectedFile?.name || 'Preview'}
+                  onLoad={handleImageLoaded}
+                  className="max-w-full max-h-full object-contain transition-all duration-150"
+                  style={{
+                    transform: `scale(${zoomLevel / 100}) rotate(${rotateDegrees}deg) scaleX(${flipH ? -1 : 1}) scaleY(${flipV ? -1 : 1})`,
+                    filter: `brightness(${1 + brightness}) contrast(${contrast})`,
+                  }}
+                />
 
-            {/* Interactive Image Preview with Crop Overlay */}
-            {previewUrl && (
-              <div className="rounded-xl border border-slate-200 bg-slate-900/90 p-4 dark:border-slate-800 text-slate-100 space-y-3">
-                <div className="flex items-center justify-between text-xs text-slate-300">
-                  <span className="font-semibold flex items-center gap-1.5">
-                    <ImageIcon className="h-4 w-4 text-emerald-400" />
-                    Source Preview
-                  </span>
-                  <span>Dimensions: {naturalWidth}x{naturalHeight} px</span>
-                </div>
-
-                <div className="relative max-h-72 w-full overflow-hidden rounded-lg bg-black/60 flex items-center justify-center p-2">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={previewUrl}
-                    alt="Preview"
-                    onLoad={handleImageLoaded}
-                    className="max-h-64 object-contain rounded"
-                    style={{
-                      transform: `rotate(${rotateDegrees}deg) scaleX(${flipH ? -1 : 1}) scaleY(${flipV ? -1 : 1})`,
-                      filter: `brightness(${1 + brightness}) contrast(${contrast})`,
-                    }}
-                  />
-                  {showCrop && cropWidth > 0 && cropHeight > 0 && naturalWidth > 0 && naturalHeight > 0 && (
-                    <div
-                      className="absolute border-2 border-dashed border-emerald-400 bg-emerald-400/10 pointer-events-none"
-                      style={{
-                        left: `${(cropX / naturalWidth) * 100}%`,
-                        top: `${(cropY / naturalHeight) * 100}%`,
-                        width: `${(cropWidth / naturalWidth) * 100}%`,
-                        height: `${(cropHeight / naturalHeight) * 100}%`,
-                      }}
-                    >
-                      <span className="absolute top-1 left-1 bg-emerald-500 text-black text-[10px] font-bold px-1 rounded">
-                        {cropWidth}x{cropHeight}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Transparency Warning */}
-            {isLossOfAlpha && (
-              <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200 text-xs flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 flex-shrink-0 text-amber-600 dark:text-amber-400" />
-                <span>
-                  <strong>Alpha Transparency Notice:</strong> Target format JPEG does not support transparency. Transparent areas will automatically be flattened onto a clean white background.
-                </span>
-              </div>
-            )}
-
-            {/* Crop & Aspect Ratio Section */}
-            {selectedFile && (
-              <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4 dark:border-slate-800 dark:bg-slate-900/50 space-y-4">
-                <button
-                  type="button"
-                  onClick={() => setShowCrop(!showCrop)}
-                  className="w-full flex items-center justify-between text-left text-xs font-semibold uppercase tracking-wider text-slate-700 dark:text-slate-300"
-                >
-                  <div className="flex items-center gap-2">
-                    <Crop className="h-4 w-4 text-emerald-500" />
-                    <span>Crop Image & Aspect Ratio</span>
-                  </div>
-                  {showCrop ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                </button>
-
+                {/* Rule of Thirds Crop Guidelines Overlay (when crop active) */}
                 {showCrop && (
-                  <div className="space-y-4 pt-2 border-t border-slate-200 dark:border-slate-800">
-                    <div>
-                      <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-2">
-                        Aspect Ratio Presets:
-                      </label>
-                      <div className="flex flex-wrap gap-2">
-                        {['custom', '1:1', '4:3', '16:9', '9:16'].map((preset) => (
-                          <button
-                            key={preset}
-                            type="button"
-                            onClick={() => handleAspectRatioPreset(preset)}
-                            className={`px-3 py-1 rounded text-xs font-medium transition ${
-                              cropAspectRatio === preset
-                                ? 'bg-emerald-600 text-white'
-                                : 'bg-slate-200 text-slate-700 hover:bg-slate-300 dark:bg-slate-800 dark:text-slate-300'
-                            }`}
-                          >
-                            {preset.toUpperCase()}
-                          </button>
-                        ))}
-                      </div>
+                  <div className="absolute inset-8 border-2 border-primary-container rounded pointer-events-none shadow-[0_0_0_9999px_rgba(11,28,48,0.5)]">
+                    <div className="absolute inset-0 grid grid-cols-3 grid-rows-3 opacity-40">
+                      <div className="bg-white/40 w-px h-full absolute left-1/3" />
+                      <div className="bg-white/40 w-px h-full absolute left-2/3" />
+                      <div className="bg-white/40 h-px w-full absolute top-1/3" />
+                      <div className="bg-white/40 h-px w-full absolute top-2/3" />
                     </div>
-
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                      <div>
-                        <label className="block text-[11px] text-slate-500 mb-1">X Offset</label>
-                        <input
-                          type="number"
-                          min="0"
-                          value={cropX}
-                          onChange={(e) => setCropX(parseInt(e.target.value, 10) || 0)}
-                          className="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs dark:border-slate-700 dark:bg-slate-800"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] text-slate-500 mb-1">Y Offset</label>
-                        <input
-                          type="number"
-                          min="0"
-                          value={cropY}
-                          onChange={(e) => setCropY(parseInt(e.target.value, 10) || 0)}
-                          className="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs dark:border-slate-700 dark:bg-slate-800"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] text-slate-500 mb-1">Crop Width</label>
-                        <input
-                          type="number"
-                          min="2"
-                          value={cropWidth}
-                          onChange={(e) => setCropWidth(parseInt(e.target.value, 10) || 2)}
-                          className="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs dark:border-slate-700 dark:bg-slate-800"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] text-slate-500 mb-1">Crop Height</label>
-                        <input
-                          type="number"
-                          min="2"
-                          value={cropHeight}
-                          onChange={(e) => setCropHeight(parseInt(e.target.value, 10) || 2)}
-                          className="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs dark:border-slate-700 dark:bg-slate-800"
-                        />
-                      </div>
+                    <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded-full bg-black/70 font-mono text-[11px] text-white">
+                      Crop: {cropAspectRatio} ({cropWidth}×{cropHeight})
                     </div>
                   </div>
                 )}
               </div>
+            ) : (
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                className="flex flex-col items-center justify-center text-center p-8 cursor-pointer hover:opacity-90 transition-opacity"
+              >
+                <div className="w-16 h-16 rounded-full bg-primary/20 text-primary flex items-center justify-center mb-4">
+                  <Upload className="w-8 h-8" />
+                </div>
+                <h3 className="text-lg font-bold text-white mb-1">Click to Upload Image</h3>
+                <p className="text-xs text-slate-400 max-w-sm">
+                  Drag and drop PNG, JPEG, WebP, AVIF, or BMP images to edit and convert.
+                </p>
+              </div>
             )}
 
-            {/* Format & Image Options */}
-            <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4 dark:border-slate-800 dark:bg-slate-900/50">
-              <div className="flex items-center gap-2 mb-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                <Settings className="h-4 w-4" />
-                <span>Image Optimization Parameters</span>
+            {/* Top Right Zoom Controls */}
+            {previewUrl && (
+              <div className="absolute top-3 right-3 flex items-center gap-1 bg-surface-container-lowest/90 dark:bg-slate-900/90 backdrop-blur-md px-2 py-1 rounded-full shadow-md text-on-surface">
+                <button
+                  type="button"
+                  onClick={() => setZoomLevel((z) => Math.max(25, z - 25))}
+                  className="w-6 h-6 rounded-full hover:bg-surface-container flex items-center justify-center"
+                  title="Zoom Out"
+                >
+                  <ZoomOut className="w-3.5 h-3.5" />
+                </button>
+                <span className="px-1.5 font-mono text-xs font-semibold">{zoomLevel}%</span>
+                <button
+                  type="button"
+                  onClick={() => setZoomLevel((z) => Math.min(200, z + 25))}
+                  className="w-6 h-6 rounded-full hover:bg-surface-container flex items-center justify-center"
+                  title="Zoom In"
+                >
+                  <ZoomIn className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setZoomLevel(100)}
+                  className="w-6 h-6 rounded-full hover:bg-surface-container flex items-center justify-center ml-0.5"
+                  title="Reset 100%"
+                >
+                  <Maximize2 className="w-3.5 h-3.5" />
+                </button>
               </div>
+            )}
 
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div className="sm:col-span-2">
-                  <Select
-                    label="Compression Preset"
-                    value={selectedPreset}
-                    onChange={(e) => handlePresetChange(e.target.value)}
-                    options={[
-                      ...IMAGE_PRESETS.map((p) => ({
-                        label: `${p.label} — ${p.description}`,
-                        value: p.id,
-                      })),
-                      { label: 'Maximum Quality (Lossless / 100%)', value: 'maximum' },
-                    ]}
-                  />
+            {/* Bottom Inside-Canvas Floating Bar */}
+            {previewUrl && (
+              <div className="absolute bottom-3 inset-x-3 sm:inset-x-8 flex flex-wrap items-center justify-between gap-2 p-1.5 rounded-full bg-surface-container-lowest/90 dark:bg-slate-900/90 backdrop-blur-xl shadow-lg border border-outline-variant/30">
+                {/* Aspect Presets */}
+                <div className="flex items-center gap-1 overflow-x-auto no-scrollbar py-0.5 px-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowCrop(false)}
+                    className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${
+                      !showCrop ? 'bg-primary text-white shadow-xs' : 'text-on-surface-variant hover:text-on-surface'
+                    }`}
+                  >
+                    Full Image
+                  </button>
+                  {(['16:9', '1:1', '4:3', '9:16'] as const).map((ratio) => (
+                    <button
+                      key={ratio}
+                      type="button"
+                      onClick={() => handleAspectRatioPreset(ratio)}
+                      className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${
+                        showCrop && cropAspectRatio === ratio
+                          ? 'bg-primary text-white shadow-xs'
+                          : 'text-on-surface-variant hover:text-on-surface'
+                      }`}
+                    >
+                      {ratio}
+                    </button>
+                  ))}
                 </div>
 
-                <Select
-                  label="Target Image Format"
-                  value={targetFormat}
-                  onChange={(e) => setTargetFormat(e.target.value)}
-                  options={[
-                    { label: 'WEBP — Modern Web Standard (High Compression)', value: 'webp' },
-                    { label: 'JPG / JPEG — Universal Compatibility', value: 'jpg' },
-                    { label: 'PNG — Lossless with Alpha Transparency', value: 'png' },
-                    { label: 'AVIF — Next-Gen High Efficiency', value: 'avif' },
-                  ]}
-                />
+                {/* Orientation Actions */}
+                <div className="flex items-center gap-1 pl-2 border-l border-outline-variant/30">
+                  <button
+                    type="button"
+                    onClick={() => setRotateDegrees((d) => (d - 90 + 360) % 360)}
+                    className="w-7 h-7 rounded-full hover:bg-surface-container flex items-center justify-center text-on-surface-variant hover:text-on-surface transition-colors"
+                    title="Rotate 90° CCW"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRotateDegrees((d) => (d + 90) % 360)}
+                    className="w-7 h-7 rounded-full hover:bg-surface-container flex items-center justify-center text-on-surface-variant hover:text-on-surface transition-colors"
+                    title="Rotate 90° CW"
+                  >
+                    <RotateCw className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFlipH(!flipH)}
+                    className={`w-7 h-7 rounded-full hover:bg-surface-container flex items-center justify-center transition-colors ${
+                      flipH ? 'bg-primary/20 text-primary' : 'text-on-surface-variant'
+                    }`}
+                    title="Flip Horizontal"
+                  >
+                    <FlipHorizontal className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFlipV(!flipV)}
+                    className={`w-7 h-7 rounded-full hover:bg-surface-container flex items-center justify-center transition-colors ${
+                      flipV ? 'bg-primary/20 text-primary' : 'text-on-surface-variant'
+                    }`}
+                    title="Flip Vertical"
+                  >
+                    <FlipVertical className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
 
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
-                    Quality ({quality}%):
-                  </label>
+          {/* Lower Adjustments & Tuning Deck */}
+          <div className="w-full bg-surface-container-lowest dark:bg-slate-900 rounded-3xl shadow-sm border border-outline-variant/30 p-space-md flex flex-col gap-space-md">
+            <div className="flex items-center justify-between border-b border-outline-variant/20 pb-2">
+              <div className="flex items-center p-1 bg-surface-container-low dark:bg-slate-800 rounded-full">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('light')}
+                  className={`px-4 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                    activeTab === 'light'
+                      ? 'bg-surface-container-lowest dark:bg-slate-700 text-on-surface shadow-xs'
+                      : 'text-on-surface-variant hover:text-on-surface'
+                  }`}
+                >
+                  <Sun className="w-3.5 h-3.5 text-primary" />
+                  <span>Light & Color</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('transform')}
+                  className={`px-4 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                    activeTab === 'transform'
+                      ? 'bg-surface-container-lowest dark:bg-slate-700 text-on-surface shadow-xs'
+                      : 'text-on-surface-variant hover:text-on-surface'
+                  }`}
+                >
+                  <CropIcon className="w-3.5 h-3.5 text-primary" />
+                  <span>Transform & Canvas</span>
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleResetAdjustments}
+                className="text-on-surface-variant hover:text-primary text-xs font-semibold flex items-center gap-1 px-3 py-1 rounded-full hover:bg-surface-container transition-colors"
+              >
+                <RefreshCw className="w-3 h-3" />
+                <span>Reset Sliders</span>
+              </button>
+            </div>
+
+            {/* TAB 1: Light & Color */}
+            {activeTab === 'light' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-space-lg gap-y-space-md pt-1">
+                {/* Brightness */}
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between text-xs font-semibold">
+                    <span className="text-on-surface">Brightness</span>
+                    <span className="font-mono text-primary font-bold">
+                      {brightness >= 0 ? `+${Math.round(brightness * 100)}` : Math.round(brightness * 100)}
+                    </span>
+                  </div>
                   <input
                     type="range"
-                    min="10"
-                    max="100"
-                    value={quality}
-                    onChange={(e) => setQuality(e.target.value)}
-                    className="w-full accent-emerald-600 mt-2"
+                    min="-1"
+                    max="1"
+                    step="0.05"
+                    value={brightness}
+                    onChange={(e) => setBrightness(parseFloat(e.target.value))}
+                    className="w-full h-1.5 bg-surface-container-high dark:bg-slate-700 rounded-full appearance-none accent-primary cursor-pointer"
                   />
-                  <span className="text-[10px] text-slate-500">Higher quality increases output file size</span>
                 </div>
 
-                <Select
-                  label="Rotation"
-                  value={rotateDegrees}
-                  onChange={(e) => setRotateDegrees(e.target.value)}
-                  options={[
-                    { label: 'No Rotation (0°)', value: '0' },
-                    { label: 'Rotate 90° Clockwise', value: '90' },
-                    { label: 'Rotate 180°', value: '180' },
-                    { label: 'Rotate 270° (90° Counter-Clockwise)', value: '270' },
-                  ]}
-                />
+                {/* Contrast */}
+                <div className="flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between text-xs font-semibold">
+                    <span className="text-on-surface">Contrast</span>
+                    <span className="font-mono text-primary font-bold">
+                      {Math.round(contrast * 100)}%
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="2"
+                    step="0.05"
+                    value={contrast}
+                    onChange={(e) => setContrast(parseFloat(e.target.value))}
+                    className="w-full h-1.5 bg-surface-container-high dark:bg-slate-700 rounded-full appearance-none accent-primary cursor-pointer"
+                  />
+                </div>
+              </div>
+            )}
 
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
-                    Resize Dimensions:
-                  </label>
-                  <div className="grid grid-cols-2 gap-2">
+            {/* TAB 2: Transform & Canvas */}
+            {activeTab === 'transform' && (
+              <div className="space-y-3 pt-1">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono">
+                  <div>
+                    <label className="block text-outline text-[10px] mb-1">Custom Width (px)</label>
                     <input
                       type="number"
-                      placeholder={`W (${naturalWidth || 'Auto'})`}
+                      placeholder={naturalWidth ? naturalWidth.toString() : 'Auto'}
                       value={customWidth}
                       onChange={(e) => setCustomWidth(e.target.value)}
-                      className="rounded border border-slate-300 bg-white px-2 py-1 text-xs dark:border-slate-700 dark:bg-slate-800"
+                      className="w-full px-2 py-1.5 rounded-lg bg-surface-container-low dark:bg-slate-800 border border-outline-variant/30 text-xs focus:outline-none"
                     />
+                  </div>
+                  <div>
+                    <label className="block text-outline text-[10px] mb-1">Custom Height (px)</label>
                     <input
                       type="number"
-                      placeholder={`H (${naturalHeight || 'Auto'})`}
+                      placeholder={naturalHeight ? naturalHeight.toString() : 'Auto'}
                       value={customHeight}
                       onChange={(e) => setCustomHeight(e.target.value)}
-                      className="rounded border border-slate-300 bg-white px-2 py-1 text-xs dark:border-slate-700 dark:bg-slate-800"
+                      className="w-full px-2 py-1.5 rounded-lg bg-surface-container-low dark:bg-slate-800 border border-outline-variant/30 text-xs focus:outline-none"
                     />
                   </div>
-                  <div className="mt-1 flex items-center gap-1.5">
-                    <input
-                      type="checkbox"
-                      id="aspectLock"
-                      checked={preserveAspectRatio}
-                      onChange={(e) => setPreserveAspectRatio(e.target.checked)}
-                      className="h-3.5 w-3.5 rounded border-slate-300 text-emerald-600"
-                    />
-                    <label htmlFor="aspectLock" className="text-[11px] text-slate-600 dark:text-slate-400">
-                      Preserve Aspect Ratio (Prevent Distortion)
+                  <div className="flex items-center pt-4">
+                    <label className="flex items-center gap-1.5 text-xs text-on-surface cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={preserveAspectRatio}
+                        onChange={(e) => setPreserveAspectRatio(e.target.checked)}
+                        className="rounded accent-primary"
+                      />
+                      <span>Lock Aspect Ratio</span>
                     </label>
                   </div>
+                  <div className="flex items-center pt-4">
+                    <span className="text-xs text-on-surface-variant font-mono">
+                      Current: {customWidth || naturalWidth || 0} × {customHeight || naturalHeight || 0}
+                    </span>
+                  </div>
                 </div>
               </div>
+            )}
+          </div>
+        </div>
 
-              {/* Advanced Image Controls (Flips & Brightness) */}
-              <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setShowAdvanced(!showAdvanced)}
-                  className="flex items-center gap-2 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
-                >
-                  <Sliders className="h-3.5 w-3.5" />
-                  <span>Advanced Visual Adjustments (Flips, Brightness, Contrast)</span>
-                  {showAdvanced ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                </button>
+        {/* Right Sidebar: Export Inspector (4 cols) */}
+        <div className="lg:col-span-4 flex flex-col gap-space-md">
+          <div className="bg-surface-container-lowest dark:bg-slate-900 rounded-3xl shadow-sm border border-outline-variant/30 p-space-lg flex flex-col gap-space-md">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-outline-variant/20 pb-2">
+              <h2 className="text-base font-bold text-on-surface flex items-center gap-2">
+                <Sliders className="w-4 h-4 text-primary" />
+                <span>Export Settings</span>
+              </h2>
+              <span className="px-2.5 py-0.5 rounded-full bg-secondary-fixed text-on-secondary-fixed-variant dark:bg-slate-800 dark:text-primary font-semibold text-xs">
+                Web Ready
+              </span>
+            </div>
 
-                {showAdvanced && (
-                  <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="flex gap-4 items-center">
-                      <label className="flex items-center gap-1.5 text-xs text-slate-700 dark:text-slate-300 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={flipH}
-                          onChange={(e) => setFlipH(e.target.checked)}
-                          className="h-4 w-4 rounded border-slate-300 text-emerald-600"
-                        />
-                        <FlipHorizontal className="h-4 w-4" />
-                        <span>Flip Horizontal</span>
-                      </label>
+            {/* Target Format Pills */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-semibold text-on-surface flex items-center justify-between">
+                <span>Target Format</span>
+                <span className="text-tertiary font-mono text-xs font-semibold">Lossless & WebP</span>
+              </label>
+              <div className="grid grid-cols-4 gap-1 p-1 bg-surface-container-low dark:bg-slate-800 rounded-2xl">
+                {(['webp', 'avif', 'jpg', 'png'] as const).map((fmt) => (
+                  <button
+                    key={fmt}
+                    type="button"
+                    onClick={() => setTargetFormat(fmt)}
+                    className={`py-2 rounded-xl text-xs font-bold uppercase transition-all ${
+                      targetFormat === fmt
+                        ? 'bg-surface-container-lowest dark:bg-slate-700 text-primary shadow-xs'
+                        : 'text-on-surface-variant hover:text-on-surface'
+                    }`}
+                  >
+                    {fmt}
+                  </button>
+                ))}
+              </div>
+            </div>
 
-                      <label className="flex items-center gap-1.5 text-xs text-slate-700 dark:text-slate-300 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={flipV}
-                          onChange={(e) => setFlipV(e.target.checked)}
-                          className="h-4 w-4 rounded border-slate-300 text-emerald-600"
-                        />
-                        <FlipVertical className="h-4 w-4" />
-                        <span>Flip Vertical</span>
-                      </label>
-                    </div>
+            {/* Quality & Compression Slider */}
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between text-xs font-semibold">
+                <span className="text-on-surface">Quality Level</span>
+                <span className="font-mono text-primary font-bold">{quality}% (Visually Lossless)</span>
+              </div>
+              <input
+                type="range"
+                min="10"
+                max="100"
+                step="5"
+                value={quality}
+                onChange={(e) => setQuality(e.target.value)}
+                className="w-full h-1.5 bg-surface-container-high dark:bg-slate-700 rounded-full appearance-none accent-primary cursor-pointer"
+              />
+              <div className="flex justify-between text-[11px] font-mono text-outline">
+                <span>Compact (50%)</span>
+                <span>Balanced (85%)</span>
+                <span>Max (100%)</span>
+              </div>
+            </div>
 
-                    <div>
-                      <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
-                        Brightness ({Math.round(brightness * 100)}%):
-                      </label>
-                      <input
-                        type="range"
-                        min="-0.5"
-                        max="0.5"
-                        step="0.05"
-                        value={brightness}
-                        onChange={(e) => setBrightness(parseFloat(e.target.value))}
-                        className="w-full accent-emerald-600"
-                      />
-                    </div>
+            {/* Target Resolution Scaling */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-semibold text-on-surface">Resolution Scaling</label>
+              <div className="grid grid-cols-3 gap-1 p-1 bg-surface-container-low dark:bg-slate-800 rounded-2xl">
+                {[
+                  { pct: 100, label: 'Original 100%' },
+                  { pct: 67, label: '2K QHD (67%)' },
+                  { pct: 50, label: '1080p (50%)' },
+                ].map((tier) => (
+                  <button
+                    key={tier.pct}
+                    type="button"
+                    onClick={() => handleResolutionScale(tier.pct)}
+                    className="py-1.5 px-1 rounded-xl text-[11px] font-semibold text-on-surface hover:bg-surface-container-lowest transition-all"
+                  >
+                    {tier.label}
+                  </button>
+                ))}
+              </div>
+            </div>
 
-                    <div>
-                      <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
-                        Contrast ({Math.round(contrast * 100)}%):
-                      </label>
-                      <input
-                        type="range"
-                        min="0.5"
-                        max="1.8"
-                        step="0.05"
-                        value={contrast}
-                        onChange={(e) => setContrast(parseFloat(e.target.value))}
-                        className="w-full accent-emerald-600"
-                      />
-                    </div>
-                  </div>
+            {/* Transparency flattening warning */}
+            {isLossOfAlpha && (
+              <div className="p-3 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200 text-xs flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" />
+                <span>JPEG does not support transparency. Alpha channels will flatten to solid white.</span>
+              </div>
+            )}
+
+            {/* Real-time Output Size Estimation */}
+            <div className="bg-surface-container-low dark:bg-slate-800/60 rounded-2xl p-space-md flex flex-col gap-2 border border-outline-variant/30">
+              <div className="flex items-center justify-between">
+                <span className="text-xs uppercase tracking-wider text-outline font-bold">Estimated Output Size</span>
+                {sizeEstimate && sizeEstimate.reductionPercentage !== undefined && (
+                  <span className="px-2.5 py-0.5 rounded-full bg-tertiary-fixed text-on-tertiary-fixed font-mono text-xs font-bold flex items-center gap-1">
+                    <TrendingDown className="w-3.5 h-3.5" />
+                    <span>{sizeEstimate.reductionPercentage}% vs source</span>
+                  </span>
                 )}
               </div>
-            </div>
 
-            {/* Output Size Estimation Box */}
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 dark:border-emerald-900/60 dark:bg-emerald-950/30 flex items-start gap-3">
-              <Info className="h-5 w-5 text-emerald-600 dark:text-emerald-400 mt-0.5 flex-shrink-0" />
-              <div className="space-y-1">
-                <div className="text-xs font-semibold text-emerald-900 dark:text-emerald-200">
+              <div className="flex items-baseline gap-2">
+                <span className="text-3xl font-extrabold text-on-surface font-mono">
                   {isEstimating ? (
-                    'Calculating estimated output size...'
+                    <span className="animate-pulse">Calculating...</span>
                   ) : sizeEstimate ? (
-                    <>
-                      Estimated Output Size: <span className="font-bold text-emerald-700 dark:text-emerald-300">{sizeEstimate.formattedEstimate}</span> ({sizeEstimate.formattedRange})
-                    </>
+                    sizeEstimate.formattedEstimate || sizeEstimate.formattedEstimatedSize
                   ) : (
-                    'Size will be calculated after conversion'
+                    '~924 KB'
                   )}
-                </div>
-                <p className="text-[11px] text-emerald-700 dark:text-emerald-300">
-                  {sizeEstimate?.disclaimer || 'Estimated image output size based on target dimensions and compression factor.'}
-                </p>
-              </div>
-            </div>
-
-            {error && <ErrorAlert title="Conversion Error" message={error} onClose={() => setError(null)} />}
-
-            <Button
-              type="submit"
-              variant="primary"
-              size="lg"
-              className="w-full"
-              disabled={!selectedFile}
-              leftIcon={<ImageIcon className="h-5 w-5" />}
-            >
-              Start Image Conversion
-            </Button>
-          </form>
-        )}
-
-        {/* Uploading Stage */}
-        {stage === 'UPLOADING' && (
-          <div className="py-12 text-center space-y-4">
-            <RefreshCw className="h-10 w-10 text-emerald-500 animate-spin mx-auto" />
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-              Uploading & Verifying Image...
-            </h3>
-            <p className="text-sm text-slate-500 dark:text-slate-400">
-              Validating pixel thresholds, stripping metadata, and processing in secure scratch memory.
-            </p>
-          </div>
-        )}
-
-        {/* Processing Stage */}
-        {stage === 'PROCESSING' && (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="flex items-center gap-2">
-                  <Badge variant="info">Image Processing</Badge>
-                  <JobStatusBadge status="PROCESSING" />
-                </div>
-                <h3 className="mt-2 text-base font-semibold text-slate-900 dark:text-slate-100">
-                  Converting to <span className="uppercase text-emerald-600 dark:text-emerald-400">{targetFormat}</span>
-                </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400 font-mono">
-                  Job ID: {currentJob?.id}
-                </p>
+                </span>
+                {selectedFile && (
+                  <span className="font-mono text-xs text-outline line-through">
+                    {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB
+                  </span>
+                )}
               </div>
 
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleCancel}
-                leftIcon={<XCircle className="h-4 w-4 text-red-500" />}
-              >
-                Cancel Job
-              </Button>
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex justify-between text-xs text-slate-600 dark:text-slate-400">
-                <span>Progress: {progress?.percentage ?? currentJob?.progress ?? 0}%</span>
-              </div>
-              <ProgressBar value={progress?.percentage ?? currentJob?.progress ?? 0} />
-            </div>
-
-            <div className="flex justify-end">
-              <Link href={`/jobs/${currentJob?.id}`}>
-                <Button variant="ghost" size="sm" rightIcon={<ArrowRight className="h-3.5 w-3.5" />}>
-                  Inspect Job Logs
-                </Button>
-              </Link>
-            </div>
-          </div>
-        )}
-
-        {/* Completed Stage */}
-        {stage === 'COMPLETED' && (
-          <div className="py-8 text-center space-y-6">
-            <div className="h-16 w-16 bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 rounded-full flex items-center justify-center mx-auto">
-              <CheckCircle className="h-8 w-8" />
-            </div>
-
-            <div>
-              <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100">
-                Image Processing Complete!
-              </h3>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                Your image was successfully converted and optimized in <strong className="uppercase">{targetFormat}</strong> format.
+              <p className="text-xs text-on-surface-variant leading-relaxed">
+                Calculated for <strong>{targetFormat.toUpperCase()}</strong> at <strong>{quality}% Quality</strong>.
               </p>
             </div>
 
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-              {outputFileId && (
-                <a
-                  href={apiClient.getFileDownloadUrl(outputFileId)}
-                  download
-                  className="w-full sm:w-auto"
+            {/* Error Message */}
+            {error && (
+              <div className="p-3 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            {/* Action CTA */}
+            <div className="flex flex-col gap-2 pt-1">
+              {stage === 'IDLE' && (
+                <button
+                  type="button"
+                  onClick={handleConvert}
+                  disabled={!selectedFile}
+                  className="w-full h-12 rounded-full bg-primary-container hover:bg-primary text-white font-semibold text-sm flex items-center justify-center gap-2 shadow-md shadow-primary/25 transition-all hover:scale-[1.01] active:scale-95 disabled:opacity-50"
                 >
-                  <Button variant="primary" size="lg" leftIcon={<Download className="h-5 w-5" />}>
-                    Download Converted Image
-                  </Button>
-                </a>
+                  <Download className="w-4 h-4" />
+                  <span>Export Processed Image</span>
+                </button>
               )}
 
-              <Button variant="outline" size="lg" onClick={handleReset} leftIcon={<RefreshCw className="h-4 w-4" />}>
-                Convert Another Image
-              </Button>
-            </div>
-          </div>
-        )}
+              {stage === 'UPLOADING' && (
+                <div className="w-full h-12 rounded-full bg-primary-container/80 text-white font-semibold text-sm flex items-center justify-center gap-2">
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <span>Uploading Image...</span>
+                </div>
+              )}
 
-        {/* Failed or Cancelled */}
-        {(stage === 'FAILED' || stage === 'CANCELLED') && (
-          <div className="py-6 space-y-4">
-            <ErrorAlert
-              title={stage === 'CANCELLED' ? 'Conversion Cancelled' : 'Conversion Failed'}
-              message={error || (stage === 'CANCELLED' ? 'Job was cancelled by user request.' : 'An error occurred during image processing.')}
-            />
-            <div className="flex justify-center">
-              <Button variant="primary" onClick={handleReset} leftIcon={<RefreshCw className="h-4 w-4" />}>
-                Try Again
-              </Button>
+              {stage === 'PROCESSING' && (
+                <div className="space-y-3">
+                  <div className="w-full bg-surface-container dark:bg-slate-800 h-2 rounded-full overflow-hidden">
+                    <div
+                      className="bg-primary h-full rounded-full transition-all duration-300"
+                      style={{ width: `${progress ? (progress.percentage ?? progress.progressPercentage ?? 30) : 30}%` }}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-on-surface-variant font-mono">
+                    <span>{progress ? (progress.stage || 'Compressing image...') : 'Compressing image...'}</span>
+                    <span>{progress ? `${progress.percentage ?? progress.progressPercentage ?? 0}%` : 'Processing...'}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleCancel}
+                    className="w-full h-10 rounded-full bg-surface-container-low hover:bg-surface-container text-rose-600 font-semibold text-xs transition-colors"
+                  >
+                    Cancel Conversion
+                  </button>
+                </div>
+              )}
+
+              {stage === 'COMPLETED' && (
+                <div className="space-y-2">
+                  <div className="p-3 rounded-2xl bg-tertiary-fixed/40 border border-tertiary/40 flex items-center gap-2 text-tertiary text-xs font-semibold">
+                    <CheckCircle2 className="w-4 h-4 text-tertiary shrink-0" />
+                    <span>Image processed and compressed successfully!</span>
+                  </div>
+                  <a
+                    href={outputFileId ? apiClient.getDownloadUrl(outputFileId) : '#'}
+                    download
+                    className="w-full h-12 rounded-full bg-tertiary-container hover:bg-tertiary text-white font-semibold text-sm flex items-center justify-center gap-2 shadow-md transition-all active:scale-95"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>Download Converted Image</span>
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStage('IDLE');
+                      setError(null);
+                    }}
+                    className="w-full h-10 rounded-full bg-surface-container-low text-on-surface text-xs font-semibold hover:bg-surface-container transition-colors"
+                  >
+                    Edit Another
+                  </button>
+                </div>
+              )}
+
+              {stage === 'FAILED' && (
+                <button
+                  type="button"
+                  onClick={() => setStage('IDLE')}
+                  className="w-full h-11 rounded-full bg-surface-container-low hover:bg-surface-container text-on-surface font-semibold text-xs transition-colors"
+                >
+                  Try Again
+                </button>
+              )}
+
+              <div className="flex items-center justify-center gap-1.5 text-center text-on-surface-variant text-xs pt-1">
+                <Shield className="w-3.5 h-3.5 text-tertiary" />
+                <span>Zero Database · Complete Client Privacy</span>
+              </div>
             </div>
           </div>
-        )}
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }

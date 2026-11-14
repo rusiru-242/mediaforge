@@ -1,7 +1,22 @@
 import type { Metadata } from 'next';
+import { Plus_Jakarta_Sans, Inter } from 'next/font/google';
 import '@/styles/globals.css';
 import { Navbar } from '@/components/layout/Navbar';
 import { Footer } from '@/components/layout/Footer';
+
+const plusJakartaSans = Plus_Jakarta_Sans({
+  subsets: ['latin'],
+  variable: '--font-sans',
+  display: 'swap',
+  weight: ['400', '500', '600', '700', '800'],
+});
+
+const inter = Inter({
+  subsets: ['latin'],
+  variable: '--font-body',
+  display: 'swap',
+  weight: ['400', '500', '600', '700'],
+});
 
 export const metadata: Metadata = {
   title: 'MediaForge — Universal Media Downloader & Transcoder',
@@ -32,8 +47,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" className={`${plusJakartaSans.variable} ${inter.variable}`} suppressHydrationWarning>
       <head>
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap"
+        />
         <script
           dangerouslySetInnerHTML={{
             __html: `
@@ -52,7 +71,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className="flex min-h-screen flex-col bg-slate-50 font-sans text-slate-900 antialiased transition-colors duration-200 dark:bg-slate-950 dark:text-slate-100">
+      <body className="flex min-h-screen flex-col bg-surface font-sans text-on-surface antialiased transition-colors duration-200 dark:bg-slate-950 dark:text-slate-100">
         <Navbar />
         <main className="flex-1">{children}</main>
         <Footer />
@@ -60,4 +79,3 @@ export default function RootLayout({
     </html>
   );
 }
-
