@@ -8,7 +8,6 @@ import {
   Youtube,
   Facebook,
   Instagram,
-  Sparkles,
   RefreshCw,
   Scissors,
   CheckCircle2,
@@ -22,6 +21,7 @@ import {
   Film,
   Volume2,
 } from 'lucide-react';
+import { useNavigationGuard } from '@/hooks/useNavigationGuard';
 import { apiClient } from '@/services/apiClient';
 import { MediaMetadataResponse, JobResponse, SizeEstimationResponse } from '@/types/api';
 
@@ -98,7 +98,7 @@ const PLATFORMS: PlatformOption[] = [
     name: 'Direct Media URL',
     placeholder: 'Paste direct .mp4, .webm, .m3u8, or audio link...',
     guidance: 'Direct media stream links (.mp4, .webm, .m3u8, .mp3, .wav).',
-    icon: (props) => <Link2 {...props} className={props.className || 'w-4 h-4 text-purple-600'} />,
+    icon: (props) => <Link2 {...props} className={props.className || 'w-4 h-4 text-[rgb(var(--download-text))]'} />,
     regex: /(\.mp4|\.webm|\.m3u8|\.mp3|\.wav|\.m4a|\.mov|\.mkv)/i,
   },
 ];
@@ -110,7 +110,12 @@ const AUDIO_BITRATES = [
   { value: '128', label: '128 kbps', quality: 'Compact' },
 ];
 
-const STANDARD_RESOLUTIONS = ['4K', '1440p', '1080p', '720p', '480p', '360p'];
+function videoQualities(data: MediaMetadataResponse): string[] {
+  const qualities = (data.availableQualities || []).filter(q => /^\d{2,4}p\b/i.test(q) && !/^(180|90|45|27)p\b/.test(q));
+  if (qualities.length) return qualities;
+  const resolution = data.resolution?.match(/^(?:\d+x)?(\d{2,4})(?:p)?$/i);
+  return resolution ? [resolution[1] + 'p'] : ['source'];
+}
 
 function formatDuration(seconds?: number): string {
   if (!seconds || seconds <= 0) return '';
@@ -144,6 +149,7 @@ function detectPlatformFromUrl(inputUrl: string, fallbackPlatform = 'direct'): s
 
 function DownloaderContent() {
   const searchParams = useSearchParams();
+  const preferredOutputFormat = searchParams.get('format')?.split('-')[0].toLowerCase();
 
   // Platform & URL State
   const [selectedPlatform, setSelectedPlatform] = useState<string>('youtube');
@@ -161,19 +167,53 @@ function DownloaderContent() {
   const [sizeEstimate, setSizeEstimate] = useState<SizeEstimationResponse | null>(null);
   const [isEstimating, setIsEstimating] = useState<boolean>(false);
 
-  // Optional Editing State (Collapsed by default)
-  const [showEditSection, setShowEditSection] = useState(false);
-  const [trimStart, setTrimStart] = useState<number>(0);
-  const [trimEnd, setTrimEnd] = useState<number>(0);
-  const [editAspectRatio, setEditAspectRatio] = useState<string>('original');
-  const [editQualityPreset, setEditQualityPreset] = useState<string>('balanced');
-  const [editVolume, setEditVolume] = useState<number>(1.0);
 
   // Job Submission and Polling
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeJob, setActiveJob] = useState<JobResponse | null>(null);
   const [jobError, setJobError] = useState<string | null>(null);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [draftReady, setDraftReady] = useState(false);
+
+  // Keep analyzed media and selection settings across route changes in this tab.
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem('mediaforge.downloader.draft.v1');
+      if (saved) {
+        const draft = JSON.parse(saved);
+        if (typeof draft.url === 'string') {
+          setUrl(draft.url);
+          if (PLATFORMS.some(p => p.id === draft.selectedPlatform)) setSelectedPlatform(draft.selectedPlatform);
+          const info = draft.metadata;
+          if (info && typeof info.title === 'string' && typeof info.mediaType === 'string'
+              && Array.isArray(info.availableFormats) && Array.isArray(info.availableQualities)) setMetadata(info);
+          if (['mp4', 'webm', 'avi', 'mkv', 'mov', 'flv', 'mp3', 'm4a', 'wav'].includes(draft.selectedFormat)) setSelectedFormat(draft.selectedFormat);
+          if (typeof draft.selectedQuality === 'string') setSelectedQuality(draft.selectedQuality);
+          if (AUDIO_BITRATES.some(b => b.value === draft.selectedAudioBitrate)) setSelectedAudioBitrate(draft.selectedAudioBitrate);
+        }
+      }
+    } catch {
+      // A corrupt draft or unavailable browser storage must not block the downloader.
+    } finally {
+      setDraftReady(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!draftReady || isProbing) return;
+    try {
+      if (!url.trim()) {
+        sessionStorage.removeItem('mediaforge.downloader.draft.v1');
+      } else {
+        sessionStorage.setItem('mediaforge.downloader.draft.v1', JSON.stringify({
+          url, selectedPlatform, metadata, selectedFormat, selectedQuality, selectedAudioBitrate,
+        }));
+      }
+    } catch {
+      // Continue normally if storage is disabled or full.
+    }
+  }, [draftReady, isProbing, url, selectedPlatform, metadata, selectedFormat, selectedQuality,
+    selectedAudioBitrate]);
 
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -243,29 +283,12 @@ function DownloaderContent() {
         const data = await apiClient.getMediaMetadata({ url: targetUrl.trim() });
         setMetadata(data);
 
-        // Format selection
-        if (data.availableFormats && data.availableFormats.length > 0) {
-          const nativeFmt = data.availableFormats.find((f) => f.nativeStream && !f.requiresConversion);
-          setSelectedFormat(nativeFmt ? nativeFmt.format.toLowerCase() : data.availableFormats[0].format.toLowerCase());
-        } else if (data.containerFormat) {
-          setSelectedFormat(data.containerFormat.toLowerCase());
-        } else {
-          setSelectedFormat('mp4');
-        }
-
-        // Quality selection
-        if (data.availableQualities && data.availableQualities.length > 0) {
-          setSelectedQuality(data.availableQualities[0]);
-        } else if (data.resolution) {
-          setSelectedQuality(data.resolution);
-        } else {
-          setSelectedQuality('1080p');
-        }
-
-        if (data.duration && data.duration > 0) {
-          setTrimStart(0);
-          setTrimEnd(Math.round(data.duration * 10) / 10);
-        }
+        // A source container (often M4A) is not the requested video output.
+        const audioSource = data.mediaType.toUpperCase() === 'AUDIO';
+        const requested = preferredOutputFormat;
+        const allowed = audioSource ? ['mp3', 'm4a', 'wav'] : ['mp4', 'webm', 'avi', 'mkv', 'mov', 'flv', 'mp3', 'm4a', 'wav'];
+        setSelectedFormat(requested && allowed.includes(requested) ? requested : audioSource ? 'm4a' : 'mp4');
+        setSelectedQuality(videoQualities(data)[0]);
       } catch (err: any) {
         setMetadata(null);
         setProbeError(err.message || 'Unable to inspect media. Ensure the URL is public and supported.');
@@ -273,7 +296,7 @@ function DownloaderContent() {
         setIsProbing(false);
       }
     },
-    [stopPolling]
+    [stopPolling, preferredOutputFormat]
   );
 
   const handlePaste = async () => {
@@ -290,6 +313,7 @@ function DownloaderContent() {
 
   // Check URL query parameters on mount or change
   useEffect(() => {
+    if (!draftReady) return;
     const queryUrl = searchParams.get('url');
     const queryFormat = searchParams.get('format');
     if (queryUrl && queryUrl !== url) {
@@ -301,7 +325,7 @@ function DownloaderContent() {
       }
       triggerProbe(queryUrl);
     }
-  }, [searchParams, triggerProbe, url]);
+  }, [draftReady, searchParams, triggerProbe, url]);
 
   // Debounced Size Estimation
   useEffect(() => {
@@ -313,18 +337,16 @@ function DownloaderContent() {
     const timer = setTimeout(async () => {
       try {
         setIsEstimating(true);
-        const isMp3 = selectedFormat.toLowerCase() === 'mp3';
-        const hasTrim = showEditSection && trimEnd > trimStart && (trimStart > 0 || trimEnd < (metadata.duration || 0));
+        const isAudioDownload = ['mp3', 'm4a', 'wav'].includes(selectedFormat.toLowerCase());
 
         const est = await apiClient.estimateOutputSize({
-          mediaType: isMp3 ? 'audio' : 'video',
+          mediaType: isAudioDownload ? 'audio' : 'video',
           outputFormat: selectedFormat,
-          targetResolution: isMp3 ? undefined : selectedQuality,
-          audioBitrate: isMp3 ? parseInt(selectedAudioBitrate, 10) : undefined,
+          targetResolution: isAudioDownload || selectedQuality === 'source' ? undefined : selectedQuality.match(/^\d+p/i)?.[0],
+          audioBitrate: selectedFormat === 'mp3' ? parseInt(selectedAudioBitrate, 10) : undefined,
           sourceDuration: metadata.duration || 60,
           sourceFileSize: metadata.fileSize,
-          startTime: hasTrim ? trimStart : undefined,
-          endTime: hasTrim ? trimEnd : undefined,
+
         });
         setSizeEstimate(est);
       } catch {
@@ -335,7 +357,7 @@ function DownloaderContent() {
     }, 250);
 
     return () => clearTimeout(timer);
-  }, [metadata, selectedFormat, selectedQuality, selectedAudioBitrate, showEditSection, trimStart, trimEnd]);
+  }, [metadata, selectedFormat, selectedQuality, selectedAudioBitrate]);
 
   // Start polling background download job
   const startJobPolling = useCallback(
@@ -378,22 +400,21 @@ function DownloaderContent() {
     setJobError(null);
 
     try {
-      const isMp3 = selectedFormat === 'mp3';
-      const hasTrim = showEditSection && trimEnd > trimStart && (trimStart > 0 || trimEnd < (metadata.duration || 0));
+      const isAudioDownload = ['mp3', 'm4a', 'wav'].includes(selectedFormat);
 
       const job = await apiClient.createDownloadJob({
         url: url.trim(),
         selectedFormat,
-        selectedQuality: isMp3 ? `${selectedAudioBitrate}k` : selectedQuality,
+        mediaType: isAudioDownload ? 'audio' : 'video',
+        selectedQuality: selectedFormat === 'wav' ? 'lossless' : selectedFormat === 'm4a' ? 'source' : isAudioDownload ? `${selectedAudioBitrate}k` : selectedQuality,
         targetFormat: selectedFormat,
-        targetQuality: isMp3 ? `${selectedAudioBitrate}k` : selectedQuality,
-        targetResolution: isMp3 ? undefined : selectedQuality,
-        audioBitrate: isMp3 ? parseInt(selectedAudioBitrate, 10) : undefined,
-        startTime: hasTrim && trimStart > 0 ? trimStart : undefined,
-        endTime: hasTrim && trimEnd > 0 ? trimEnd : undefined,
-        aspectRatio: showEditSection && editAspectRatio !== 'original' ? editAspectRatio : undefined,
-        qualityPreset: showEditSection ? editQualityPreset : undefined,
-        volume: showEditSection && editVolume !== 1.0 ? editVolume : undefined,
+        targetQuality: selectedFormat === 'wav' ? undefined : selectedFormat === 'm4a' ? 'source' : isAudioDownload ? `${selectedAudioBitrate}k` : selectedQuality,
+        targetResolution: isAudioDownload || selectedQuality === 'source' ? undefined : selectedQuality.match(/^\d+p/i)?.[0],
+        audioBitrate: selectedFormat === 'mp3' ? parseInt(selectedAudioBitrate, 10) : undefined,
+
+
+
+
       });
 
       setActiveJob(job);
@@ -421,38 +442,23 @@ function DownloaderContent() {
     }
   };
 
-  const currentPlatform = PLATFORMS.find((p) => p.id === selectedPlatform) || PLATFORMS[0];
+  const detectedPlatform = React.useMemo(() => {
+    try {
+      const parsed = new URL(url.trim());
+      return ['http:', 'https:'].includes(parsed.protocol) ? detectPlatformFromUrl(parsed.href) : null;
+    } catch { return null; }
+  }, [url]);
+  const effectivePlatform = detectedPlatform || selectedPlatform;
+  const currentPlatform = PLATFORMS.find((p) => p.id === effectivePlatform) || PLATFORMS[0];
   const isJobRunning = Boolean(activeJob && (activeJob.status === 'QUEUED' || activeJob.status === 'PROCESSING'));
+  useNavigationGuard(isProbing || isSubmitting || isJobRunning);
   const isJobCompleted = Boolean(activeJob && activeJob.status === 'COMPLETED');
-  const isMp3 = selectedFormat.toLowerCase() === 'mp3';
+  const isAudioDownload = ['mp3', 'm4a', 'wav'].includes(selectedFormat.toLowerCase());
 
-  // Format options: MP4, MP3, WebM + any detected format
-  const availableFormatKeys = React.useMemo(() => {
-    const list = ['mp4', 'mp3', 'webm'];
-    if (metadata?.availableFormats) {
-      metadata.availableFormats.forEach((f) => {
-        const fmt = f.format.toLowerCase();
-        if (!list.includes(fmt)) {
-          list.push(fmt);
-        }
-      });
-    }
-    return list;
-  }, [metadata]);
+  const videoFormats = metadata?.mediaType.toUpperCase() === 'AUDIO' ? [] : ['mp4', 'webm', 'avi', 'mkv', 'mov', 'flv'];
+  const audioFormats = ['mp3', 'm4a', 'wav'];
 
-  // Video resolution list
-  const availableResolutions = React.useMemo(() => {
-    if (metadata?.availableQualities && metadata.availableQualities.length > 0) {
-      return metadata.availableQualities;
-    }
-    if (metadata?.resolution) {
-      const norm = metadata.resolution.includes('p') ? metadata.resolution : `${metadata.resolution}p`;
-      if (!STANDARD_RESOLUTIONS.includes(norm)) {
-        return [norm, ...STANDARD_RESOLUTIONS];
-      }
-    }
-    return STANDARD_RESOLUTIONS;
-  }, [metadata]);
+  const availableResolutions = React.useMemo(() => metadata ? videoQualities(metadata) : ['source'], [metadata]);
 
   // Formatted estimation string
   const formattedEstimate = React.useMemo(() => {
@@ -470,14 +476,14 @@ function DownloaderContent() {
   }, [isEstimating, sizeEstimate, metadata]);
 
   return (
-    <div className="flex flex-col w-full min-h-[calc(100vh-80px)] bg-slate-50 dark:bg-[#0B0E14] text-slate-900 dark:text-slate-100 py-8 px-4 sm:px-6 lg:px-8 transition-colors">
+    <div data-platform={currentPlatform.id} className="downloader-page flex flex-col w-full min-h-[calc(100vh-80px)] bg-slate-50 dark:bg-[#0B0E14] text-slate-900 dark:text-slate-100 pt-16 sm:pt-20 pb-8 px-4 sm:px-6 lg:px-8 transition-colors">
       <div className="w-full max-w-4xl mx-auto flex flex-col gap-6">
         {/* 1. Header */}
         <div className="text-center space-y-2">
           <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white">
             Online Media Downloader
           </h1>
-          <p className="text-sm sm:text-base text-slate-600 dark:text-slate-400 max-w-2xl mx-auto">
+          <p className="text-sm sm:text-base text-slate-600 dark:text-slate-300 max-w-2xl mx-auto">
             Download high-quality videos and extract MP3 audio directly from supported platforms or direct media links.
           </p>
         </div>
@@ -487,19 +493,23 @@ function DownloaderContent() {
           <div className="flex items-center gap-1.5 p-1.5 bg-white dark:bg-[#111622] rounded-full border border-slate-200 dark:border-slate-800 shadow-xs overflow-x-auto max-w-full">
             {PLATFORMS.map((platform) => {
               const Icon = platform.icon;
-              const isActive = selectedPlatform === platform.id;
+              const isActive = effectivePlatform === platform.id;
               return (
                 <button
                   key={platform.id}
                   type="button"
+                  disabled={Boolean(detectedPlatform && !isActive)}
+                  aria-pressed={isActive}
+                  title={detectedPlatform && !isActive ? 'Platform detected from URL. Clear or replace the URL to change it.' : platform.name}
                   onClick={() => {
+                    if (detectedPlatform) return;
                     setSelectedPlatform(platform.id);
                     setProbeError(null);
                   }}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition-all ${
+                  className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
                     isActive
-                      ? 'bg-purple-600 text-white shadow-xs'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/80'
+                      ? 'bg-[rgb(var(--download-accent))] text-white shadow-xs'
+                      : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/80'
                   }`}
                 >
                   <Icon className="w-4 h-4 shrink-0" />
@@ -521,7 +531,7 @@ function DownloaderContent() {
                 onChange={(e) => handleUrlChange(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && triggerProbe(url)}
                 placeholder={currentPlatform.placeholder}
-                className="w-full h-14 pl-5 pr-36 sm:pr-48 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-sm font-medium placeholder-slate-400 focus:outline-none focus:border-purple-600 focus:ring-2 focus:ring-purple-600/20 transition-all"
+                className="w-full h-14 pl-5 pr-36 sm:pr-48 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-sm font-medium placeholder-slate-400 focus:outline-none focus:border-[rgb(var(--download-accent))] focus:ring-2 focus:ring-[rgb(var(--download-accent)/0.2)] transition-all"
               />
               <div className="absolute right-2 flex items-center gap-1.5">
                 {url && (
@@ -547,16 +557,16 @@ function DownloaderContent() {
                   type="button"
                   onClick={() => triggerProbe(url)}
                   disabled={isProbing || !url.trim()}
-                  className="h-10 px-4 sm:px-5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-semibold text-xs sm:text-sm flex items-center gap-1.5 shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="h-10 px-4 sm:px-5 rounded-xl bg-[rgb(var(--download-accent))] hover:bg-[rgb(var(--download-hover))] text-white font-semibold text-xs sm:text-sm flex items-center gap-1.5 shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {isProbing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                  {isProbing && <RefreshCw className="w-4 h-4 animate-spin" />}
                   <span>{isProbing ? 'Analyzing...' : 'Analyze'}</span>
                 </button>
               </div>
             </div>
 
             {/* Platform Guidance Note */}
-            <p className="text-xs text-slate-500 dark:text-slate-400 px-1">
+            <p className="text-xs text-slate-500 dark:text-slate-300 px-1">
               {currentPlatform.guidance} Availability depends on host accessibility.
             </p>
           </div>
@@ -607,7 +617,7 @@ function DownloaderContent() {
                       <span>{metadata.platform || currentPlatform.name}</span>
                     </span>
                     {metadata.duration && metadata.duration > 0 && (
-                      <span className="text-xs text-slate-500 dark:text-slate-400">
+                      <span className="text-xs text-slate-500 dark:text-slate-300">
                         Duration: {formatDuration(metadata.duration)}
                       </span>
                     )}
@@ -639,18 +649,17 @@ function DownloaderContent() {
                 <h3 className="text-sm font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200">
                   Choose Download Quality
                 </h3>
-                <span className="text-xs text-slate-500 dark:text-slate-400">Select format & quality</span>
+                <span className="text-xs text-slate-500 dark:text-slate-300">Select format & quality</span>
               </div>
 
               {/* Side-by-Side Selectors: LEFT (Format) / RIGHT (Resolution or Bitrate) */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5 items-start">
                 {/* LEFT: Format */}
                 <div className="flex flex-col gap-2">
-                  <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Format</label>
+                  <label className="text-xs font-bold text-slate-700 dark:text-slate-200">Video formats</label>
                   <div className="grid grid-cols-3 gap-2">
-                    {availableFormatKeys.map((fmt) => {
+                    {videoFormats.map((fmt) => {
                       const isFmtActive = selectedFormat.toLowerCase() === fmt;
-                      const isAudio = fmt === 'mp3';
                       return (
                         <button
                           key={fmt}
@@ -658,34 +667,56 @@ function DownloaderContent() {
                           onClick={() => setSelectedFormat(fmt)}
                           className={`py-3 px-3 rounded-xl text-center flex flex-col items-center justify-center gap-1 border transition-all ${
                             isFmtActive
-                              ? 'bg-purple-600 text-white border-purple-600 shadow-xs'
+                              ? 'bg-[rgb(var(--download-accent))] text-white border-[rgb(var(--download-accent))] shadow-xs'
                               : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-750'
                           }`}
                         >
                           <div className="flex items-center gap-1">
-                            {isAudio ? <Music className="w-3.5 h-3.5" /> : <Film className="w-3.5 h-3.5" />}
+                            <Film className="w-3.5 h-3.5" />
                             <span className="text-xs font-extrabold uppercase">{fmt}</span>
                           </div>
                           <span
                             className={`text-[10px] font-medium ${
-                              isFmtActive ? 'text-purple-200' : 'text-slate-400 dark:text-slate-500'
+                              isFmtActive ? 'text-white/80' : 'text-slate-400 dark:text-slate-300'
                             }`}
                           >
-                            {isAudio ? 'Audio Only' : 'Video'}
+                            Video
                           </span>
                         </button>
                       );
                     })}
+                  </div>
+                  <h3 className="mt-3 text-xs font-bold text-slate-700 dark:text-slate-100">Download Audio</h3>
+                  <div className="grid grid-cols-2 gap-2" aria-label="Audio formats">
+                    {audioFormats.map((fmt) => (
+                      <button key={fmt} type="button" aria-pressed={selectedFormat === fmt}
+                        onClick={() => setSelectedFormat(fmt)}
+                        className={`flex items-center justify-center gap-2 rounded-xl border px-3 py-3 text-xs font-bold uppercase transition-colors ${selectedFormat === fmt
+                          ? 'bg-[rgb(var(--download-accent))] border-[rgb(var(--download-accent))] text-white'
+                          : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-700'}`}>
+                        <Music className="w-3.5 h-3.5" />{fmt}
+                      </button>
+                    ))}
                   </div>
                 </div>
 
                 {/* RIGHT: Resolution or Audio Bitrate */}
                 <div className="flex flex-col gap-2">
                   <label className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                    {isMp3 ? 'Audio Quality (Bitrate)' : 'Video Resolution'}
+                    {selectedFormat === 'wav' || selectedFormat === 'm4a' ? 'Audio Quality' : isAudioDownload ? 'Audio Quality (Bitrate)' : 'Video Resolution'}
                   </label>
 
-                  {isMp3 ? (
+                  {selectedFormat === 'm4a' ? (
+                    <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-100 text-xs">
+                      <p className="font-bold">M4A audio only</p>
+                      <p className="mt-1 text-slate-600 dark:text-slate-300">Preserves source AAC audio when compatible, or converts to AAC.</p>
+                    </div>
+                  ) : selectedFormat === 'wav' ? (
+                    <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-100 text-xs">
+                      <p className="font-bold">Lossless WAV audio</p>
+                      <p className="mt-1 text-slate-600 dark:text-slate-300">Uncompressed PCM audio. Preserves source quality with a larger file size.</p>
+                    </div>
+                  ) : isAudioDownload ? (
                     /* Audio Bitrate Selector */
                     <div className="grid grid-cols-2 gap-2">
                       {AUDIO_BITRATES.map((item) => {
@@ -697,14 +728,14 @@ function DownloaderContent() {
                             onClick={() => setSelectedAudioBitrate(item.value)}
                             className={`p-2.5 rounded-xl text-left border transition-all ${
                               isBitrateActive
-                                ? 'bg-purple-600 text-white border-purple-600 shadow-xs'
+                                ? 'bg-[rgb(var(--download-accent))] text-white border-[rgb(var(--download-accent))] shadow-xs'
                                 : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-750'
                             }`}
                           >
                             <span className="text-xs font-bold block">{item.label}</span>
                             <span
                               className={`text-[10px] ${
-                                isBitrateActive ? 'text-purple-200' : 'text-slate-400 dark:text-slate-500'
+                                isBitrateActive ? 'text-white/80' : 'text-slate-400 dark:text-slate-300'
                               }`}
                             >
                               {item.quality}
@@ -728,14 +759,14 @@ function DownloaderContent() {
                             onClick={() => setSelectedQuality(qual)}
                             className={`p-2.5 rounded-xl text-left border transition-all ${
                               isQualActive
-                                ? 'bg-purple-600 text-white border-purple-600 shadow-xs'
+                                ? 'bg-[rgb(var(--download-accent))] text-white border-[rgb(var(--download-accent))] shadow-xs'
                                 : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-750'
                             }`}
                           >
-                            <span className="text-xs font-bold block">{qual}</span>
+                            <span className="text-xs font-bold block">{qual === 'source' ? 'Original source' : qual}</span>
                             <span
                               className={`text-[10px] ${
-                                isQualActive ? 'text-purple-200' : 'text-slate-400 dark:text-slate-500'
+                                isQualActive ? 'text-white/80' : 'text-slate-400 dark:text-slate-300'
                               }`}
                             >
                               {isNative ? 'Original' : 'Transcoded'}
@@ -750,15 +781,10 @@ function DownloaderContent() {
 
               {/* 6. Output Size Estimation (Directly under format and resolution) */}
               <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-t border-slate-200 dark:border-slate-800 text-xs">
-                <div className="flex items-center gap-2">
-                  <span className="font-semibold text-slate-600 dark:text-slate-400">Estimated file size:</span>
-                  <span className="font-mono font-bold text-purple-600 dark:text-purple-400 text-sm">
-                    {formattedEstimate}
-                  </span>
-                </div>
-                <div className="text-slate-500 dark:text-slate-400 text-[11px]">
+
+                <div className="text-slate-500 dark:text-slate-300 text-[11px]">
                   Format: <span className="font-semibold uppercase">{selectedFormat}</span> · Quality:{' '}
-                  <span className="font-semibold">{isMp3 ? `${selectedAudioBitrate} kbps` : selectedQuality}</span>
+                  <span className="font-semibold">{selectedFormat === 'wav' ? 'Lossless PCM' : selectedFormat === 'm4a' ? 'Source audio / AAC' : isAudioDownload ? `${selectedAudioBitrate} kbps` : selectedQuality}</span>
                 </div>
               </div>
             </div>
@@ -780,10 +806,10 @@ function DownloaderContent() {
                   type="button"
                   onClick={handleStartDownload}
                   disabled={isSubmitting || !metadata.directDownloadSupported}
-                  className="w-full py-4 rounded-2xl bg-purple-600 hover:bg-purple-700 active:scale-[0.99] text-white font-bold text-base shadow-md shadow-purple-600/20 flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full py-4 rounded-2xl bg-[rgb(var(--download-accent))] hover:bg-[rgb(var(--download-hover))] active:scale-[0.99] text-white font-bold text-base shadow-md shadow-[rgb(var(--download-accent)/0.2)] flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Download className="w-5 h-5" />
-                  <span>{isMp3 ? 'Download Audio' : 'Download Video'}</span>
+                  <span>{isAudioDownload ? 'Download Audio' : 'Download Video'}</span>
                 </button>
               )}
 
@@ -794,13 +820,13 @@ function DownloaderContent() {
                     <span className="text-slate-700 dark:text-slate-300">
                       {activeJob?.status === 'QUEUED' ? 'Queued in buffer...' : 'Downloading and packaging media...'}
                     </span>
-                    <span className="font-mono text-purple-600 dark:text-purple-400">
+                    <span className="font-mono text-[rgb(var(--download-text))] dark:text-[rgb(var(--download-light))]">
                       {activeJob?.progress ?? activeJob?.progressPercentage ?? 10}%
                     </span>
                   </div>
                   <div className="w-full bg-slate-200 dark:bg-slate-800 h-2.5 rounded-full overflow-hidden">
                     <div
-                      className="bg-purple-600 h-full rounded-full transition-all duration-300"
+                      className="bg-[rgb(var(--download-accent))] h-full rounded-full transition-all duration-300"
                       style={{ width: `${activeJob ? activeJob.progress ?? activeJob.progressPercentage ?? 15 : 15}%` }}
                     />
                   </div>
@@ -846,114 +872,7 @@ function DownloaderContent() {
             </div>
           )}
 
-          {/* 8. Optional "Edit Before Download" (Collapsed by default) */}
-          {metadata && metadata.directDownloadSupported && (
-            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
-              <button
-                type="button"
-                onClick={() => setShowEditSection(!showEditSection)}
-                className="w-full flex items-center justify-between p-4 bg-slate-50 hover:bg-slate-100 dark:bg-slate-900/60 dark:hover:bg-slate-900 text-slate-700 dark:text-slate-300 text-xs font-bold transition-colors"
-              >
-                <div className="flex items-center gap-2">
-                  <Scissors className="w-4 h-4 text-purple-600" />
-                  <span>Edit Before Download</span>
-                  <span className="px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-800 text-[10px] text-slate-500 font-normal">
-                    Optional
-                  </span>
-                </div>
-                {showEditSection ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-              </button>
 
-              {showEditSection && (
-                <div className="p-5 bg-white dark:bg-[#111622] space-y-4 border-t border-slate-200 dark:border-slate-800">
-                  {/* Trim Controls */}
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Trim Duration (Seconds)</label>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <span className="text-[11px] text-slate-500 block mb-1">Start Time (s)</span>
-                        <input
-                          type="number"
-                          min="0"
-                          step="1"
-                          value={trimStart}
-                          onChange={(e) => setTrimStart(Math.max(0, parseFloat(e.target.value) || 0))}
-                          className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-xs font-mono focus:outline-none focus:border-purple-600"
-                        />
-                      </div>
-                      <div>
-                        <span className="text-[11px] text-slate-500 block mb-1">End Time (s)</span>
-                        <input
-                          type="number"
-                          min={trimStart}
-                          max={metadata.duration || 9999}
-                          step="1"
-                          value={trimEnd || metadata.duration || 60}
-                          onChange={(e) => setTrimEnd(Math.max(trimStart + 1, parseFloat(e.target.value) || 0))}
-                          className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-xs font-mono focus:outline-none focus:border-purple-600"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Crop / Aspect Ratio (For video only) */}
-                  {!isMp3 && (
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Crop Aspect Ratio</label>
-                      <div className="flex flex-wrap gap-2">
-                        {['original', '16:9', '9:16', '1:1', '4:3'].map((ratio) => (
-                          <button
-                            key={ratio}
-                            type="button"
-                            onClick={() => setEditAspectRatio(ratio)}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
-                              editAspectRatio === ratio
-                                ? 'bg-purple-600 text-white border-purple-600 shadow-xs'
-                                : 'bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100'
-                            }`}
-                          >
-                            {ratio === 'original' ? 'Source Original' : ratio}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Quality Preset & Volume Tuning */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
-                    <div className="space-y-1">
-                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300">Processing Preset</label>
-                      <select
-                        value={editQualityPreset}
-                        onChange={(e) => setEditQualityPreset(e.target.value)}
-                        className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-xs focus:outline-none focus:border-purple-600"
-                      >
-                        <option value="fast">Fast (Stream Remux)</option>
-                        <option value="balanced">Balanced (High Quality)</option>
-                        <option value="high">Master Fidelity</option>
-                      </select>
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
-                        <Volume2 className="w-3.5 h-3.5" />
-                        <span>Volume Factor ({Math.round(editVolume * 100)}%)</span>
-                      </label>
-                      <input
-                        type="range"
-                        min="0.5"
-                        max="2.0"
-                        step="0.1"
-                        value={editVolume}
-                        onChange={(e) => setEditVolume(parseFloat(e.target.value))}
-                        className="w-full accent-purple-600 h-2 bg-slate-200 dark:bg-slate-700 rounded-lg cursor-pointer"
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
         </div>
       </div>
     </div>

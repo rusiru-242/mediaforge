@@ -1,6 +1,9 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useTrimmedPlayback } from '@/hooks/useTrimmedPlayback';
+import { useNavigationGuard } from '@/hooks/useNavigationGuard';
+
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import {
   Music,
@@ -10,7 +13,6 @@ import {
   SkipForward,
   RotateCcw,
   RotateCw,
-  Scissors,
   Sliders,
   Volume2,
   VolumeX,
@@ -19,17 +21,17 @@ import {
   RefreshCw,
   CheckCircle2,
   AlertCircle,
-  Shield,
   Layers,
   ChevronDown,
-  Trash2,
-  Plus,
-  TrendingDown,
   Sparkles,
   Zap,
 } from 'lucide-react';
 import { apiClient } from '@/services/apiClient';
-import { JobResponse, ConversionProgressResponse, SizeEstimationResponse, TimeRangeDto } from '@/types/api';
+import { JobResponse, ConversionProgressResponse } from '@/types/api';
+import { AudioWaveform } from '@/components/editor/AudioWaveform';
+import { TrimHandles } from '@/components/editor/TrimHandles';
+import { useAudioPreview } from '@/hooks/useAudioPreview';
+import { AUDIO_EFFECTS, AudioEffect, fadeEnvelopePath } from '@/utils/audioEffects';
 import { AUDIO_PRESETS } from '@/utils/presets';
 
 export default function AudioConverterPage() {
@@ -50,29 +52,45 @@ export default function AudioConverterPage() {
   // Trim & Cut
   const [startTime, setStartTime] = useState<number>(0);
   const [endTime, setEndTime] = useState<number>(0);
-  const [cutSegments, setCutSegments] = useState<TimeRangeDto[]>([]);
 
   // Volume, Gain & Filters
   const [volume, setVolume] = useState<number>(1.0);
-  const [removeSilence, setRemoveSilence] = useState<boolean>(false);
+  const [audioEffects, setAudioEffects] = useState<AudioEffect[]>([]);
+  const [audioEffectLevels, setAudioEffectLevels] = useState<Partial<Record<AudioEffect, number>>>({});
   const [fadeInDuration, setFadeInDuration] = useState<number>(0);
   const [fadeOutDuration, setFadeOutDuration] = useState<number>(0);
 
-  // Output Size Estimation
-  const [sizeEstimate, setSizeEstimate] = useState<SizeEstimationResponse | null>(null);
-  const [isEstimating, setIsEstimating] = useState<boolean>(false);
-
   // Stage & Tracking
   const [stage, setStage] = useState<'IDLE' | 'UPLOADING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'CANCELLED'>('IDLE');
+  useNavigationGuard(stage === 'UPLOADING' || stage === 'PROCESSING');
   const [error, setError] = useState<string | null>(null);
   const [currentJob, setCurrentJob] = useState<JobResponse | null>(null);
   const [progress, setProgress] = useState<ConversionProgressResponse | null>(null);
   const [outputFileId, setOutputFileId] = useState<string | null>(null);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const playback = useTrimmedPlayback(audioRef, previewUrl, startTime, endTime, audioDuration, setCurrentTime, setIsPlaying);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const estimateTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [isDraggingAudio, setIsDraggingAudio] = useState(false);
+  const isBusy = stage === 'UPLOADING' || stage === 'PROCESSING';
+
+  const preview = useAudioPreview(audioRef, previewUrl, {effects: audioEffects, levels: audioEffectLevels, volume, start: startTime,
+    end: endTime || audioDuration, fadeIn: fadeInDuration, fadeOut: fadeOutDuration});
+  const selectedDuration = Math.max(0, (endTime || audioDuration) - startTime);
+  useEffect(() => {
+    setFadeInDuration(value => Math.min(value, selectedDuration));
+    setFadeOutDuration(value => Math.min(value, selectedDuration));
+  }, [selectedDuration]);
+  const curve = fadeEnvelopePath(startTime, endTime || audioDuration, fadeInDuration, fadeOutDuration);
+  const exportKey = useRef<string | null>(null);
+  const settingsKey = JSON.stringify({ file: selectedFile && [selectedFile.name, selectedFile.size, selectedFile.lastModified],
+    targetFormat, bitrate, sampleRate, channels, startTime, endTime, volume, fadeInDuration, fadeOutDuration, audioEffects, audioEffectLevels });
+  useEffect(() => {
+    if (stage === 'COMPLETED' && exportKey.current !== settingsKey) {
+      setStage('IDLE'); setOutputFileId(null);
+    }
+  }, [settingsKey, stage]);
 
   // Object URL lifecycle
   useEffect(() => {
@@ -96,17 +114,7 @@ export default function AudioConverterPage() {
     setEndTime(dur);
   };
 
-  const handleTimeUpdate = () => {
-    if (audioRef.current) {
-      setCurrentTime(audioRef.current.currentTime);
-      if (endTime > 0 && audioRef.current.currentTime >= endTime) {
-        audioRef.current.pause();
-        setIsPlaying(false);
-      }
-    }
-  };
-
-  const togglePlay = () => {
+  const togglePlay = async () => {
     if (!audioRef.current) return;
     if (isPlaying) {
       audioRef.current.pause();
@@ -115,23 +123,23 @@ export default function AudioConverterPage() {
       if (audioRef.current.currentTime < startTime || (endTime > 0 && audioRef.current.currentTime >= endTime)) {
         audioRef.current.currentTime = startTime;
       }
-      audioRef.current.play();
-      setIsPlaying(true);
+      try {
+        await preview.start(); await audioRef.current.play(); setIsPlaying(true);
+      } catch { setError('Unable to start audio preview. Try importing the file again.'); }
     }
   };
 
   const seekRelative = (seconds: number) => {
     if (!audioRef.current) return;
-    audioRef.current.currentTime = Math.max(0, Math.min(audioDuration, audioRef.current.currentTime + seconds));
+    playback.seek(audioRef.current.currentTime + seconds);
   };
 
   const handleTimelineScrub = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!audioRef.current || audioDuration <= 0) return;
     const rect = e.currentTarget.getBoundingClientRect();
+    if (rect.width <= 0) return;
     const pos = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    const target = pos * audioDuration;
-    audioRef.current.currentTime = target;
-    setCurrentTime(target);
+    playback.seek(pos * audioDuration);
   };
 
   const formatTime = (sec: number) => {
@@ -148,67 +156,7 @@ export default function AudioConverterPage() {
     }
   };
 
-  const addCutSegment = () => {
-    if (audioDuration <= 0) return;
-    const defaultStart = Math.min(audioDuration * 0.25, 5);
-    const defaultEnd = Math.min(audioDuration * 0.5, 10);
-    setCutSegments([...cutSegments, { start: Math.round(defaultStart), end: Math.round(defaultEnd) }]);
-  };
-
-  const removeCutSegment = (idx: number) => {
-    setCutSegments(cutSegments.filter((_, i) => i !== idx));
-  };
-
-  const updateCutSegment = (idx: number, field: 'start' | 'end', val: number) => {
-    const updated = [...cutSegments];
-    updated[idx] = { ...updated[idx], [field]: Math.max(0, val) };
-    setCutSegments(updated);
-  };
-
-  const effectiveDuration = useMemo(() => {
-    if (!audioDuration) return 0;
-    let dur = Math.max(0, (endTime > 0 ? endTime : audioDuration) - startTime);
-    cutSegments.forEach((seg) => {
-      const s = Math.max(startTime, seg.start);
-      const e = Math.min(endTime > 0 ? endTime : audioDuration, seg.end);
-      if (e > s) {
-        dur -= e - s;
-      }
-    });
-    return Math.max(0.1, Math.round(dur * 10) / 10);
-  }, [audioDuration, startTime, endTime, cutSegments]);
-
-  // Output Size Estimation
-  useEffect(() => {
-    if (estimateTimerRef.current) {
-      clearTimeout(estimateTimerRef.current);
-    }
-
-    estimateTimerRef.current = setTimeout(async () => {
-      try {
-        setIsEstimating(true);
-        const est = await apiClient.estimateOutputSize({
-          mediaType: 'audio',
-          outputFormat: targetFormat,
-          sourceDuration: audioDuration > 0 ? audioDuration : 180,
-          sourceFileSize: selectedFile ? selectedFile.size : undefined,
-          audioBitrate: parseInt(bitrate.replace('k', ''), 10) || 320,
-          startTime: startTime > 0 ? startTime : undefined,
-          endTime: endTime > 0 && endTime < audioDuration ? endTime : undefined,
-          removeSegments: cutSegments.length > 0 ? cutSegments : undefined,
-        });
-        setSizeEstimate(est);
-      } catch {
-        // Fallback
-      } finally {
-        setIsEstimating(false);
-      }
-    }, 300);
-
-    return () => {
-      if (estimateTimerRef.current) clearTimeout(estimateTimerRef.current);
-    };
-  }, [selectedFile, targetFormat, bitrate, sampleRate, startTime, endTime, cutSegments, audioDuration]);
+  const effectiveDuration = audioDuration > 0 ? Math.max(0.1, Math.round(((endTime || audioDuration) - startTime) * 10) / 10) : 0;
 
   const cleanupPolling = () => {
     if (pollIntervalRef.current) {
@@ -272,6 +220,7 @@ export default function AudioConverterPage() {
 
     setError(null);
     setStage('UPLOADING');
+    exportKey.current = settingsKey;
     setCurrentJob(null);
     setProgress(null);
     setOutputFileId(null);
@@ -291,11 +240,11 @@ export default function AudioConverterPage() {
         audioChannels: channels,
         startTime: hasTrim && startTime > 0 ? startTime : undefined,
         endTime: hasTrim && endTime > 0 ? endTime : undefined,
-        removeSegments: cutSegments.length > 0 ? cutSegments : undefined,
         volume: volume !== 1.0 ? volume : undefined,
-        removeSilence: removeSilence ? true : undefined,
-        fadeInDuration: fadeInDuration > 0 ? fadeInDuration : undefined,
-        fadeOutDuration: fadeOutDuration > 0 ? fadeOutDuration : undefined,
+        audioEffects,
+        audioEffectLevels,
+        fadeInDuration: fadeInDuration > 0 ? Math.min(fadeInDuration, effectiveDuration) : undefined,
+        fadeOutDuration: fadeOutDuration > 0 ? Math.min(fadeOutDuration, effectiveDuration) : undefined,
       });
 
       const effectiveJobId = job.id || (job as any).jobId;
@@ -325,30 +274,42 @@ export default function AudioConverterPage() {
   const handleResetMarkers = () => {
     setStartTime(0);
     setEndTime(audioDuration);
-    setCutSegments([]);
+    
     if (audioRef.current) {
       audioRef.current.currentTime = 0;
       setCurrentTime(0);
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setSelectedFile(e.target.files[0]);
-      setStage('IDLE');
-      setError(null);
+  const importAudio = (file: File) => {
+    if (isBusy) return;
+    if (!file.type.startsWith('audio/') && !file.type.startsWith('video/')
+        && !/\.(mp3|wav|flac|aac|ogg|m4a|wma|opus|mp4|mkv|webm|avi|mov|flv|m4v)$/i.test(file.name)) {
+      setError('Choose a supported audio or video file.'); return;
     }
+    if (file.size > 500 * 1024 * 1024) { setError('This file is too large to import.'); return; }
+    cleanupPolling();
+    setSelectedFile(file); setStage('IDLE'); setError(null);
+    setCurrentJob(null); setProgress(null); setOutputFileId(null);
+    setAudioDuration(0); setStartTime(0); setEndTime(0); 
+    setCurrentTime(0); setIsPlaying(false);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files?.[0]) importAudio(e.target.files[0]);
+    e.target.value = '';
   };
 
   return (
-    <div className="w-full max-w-7xl mx-auto px-gutter py-space-md flex flex-col gap-space-md">
+    <div className="audio-editor w-full max-w-7xl mx-auto px-gutter py-space-md flex flex-col gap-space-md text-slate-900 dark:text-slate-100">
       {/* Hidden audio element for preview */}
       {previewUrl && (
         <audio
+          key={previewUrl}
           ref={audioRef}
           src={previewUrl}
           onLoadedMetadata={handleLoadedMetadata}
-          onTimeUpdate={handleTimeUpdate}
+          
           className="hidden"
         />
       )}
@@ -357,22 +318,22 @@ export default function AudioConverterPage() {
       <div className="w-full bg-surface-container-lowest dark:bg-slate-900 rounded-2xl p-space-md shadow-sm border border-outline-variant/30 flex flex-col xl:flex-row xl:items-center xl:justify-between gap-space-md">
         <div className="flex flex-wrap items-center gap-space-sm min-w-0">
           <div className="flex items-center gap-2">
-            <span className="w-8 h-8 rounded-full bg-primary-fixed dark:bg-slate-800 text-primary flex items-center justify-center font-bold">
+            <span className="w-8 h-8 rounded-full bg-primary-fixed dark:bg-violet-950 dark:bg-slate-800 text-primary dark:text-violet-200 flex items-center justify-center font-bold">
               <Music className="w-4 h-4" />
             </span>
-            <Link href="/" className="text-xs text-on-surface-variant hover:text-on-surface font-semibold">
+            <Link href="/" className="text-xs text-on-surface-variant dark:text-slate-200 hover:text-on-surface font-semibold">
               Audio Editor
             </Link>
-            <span className="text-outline-variant text-xs">/</span>
-            <span className="text-sm font-bold text-on-surface truncate max-w-[280px] sm:max-w-md">
+            <span className="text-outline-variant dark:text-slate-400 text-xs">/</span>
+            <span className="text-sm font-bold text-on-surface dark:text-slate-100 truncate max-w-[280px] sm:max-w-md">
               {selectedFile ? selectedFile.name : 'No audio loaded'}
             </span>
           </div>
           {selectedFile && audioDuration > 0 && (
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-surface-container-low dark:bg-slate-800 text-on-surface-variant font-mono text-xs">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-surface-container-low dark:bg-slate-800 text-on-surface-variant dark:text-slate-200 font-mono text-xs">
               <span className="w-2 h-2 rounded-full bg-tertiary-container animate-pulse" />
               <span>
-                {channels === 2 ? 'Stereo' : 'Mono'} · {formatTime(audioDuration)} · {(selectedFile.size / (1024 * 1024)).toFixed(1)} MB
+                {channels === 2 ? 'Stereo' : 'Mono'} · {formatTime(audioDuration)}
               </span>
             </div>
           )}
@@ -383,12 +344,12 @@ export default function AudioConverterPage() {
             type="button"
             onClick={handleResetMarkers}
             disabled={!selectedFile}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-container-low dark:bg-slate-800 text-on-surface-variant hover:bg-surface-container font-semibold text-xs disabled:opacity-40"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-container-low dark:bg-slate-800 text-on-surface-variant dark:text-slate-200 hover:bg-surface-container font-semibold text-xs disabled:opacity-40 dark:disabled:opacity-100 dark:disabled:text-slate-400"
           >
             <RefreshCw className="w-3.5 h-3.5" />
             <span>Reset Markers</span>
           </button>
-          <label className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-primary-fixed text-on-primary-fixed-variant dark:bg-slate-800 dark:text-primary font-semibold text-xs cursor-pointer shadow-xs">
+          <label className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-primary-fixed dark:bg-violet-950 text-on-primary-fixed-variant dark:text-violet-200 dark:bg-slate-800 dark:text-violet-200 font-semibold text-xs cursor-pointer shadow-xs">
             <Upload className="w-3.5 h-3.5" />
             <span>{selectedFile ? 'Replace File' : 'Import Audio'}</span>
             <input
@@ -396,6 +357,7 @@ export default function AudioConverterPage() {
               type="file"
               accept="audio/*,video/*,.mp3,.wav,.flac,.aac,.ogg,.m4a,.wma,.opus"
               onChange={handleFileChange}
+              disabled={isBusy}
               className="hidden"
             />
           </label>
@@ -406,24 +368,36 @@ export default function AudioConverterPage() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-space-lg items-start">
         {/* Studio Center (8 Columns) */}
         <section className="lg:col-span-8 flex flex-col gap-space-md">
+          <div role="button" tabIndex={isBusy ? -1 : 0} aria-label="Import audio by browsing or dropping a file" aria-disabled={isBusy}
+            onClick={() => !isBusy && fileInputRef.current?.click()}
+            onKeyDown={e => { if (!isBusy && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); fileInputRef.current?.click(); } }}
+            onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = isBusy ? 'none' : 'copy'; if (!isBusy) setIsDraggingAudio(true); }}
+            onDragLeave={e => { if (!(e.relatedTarget instanceof Node) || !e.currentTarget.contains(e.relatedTarget)) setIsDraggingAudio(false); }}
+            onDrop={e => { e.preventDefault(); setIsDraggingAudio(false); if (e.dataTransfer.files[0]) importAudio(e.dataTransfer.files[0]); }}
+            className={`min-h-56 rounded-3xl border-2 border-dashed p-8 flex flex-col items-center justify-center text-center transition-colors ${isDraggingAudio ? 'border-violet-400 bg-violet-50 dark:bg-violet-950/50' : 'border-slate-300 bg-white dark:border-slate-600 dark:bg-slate-900'} ${isBusy ? 'cursor-not-allowed' : 'cursor-pointer hover:border-violet-400'}`}>
+            <div className="w-16 h-16 rounded-full bg-violet-100 dark:bg-violet-500/20 flex items-center justify-center mb-4 text-violet-600 dark:text-violet-200"><Upload className="w-8 h-8" /></div>
+            <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">{isDraggingAudio ? 'Drop audio here' : selectedFile ? 'Replace Audio' : 'Click or Drag Audio to Import'}</h2>
+            <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">MP3, WAV, FLAC, AAC, OGG, M4A and other supported media files.</p>
+            {selectedFile && <p className="mt-3 max-w-full truncate text-sm font-semibold text-violet-700 dark:text-violet-200">{selectedFile.name}</p>}
+          </div>
           {/* Visual Master Transport & Readouts */}
           <div className="w-full bg-surface-container-lowest dark:bg-slate-900 rounded-3xl p-space-lg shadow-sm border border-outline-variant/30 space-y-space-md">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-space-md">
               {/* Monospace Time Display */}
               <div className="flex items-center gap-space-md">
                 <div className="bg-surface-container-low dark:bg-slate-950 rounded-2xl px-space-md py-2.5 flex items-baseline gap-2 border border-outline-variant/20">
-                  <span className="text-xs uppercase text-on-surface-variant font-bold tracking-wider">Current</span>
-                  <span className="text-2xl font-mono font-extrabold text-primary tracking-tight">
+                  <span className="text-xs uppercase text-on-surface-variant dark:text-slate-200 font-bold tracking-wider">Current</span>
+                  <span className="text-2xl font-mono font-extrabold text-primary dark:text-violet-200 tracking-tight">
                     {formatTime(currentTime)}
                   </span>
-                  <span className="text-base font-mono text-outline-variant">/</span>
-                  <span className="text-sm font-mono text-on-surface-variant font-semibold">
+                  <span className="text-base font-mono text-outline-variant dark:text-slate-400">/</span>
+                  <span className="text-sm font-mono text-on-surface-variant dark:text-slate-200 font-semibold">
                     {formatTime(audioDuration)}
                   </span>
                 </div>
                 <div className="hidden sm:flex flex-col">
-                  <span className="text-[11px] text-on-surface-variant font-medium">Effective</span>
-                  <span className="font-mono text-xs font-bold text-on-surface">
+                  <span className="text-[11px] text-on-surface-variant dark:text-slate-200 font-medium">Effective</span>
+                  <span className="font-mono text-xs font-bold text-on-surface dark:text-slate-100">
                     {effectiveDuration.toFixed(1)}s
                   </span>
                 </div>
@@ -431,7 +405,7 @@ export default function AudioConverterPage() {
 
               {/* Playback Speed Pills */}
               <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold text-on-surface-variant">Speed</span>
+                <span className="text-xs font-semibold text-on-surface-variant dark:text-slate-200">Speed</span>
                 <div className="inline-flex items-center p-1 bg-surface-container-low dark:bg-slate-800 rounded-full">
                   {[0.75, 1.0, 1.25, 1.5].map((speed) => (
                     <button
@@ -440,8 +414,8 @@ export default function AudioConverterPage() {
                       onClick={() => handleSpeedChange(speed)}
                       className={`px-2.5 py-1 rounded-full text-xs font-semibold transition-all ${
                         playbackSpeed === speed
-                          ? 'bg-surface-container-lowest dark:bg-slate-700 text-primary shadow-xs'
-                          : 'text-on-surface-variant hover:text-on-surface'
+                          ? 'bg-surface-container-lowest dark:bg-slate-700 text-primary dark:text-violet-200 shadow-xs'
+                          : 'text-on-surface-variant dark:text-slate-200 hover:text-on-surface'
                       }`}
                     >
                       {speed}x
@@ -457,9 +431,9 @@ export default function AudioConverterPage() {
                 <button
                   type="button"
                   onClick={() => {
-                    if (audioRef.current) audioRef.current.currentTime = startTime;
+                    playback.seek(startTime);
                   }}
-                  className="w-10 h-10 rounded-full bg-surface-container-low dark:bg-slate-800 hover:bg-surface-container text-on-surface-variant hover:text-on-surface flex items-center justify-center transition-colors"
+                  className="w-10 h-10 rounded-full bg-surface-container-low dark:bg-slate-800 hover:bg-surface-container text-on-surface-variant dark:text-slate-200 hover:text-on-surface flex items-center justify-center transition-colors"
                   title="Jump to In-Point"
                 >
                   <SkipBack className="w-4 h-4" />
@@ -467,7 +441,7 @@ export default function AudioConverterPage() {
                 <button
                   type="button"
                   onClick={() => seekRelative(-5)}
-                  className="w-10 h-10 rounded-full bg-surface-container-low dark:bg-slate-800 hover:bg-surface-container text-on-surface-variant hover:text-on-surface flex items-center justify-center transition-all hover:scale-105 active:scale-95"
+                  className="w-10 h-10 rounded-full bg-surface-container-low dark:bg-slate-800 hover:bg-surface-container text-on-surface-variant dark:text-slate-200 hover:text-on-surface flex items-center justify-center transition-all hover:scale-105 active:scale-95"
                   title="Rewind 5s"
                 >
                   <RotateCcw className="w-4 h-4" />
@@ -476,7 +450,7 @@ export default function AudioConverterPage() {
                   type="button"
                   onClick={togglePlay}
                   disabled={!selectedFile}
-                  className="w-14 h-14 rounded-full bg-primary-container hover:bg-primary text-white flex items-center justify-center transition-all duration-300 hover:scale-105 active:scale-95 shadow-md shadow-primary/25 disabled:opacity-50"
+                  className="w-14 h-14 rounded-full bg-primary-container hover:bg-primary text-white flex items-center justify-center transition-all duration-300 hover:scale-105 active:scale-95 shadow-md shadow-primary/25 disabled:opacity-50 dark:disabled:opacity-100 dark:disabled:bg-violet-950 dark:disabled:text-violet-200"
                   title="Play / Pause"
                 >
                   {isPlaying ? <Pause className="w-6 h-6" /> : <Play className="w-6 h-6 ml-0.5" />}
@@ -484,7 +458,7 @@ export default function AudioConverterPage() {
                 <button
                   type="button"
                   onClick={() => seekRelative(5)}
-                  className="w-10 h-10 rounded-full bg-surface-container-low dark:bg-slate-800 hover:bg-surface-container text-on-surface-variant hover:text-on-surface flex items-center justify-center transition-all hover:scale-105 active:scale-95"
+                  className="w-10 h-10 rounded-full bg-surface-container-low dark:bg-slate-800 hover:bg-surface-container text-on-surface-variant dark:text-slate-200 hover:text-on-surface flex items-center justify-center transition-all hover:scale-105 active:scale-95"
                   title="Forward 5s"
                 >
                   <RotateCw className="w-4 h-4" />
@@ -492,9 +466,9 @@ export default function AudioConverterPage() {
                 <button
                   type="button"
                   onClick={() => {
-                    if (audioRef.current) audioRef.current.currentTime = endTime || audioDuration;
+                    playback.seek(endTime || audioDuration);
                   }}
-                  className="w-10 h-10 rounded-full bg-surface-container-low dark:bg-slate-800 hover:bg-surface-container text-on-surface-variant hover:text-on-surface flex items-center justify-center transition-colors"
+                  className="w-10 h-10 rounded-full bg-surface-container-low dark:bg-slate-800 hover:bg-surface-container text-on-surface-variant dark:text-slate-200 hover:text-on-surface flex items-center justify-center transition-colors"
                   title="Jump to End"
                 >
                   <SkipForward className="w-4 h-4" />
@@ -504,21 +478,23 @@ export default function AudioConverterPage() {
               {/* Master Volume & Meter */}
               <div className="flex items-center gap-space-md">
                 <div className="flex items-center gap-2">
-                  <Volume2 className="w-4 h-4 text-on-surface-variant" />
+                  <Volume2 className="w-4 h-4 text-on-surface-variant dark:text-slate-200" />
+                  <span className="text-xs font-semibold text-on-surface dark:text-slate-100">Clip volume</span>
                   <input
-                    type="range"
+                    type="range" disabled={!selectedFile}
                     min="0"
-                    max="1.5"
+                    max="2"
+                    aria-label="Clip volume"
                     step="0.05"
                     value={volume}
                     onChange={(e) => {
                       const val = parseFloat(e.target.value);
                       setVolume(val);
-                      if (audioRef.current) audioRef.current.volume = Math.min(1, val);
+
                     }}
-                    className="w-24 sm:w-28 accent-primary h-1.5 bg-surface-container-high dark:bg-slate-700 rounded-full cursor-pointer"
+                    className="w-24 sm:w-28 accent-primary dark:accent-violet-400 h-1.5 bg-surface-container-high dark:bg-slate-700 rounded-full cursor-pointer"
                   />
-                  <span className="font-mono text-xs text-on-surface-variant w-12 text-right">
+                  <span className="font-mono text-xs text-on-surface-variant dark:text-slate-200 w-12 text-right">
                     {(volume * 100).toFixed(0)}%
                   </span>
                 </div>
@@ -527,28 +503,28 @@ export default function AudioConverterPage() {
           </div>
 
           {/* Waveform Studio Canvas Pane */}
-          <div className="w-full bg-inverse-surface rounded-3xl p-space-md shadow-md text-white flex flex-col gap-space-md relative overflow-hidden select-none">
+          <div className="w-full bg-white dark:bg-slate-800 rounded-3xl p-space-md shadow-sm border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-slate-100 flex flex-col gap-space-md relative overflow-hidden select-none">
             {/* Waveform HUD Top */}
-            <div className="flex items-center justify-between text-xs text-slate-300 pb-1">
+            <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-300 pb-1">
               <div className="flex items-center gap-3">
-                <span className="inline-flex items-center gap-1.5 font-semibold bg-white/10 px-2.5 py-1 rounded-full text-[11px]">
-                  <span className="w-2 h-2 rounded-full bg-primary-fixed animate-pulse" />
-                  <span>Stereo Master Audio</span>
+                <span className="inline-flex items-center gap-1.5 font-semibold bg-violet-50 dark:bg-white/10 px-2.5 py-1 rounded-full text-[11px]">
+                  <span className="w-2 h-2 rounded-full bg-primary-fixed dark:bg-violet-950 animate-pulse" />
+                  <span>Audio Waveform</span>
                 </span>
-                <span className="font-mono text-tertiary-fixed font-semibold">
+                <span className="font-mono text-emerald-700 dark:text-emerald-300 font-semibold">
                   Selection: {effectiveDuration.toFixed(1)}s
                 </span>
               </div>
-              <span className="font-mono text-[11px] text-slate-400">PCM 32-bit Float</span>
+              <span className="font-mono text-[11px] text-slate-500 dark:text-slate-400">{selectedFile ? 'Combined waveform' : 'No audio loaded'}</span>
             </div>
 
             {/* Interactive Multichannel Waveform Container */}
             <div
               onClick={handleTimelineScrub}
-              className="relative w-full h-52 bg-white/5 rounded-2xl overflow-hidden flex flex-col justify-between py-2 border-y border-white/10 cursor-pointer"
+              className="relative w-full h-52 bg-slate-50 dark:bg-white/5 rounded-2xl overflow-hidden flex flex-col justify-between py-2 border border-slate-200 dark:border-white/10 cursor-pointer"
             >
               {/* Time scale */}
-              <div className="absolute top-1 inset-x-0 flex justify-between px-3 text-[10px] font-mono text-white/50 pointer-events-none z-10">
+              <div className="absolute top-1 inset-x-0 flex justify-between px-3 text-[10px] font-mono text-slate-600 dark:text-slate-300 pointer-events-none z-10">
                 <span>00:00</span>
                 <span>{formatTime(audioDuration * 0.25)}</span>
                 <span>{formatTime(audioDuration * 0.5)}</span>
@@ -559,7 +535,7 @@ export default function AudioConverterPage() {
               {/* Dimmed Left (Pre-Trim) */}
               {audioDuration > 0 && startTime > 0 && (
                 <div
-                  className="absolute left-0 top-0 bottom-0 bg-black/60 pointer-events-none z-10"
+                  className="absolute left-0 top-0 bottom-0 bg-slate-300/65 dark:bg-black/60 pointer-events-none z-10"
                   style={{ width: `${(startTime / audioDuration) * 100}%` }}
                 />
               )}
@@ -567,7 +543,7 @@ export default function AudioConverterPage() {
               {/* Dimmed Right (Post-Trim) */}
               {audioDuration > 0 && endTime < audioDuration && (
                 <div
-                  className="absolute right-0 top-0 bottom-0 bg-black/60 pointer-events-none z-10"
+                  className="absolute right-0 top-0 bottom-0 bg-slate-300/65 dark:bg-black/60 pointer-events-none z-10"
                   style={{ width: `${((audioDuration - endTime) / audioDuration) * 100}%` }}
                 />
               )}
@@ -583,6 +559,13 @@ export default function AudioConverterPage() {
                 />
               )}
 
+              <TrimHandles duration={audioDuration} start={startTime} end={endTime || audioDuration} onStartChange={setStartTime} onEndChange={setEndTime} />
+              {audioDuration > 0 && <svg role="img" aria-label="Audio fade envelope" data-fade-in={fadeInDuration} data-fade-out={fadeOutDuration}
+                className="absolute inset-y-0 h-full pointer-events-none z-20 overflow-visible" style={{left: `${startTime / audioDuration * 100}%`, width: `${selectedDuration / audioDuration * 100}%`}}
+                viewBox="0 0 100 100" preserveAspectRatio="none">
+                <path d={curve + ' L100,100 L0,100 Z'} fill="rgba(34,211,238,0.1)" />
+                <path d={curve} fill="none" stroke="#67e8f9" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+              </svg>}
               {/* Playhead Needle */}
               {audioDuration > 0 && (
                 <div
@@ -593,45 +576,18 @@ export default function AudioConverterPage() {
                 </div>
               )}
 
-              {/* Channel L SVG Waveform */}
-              <div className="relative w-full h-[46%] flex items-center px-1">
-                <span className="absolute left-2 top-1 text-[9px] font-mono text-white/40">CH L</span>
-                <svg className="w-full h-full text-primary-fixed" preserveAspectRatio="none" viewBox="0 0 1000 120">
-                  <path
-                    d="M0,60 Q20,10 40,60 T80,60 T120,15 T160,60 T200,8 T240,60 T280,25 T320,60 T360,5 T400,60 T440,20 T480,60 T520,10 T560,60 T600,25 T640,60 T680,12 T720,60 T760,30 T800,60 T840,15 T880,60 T920,35 T960,60 T1000,60 L1000,60 L0,60 Z"
-                    fill="currentColor"
-                    opacity="0.85"
-                  />
-                </svg>
-              </div>
-
-              {/* Center Zero Crossing */}
-              <div className="w-full h-px bg-white/15 relative">
-                <span className="absolute right-2 -top-2 text-[8px] font-mono text-white/30">0 dB</span>
-              </div>
-
-              {/* Channel R SVG Waveform */}
-              <div className="relative w-full h-[46%] flex items-center px-1">
-                <span className="absolute left-2 top-1 text-[9px] font-mono text-white/40">CH R</span>
-                <svg className="w-full h-full text-secondary-fixed-dim" preserveAspectRatio="none" viewBox="0 0 1000 120">
-                  <path
-                    d="M0,60 Q25,20 50,60 T100,60 T150,10 T200,60 T250,5 T300,60 T350,30 T400,60 T450,15 T500,60 T550,5 T600,60 T650,22 T700,60 T750,10 T800,60 T850,28 T900,60 T950,15 T1000,60 L1000,60 L0,60 Z"
-                    fill="currentColor"
-                    opacity="0.85"
-                  />
-                </svg>
-              </div>
+              <AudioWaveform file={selectedFile} />
             </div>
 
             {/* Bottom Status & Markers */}
-            <div className="flex flex-wrap items-center justify-between text-xs text-slate-300 font-mono pt-1">
+            <div className="flex flex-wrap items-center justify-between text-xs text-slate-600 dark:text-slate-300 font-mono pt-1">
               <div className="flex items-center gap-4">
                 <span>In: {formatTime(startTime)}</span>
                 <span>Out: {formatTime(endTime || audioDuration)}</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-tertiary-fixed-dim" />
-                <span>Lossless Buffer Ready</span>
+                <span>{selectedFile ? 'Audio imported' : 'Import audio to begin'}</span>
               </div>
             </div>
           </div>
@@ -641,148 +597,103 @@ export default function AudioConverterPage() {
             {/* Trim Sliders */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="flex flex-col gap-1">
-                <div className="flex justify-between text-xs text-on-surface-variant font-mono">
+                <div className="flex justify-between text-xs text-on-surface-variant dark:text-slate-200 font-mono">
                   <span>Start Marker:</span>
-                  <strong className="text-primary">{formatTime(startTime)}</strong>
+                  <strong className="text-primary dark:text-violet-200">{formatTime(startTime)}</strong>
                 </div>
                 <input
-                  type="range"
+                  type="range" disabled={!selectedFile}
                   min="0"
                   max={endTime > 0 ? endTime - 0.1 : audioDuration}
                   step="0.1"
                   value={startTime}
                   onChange={(e) => setStartTime(parseFloat(e.target.value))}
-                  className="w-full accent-primary h-1.5 bg-surface-container-high dark:bg-slate-800 rounded-full cursor-pointer"
+                  className="w-full accent-primary dark:accent-violet-400 h-1.5 bg-surface-container-high dark:bg-slate-800 rounded-full cursor-pointer"
                 />
               </div>
               <div className="flex flex-col gap-1">
-                <div className="flex justify-between text-xs text-on-surface-variant font-mono">
+                <div className="flex justify-between text-xs text-on-surface-variant dark:text-slate-200 font-mono">
                   <span>End Marker:</span>
-                  <strong className="text-primary">{formatTime(endTime || audioDuration)}</strong>
+                  <strong className="text-primary dark:text-violet-200">{formatTime(endTime || audioDuration)}</strong>
                 </div>
                 <input
-                  type="range"
+                  type="range" disabled={!selectedFile}
                   min={startTime + 0.1}
                   max={audioDuration || 100}
                   step="0.1"
                   value={endTime || audioDuration}
                   onChange={(e) => setEndTime(parseFloat(e.target.value))}
-                  className="w-full accent-primary h-1.5 bg-surface-container-high dark:bg-slate-800 rounded-full cursor-pointer"
+                  className="w-full accent-primary dark:accent-violet-400 h-1.5 bg-surface-container-high dark:bg-slate-800 rounded-full cursor-pointer"
                 />
               </div>
             </div>
 
-            {/* Fade Transitions & Smart Clean */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-space-md pt-2">
+            {/* Fade Transitions */}
+            <div className="grid grid-cols-1 gap-space-md pt-2">
               {/* Fade Transitions */}
               <div className="bg-surface-container-low dark:bg-slate-800/60 rounded-2xl p-space-md space-y-space-sm border border-outline-variant/20">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-on-surface">Fade Transitions</span>
-                  <span className="text-xs text-primary font-semibold">Logarithmic</span>
+                  <span className="text-xs font-bold text-on-surface dark:text-slate-100">Fade Transitions</span>
+                  <span className="text-xs text-primary dark:text-violet-200 font-semibold">Smooth curve</span>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
-                    <div className="flex justify-between text-xs text-on-surface-variant">
+                    <div className="flex justify-between text-xs text-on-surface-variant dark:text-slate-200">
                       <span>Fade In</span>
                       <span className="font-mono font-semibold">{fadeInDuration}s</span>
                     </div>
                     <input
-                      type="range"
+                      type="range" disabled={!selectedFile}
                       min="0"
-                      max="10"
-                      step="0.5"
-                      value={fadeInDuration}
+                      max={selectedDuration}
+                      aria-label="Fade in duration"
+                      step="0.1"
+                      value={Math.min(fadeInDuration, selectedDuration)}
                       onChange={(e) => setFadeInDuration(parseFloat(e.target.value))}
-                      className="w-full accent-primary h-1.5 bg-surface-container-high dark:bg-slate-700 rounded-full cursor-pointer"
+                      className="w-full accent-primary dark:accent-violet-400 h-1.5 bg-surface-container-high dark:bg-slate-700 rounded-full cursor-pointer"
                     />
                   </div>
                   <div className="space-y-1">
-                    <div className="flex justify-between text-xs text-on-surface-variant">
+                    <div className="flex justify-between text-xs text-on-surface-variant dark:text-slate-200">
                       <span>Fade Out</span>
                       <span className="font-mono font-semibold">{fadeOutDuration}s</span>
                     </div>
                     <input
-                      type="range"
+                      type="range" disabled={!selectedFile}
                       min="0"
-                      max="10"
-                      step="0.5"
-                      value={fadeOutDuration}
+                      max={selectedDuration}
+                      aria-label="Fade out duration"
+                      step="0.1"
+                      value={Math.min(fadeOutDuration, selectedDuration)}
                       onChange={(e) => setFadeOutDuration(parseFloat(e.target.value))}
-                      className="w-full accent-primary h-1.5 bg-surface-container-high dark:bg-slate-700 rounded-full cursor-pointer"
+                      className="w-full accent-primary dark:accent-violet-400 h-1.5 bg-surface-container-high dark:bg-slate-700 rounded-full cursor-pointer"
                     />
                   </div>
                 </div>
               </div>
 
-              {/* Smart Clean & Mastering */}
-              <div className="bg-surface-container-low dark:bg-slate-800/60 rounded-2xl p-space-md space-y-space-sm border border-outline-variant/20">
-                <span className="text-xs font-bold text-on-surface">Smart Clean & Mastering</span>
-                <div className="flex flex-wrap gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => setRemoveSilence(!removeSilence)}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold shadow-xs transition-all ${
-                      removeSilence
-                        ? 'bg-primary-container text-white'
-                        : 'bg-surface-container-lowest dark:bg-slate-700 text-on-surface hover:bg-surface-container'
-                    }`}
-                  >
-                    <span>Strip Silence</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={addCutSegment}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-container-lowest dark:bg-slate-700 text-on-surface text-xs font-semibold hover:bg-surface-container transition-all"
-                  >
-                    <Scissors className="w-3.5 h-3.5 text-primary" />
-                    <span>Cut Unwanted Interval</span>
-                  </button>
-                </div>
-              </div>
             </div>
 
-            {/* Cut Segments List */}
-            {cutSegments.length > 0 && (
-              <div className="space-y-2 pt-2 border-t border-outline-variant/20">
-                <span className="text-xs font-bold text-on-surface">Cut Segments (Removed from Audio):</span>
-                {cutSegments.map((seg, idx) => (
-                  <div
-                    key={idx}
-                    className="flex items-center gap-3 p-2 rounded-xl bg-surface-container-low dark:bg-slate-800 text-xs"
-                  >
-                    <span className="font-mono font-bold text-outline">#{idx + 1}</span>
-                    <span>Cut from:</span>
-                    <input
-                      type="number"
-                      min="0"
-                      max={seg.end}
-                      step="0.1"
-                      value={seg.start}
-                      onChange={(e) => updateCutSegment(idx, 'start', parseFloat(e.target.value) || 0)}
-                      className="w-16 px-2 py-0.5 rounded bg-surface-container-lowest dark:bg-slate-900 font-mono text-xs"
-                    />
-                    <span>s to</span>
-                    <input
-                      type="number"
-                      min={seg.start}
-                      max={audioDuration}
-                      step="0.1"
-                      value={seg.end}
-                      onChange={(e) => updateCutSegment(idx, 'end', parseFloat(e.target.value) || 0)}
-                      className="w-16 px-2 py-0.5 rounded bg-surface-container-lowest dark:bg-slate-900 font-mono text-xs"
-                    />
-                    <span>s</span>
-                    <button
-                      type="button"
-                      onClick={() => removeCutSegment(idx)}
-                      className="ml-auto text-rose-500 hover:text-rose-700 p-1"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
+            <div className="rounded-2xl bg-surface-container-low dark:bg-slate-800/60 p-4 border border-outline-variant/20 space-y-3">
+              <div className="flex items-center justify-between"><h3 className="text-sm font-bold text-on-surface dark:text-slate-100">Audio Effects</h3>
+                <button type="button" onClick={() => setAudioEffects([])} className="text-xs font-semibold text-primary dark:text-violet-200">Clear effects</button></div>
+              <div className="flex flex-wrap gap-2">{AUDIO_EFFECTS.map(effect => <button type="button" key={effect.id} aria-pressed={audioEffects.includes(effect.id)}
+                onClick={() => setAudioEffects(current => current.includes(effect.id) ? current.filter(id => id !== effect.id) : [...current, effect.id])}
+                className={`px-4 py-2 rounded-full text-xs font-semibold ${audioEffects.includes(effect.id) ? 'bg-primary-container text-white' : 'bg-white dark:bg-slate-700 text-on-surface dark:text-slate-100'}`}>{effect.label}</button>)}</div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {AUDIO_EFFECTS.filter(effect => audioEffects.includes(effect.id)).map(effect => (
+                  <label key={effect.id} className="flex flex-col gap-2 text-xs text-on-surface dark:text-slate-100">
+                    <span className="flex justify-between font-semibold"><span>{effect.label} level</span><span className="font-mono">{audioEffectLevels[effect.id] ?? 100}%</span></span>
+                    <input type="range" disabled={!selectedFile} aria-label={`${effect.label} level`} min="0" max="100" step="1" value={audioEffectLevels[effect.id] ?? 100}
+                      aria-valuetext={`${audioEffectLevels[effect.id] ?? 100} percent`}
+                      onChange={e => setAudioEffectLevels(current => ({...current, [effect.id]: Number(e.target.value)}))}
+                      className="w-full h-2 accent-primary dark:accent-violet-400 cursor-pointer rounded-full" />
+                  </label>
                 ))}
               </div>
-            )}
+              <p className="text-xs text-on-surface-variant dark:text-slate-200">Set each effect from 0–100%. Listen with Play; levels also apply to the export.</p>
+            </div>
+
           </div>
         </section>
 
@@ -792,17 +703,14 @@ export default function AudioConverterPage() {
             {/* Header */}
             <div className="flex items-center justify-between pb-1 border-b border-outline-variant/20">
               <div className="flex items-center gap-2">
-                <Sliders className="w-4 h-4 text-primary" />
-                <h2 className="text-base font-bold text-on-surface">Export Settings</h2>
+                <Sliders className="w-4 h-4 text-primary dark:text-violet-200" />
+                <h2 className="text-base font-bold text-on-surface dark:text-slate-100">Export Settings</h2>
               </div>
-              <span className="px-2.5 py-0.5 rounded-full bg-tertiary-fixed text-on-tertiary-fixed font-semibold text-xs uppercase tracking-wider">
-                Lossless Ready
-              </span>
             </div>
 
             {/* Format Pills */}
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-on-surface">Audio Container Format</label>
+              <label className="text-xs font-semibold text-on-surface dark:text-slate-100">Audio Container Format</label>
               <div className="grid grid-cols-5 gap-1 p-1 bg-surface-container-low dark:bg-slate-800 rounded-2xl">
                 {(['mp3', 'wav', 'aac', 'flac', 'ogg'] as const).map((fmt) => (
                   <button
@@ -811,8 +719,8 @@ export default function AudioConverterPage() {
                     onClick={() => setTargetFormat(fmt)}
                     className={`py-2 rounded-xl text-xs font-bold uppercase transition-all ${
                       targetFormat === fmt
-                        ? 'bg-surface-container-lowest dark:bg-slate-700 text-primary shadow-xs'
-                        : 'text-on-surface-variant hover:text-on-surface'
+                        ? 'bg-surface-container-lowest dark:bg-slate-700 text-primary dark:text-violet-200 shadow-xs'
+                        : 'text-on-surface-variant dark:text-slate-200 hover:text-on-surface'
                     }`}
                   >
                     {fmt}
@@ -824,8 +732,8 @@ export default function AudioConverterPage() {
             {/* Target Bitrate Tiles */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between text-xs">
-                <label className="font-semibold text-on-surface">Target Bitrate</label>
-                <span className="font-mono text-primary font-semibold">CBR Mode</span>
+                <label className="font-semibold text-on-surface dark:text-slate-100">Target Bitrate</label>
+                <span className="font-mono text-primary dark:text-violet-200 font-semibold">CBR Mode</span>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 {[
@@ -840,12 +748,12 @@ export default function AudioConverterPage() {
                     onClick={() => setBitrate(tier.kbps)}
                     className={`p-3 rounded-2xl text-left flex flex-col justify-between transition-all border ${
                       bitrate === tier.kbps
-                        ? 'bg-primary-fixed/40 dark:bg-slate-700 border-primary text-primary font-bold shadow-xs'
-                        : 'bg-surface-container-low dark:bg-slate-800 border-transparent text-on-surface hover:bg-surface-container'
+                        ? 'bg-primary-fixed/40 dark:bg-slate-700 border-primary text-primary dark:text-violet-200 font-bold shadow-xs'
+                        : 'bg-surface-container-low dark:bg-slate-800 border-transparent text-on-surface dark:text-slate-100 hover:bg-surface-container'
                     }`}
                   >
                     <span className="text-sm font-mono font-bold">{tier.sub}</span>
-                    <span className="text-[11px] text-on-surface-variant mt-0.5">{tier.label}</span>
+                    <span className="text-[11px] text-on-surface-variant dark:text-slate-200 mt-0.5">{tier.label}</span>
                   </button>
                 ))}
               </div>
@@ -854,7 +762,7 @@ export default function AudioConverterPage() {
             {/* Channels & Sample Rate */}
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-on-surface">Channels</label>
+                <label className="text-xs font-semibold text-on-surface dark:text-slate-100">Channels</label>
                 <select
                   value={channels}
                   onChange={(e) => setChannels(parseInt(e.target.value, 10))}
@@ -865,7 +773,7 @@ export default function AudioConverterPage() {
                 </select>
               </div>
               <div className="space-y-1">
-                <label className="text-xs font-semibold text-on-surface">Sample Rate</label>
+                <label className="text-xs font-semibold text-on-surface dark:text-slate-100">Sample Rate</label>
                 <select
                   value={sampleRate}
                   onChange={(e) => setSampleRate(e.target.value)}
@@ -876,41 +784,6 @@ export default function AudioConverterPage() {
                   <option value="96000">96.0 kHz (Hi-Res)</option>
                 </select>
               </div>
-            </div>
-
-            {/* Output Size Estimation Box */}
-            <div className="w-full bg-surface-container-low dark:bg-slate-800/60 rounded-2xl p-space-md space-y-2 border border-outline-variant/30">
-              <div className="flex items-center justify-between">
-                <span className="text-xs uppercase tracking-wider text-outline font-bold">Estimated Output Size</span>
-                {sizeEstimate && sizeEstimate.reductionPercentage !== undefined && (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-tertiary-fixed text-on-tertiary-fixed font-mono text-xs font-bold">
-                    <TrendingDown className="w-3.5 h-3.5" />
-                    <span>{sizeEstimate.reductionPercentage}% vs source</span>
-                  </span>
-                )}
-              </div>
-
-              <div className="flex items-baseline gap-3">
-                <span className="text-3xl font-mono font-extrabold text-on-surface tracking-tight">
-                  {isEstimating ? (
-                    <span className="animate-pulse">Calculating...</span>
-                  ) : sizeEstimate ? (
-                    sizeEstimate.formattedEstimate || sizeEstimate.formattedEstimatedSize
-                  ) : (
-                    '~8.7 MB'
-                  )}
-                </span>
-                {selectedFile && (
-                  <span className="text-xs font-mono text-outline line-through">
-                    {(selectedFile.size / (1024 * 1024)).toFixed(1)} MB
-                  </span>
-                )}
-              </div>
-
-              <p className="text-xs text-on-surface-variant leading-relaxed">
-                Calculated for <strong>{effectiveDuration.toFixed(1)}s</strong> duration at{' '}
-                <strong>{bitrate} {targetFormat.toUpperCase()}</strong>.
-              </p>
             </div>
 
             {/* Error Alert */}
@@ -928,7 +801,7 @@ export default function AudioConverterPage() {
                   type="button"
                   onClick={handleConvert}
                   disabled={!selectedFile}
-                  className="w-full h-12 rounded-full bg-primary-container hover:bg-primary text-white font-semibold text-sm flex items-center justify-center gap-2 shadow-md shadow-primary/25 transition-all hover:scale-[1.01] active:scale-95 disabled:opacity-50"
+                  className="w-full h-12 rounded-full bg-primary-container hover:bg-primary text-white font-semibold text-sm flex items-center justify-center gap-2 shadow-md shadow-primary/25 transition-all hover:scale-[1.01] active:scale-95 disabled:opacity-50 dark:disabled:opacity-100 dark:disabled:bg-violet-950 dark:disabled:text-violet-200"
                 >
                   <Download className="w-4 h-4" />
                   <span>Export Master Audio</span>
@@ -950,7 +823,7 @@ export default function AudioConverterPage() {
                       style={{ width: `${progress ? (progress.percentage ?? progress.progressPercentage ?? 20) : 20}%` }}
                     />
                   </div>
-                  <div className="flex items-center justify-between text-xs text-on-surface-variant font-mono">
+                  <div className="flex items-center justify-between text-xs text-on-surface-variant dark:text-slate-200 font-mono">
                     <span>{progress ? (progress.stage || 'Transcoding audio...') : 'Transcoding audio...'}</span>
                     <span>{progress ? `${progress.percentage ?? progress.progressPercentage ?? 0}%` : 'Processing...'}</span>
                   </div>
@@ -966,8 +839,8 @@ export default function AudioConverterPage() {
 
               {stage === 'COMPLETED' && (
                 <div className="space-y-2">
-                  <div className="p-3 rounded-2xl bg-tertiary-fixed/40 border border-tertiary/40 flex items-center gap-2 text-tertiary text-xs font-semibold">
-                    <CheckCircle2 className="w-4 h-4 text-tertiary shrink-0" />
+                  <div className="p-3 rounded-2xl bg-tertiary-fixed/40 dark:bg-emerald-950/60 border border-tertiary/40 flex items-center gap-2 text-tertiary dark:text-emerald-300 text-xs font-semibold">
+                    <CheckCircle2 className="w-4 h-4 text-tertiary dark:text-emerald-300 shrink-0" />
                     <span>Conversion complete! High-fidelity audio ready.</span>
                   </div>
                   <a
@@ -984,7 +857,7 @@ export default function AudioConverterPage() {
                       setStage('IDLE');
                       setError(null);
                     }}
-                    className="w-full h-10 rounded-full bg-surface-container-low text-on-surface text-xs font-semibold hover:bg-surface-container transition-colors"
+                    className="w-full h-10 rounded-full border border-transparent bg-surface-container-low text-slate-900 hover:bg-surface-container dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700 text-xs font-semibold transition-colors"
                   >
                     Edit Another
                   </button>
@@ -995,16 +868,11 @@ export default function AudioConverterPage() {
                 <button
                   type="button"
                   onClick={() => setStage('IDLE')}
-                  className="w-full h-11 rounded-full bg-surface-container-low hover:bg-surface-container text-on-surface font-semibold text-xs transition-colors"
+                  className="w-full h-11 rounded-full bg-surface-container-low hover:bg-surface-container text-on-surface dark:text-slate-100 font-semibold text-xs transition-colors"
                 >
                   Try Again
                 </button>
               )}
-
-              <div className="flex items-center justify-center gap-2 text-center text-on-surface-variant text-xs pt-1">
-                <Shield className="w-3.5 h-3.5 text-tertiary" />
-                <span>Zero Database · Ephemeral Sandboxing</span>
-              </div>
             </div>
           </div>
         </aside>

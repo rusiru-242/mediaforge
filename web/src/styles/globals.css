@@ -3,6 +3,13 @@
 @tailwind utilities;
 
 :root {
+  --on-surface: 11 28 48;
+  --on-surface-variant: 71 69 85;
+  --surface: 248 249 255;
+  --surface-lowest: 255 255 255;
+  --surface-low: 239 244 255;
+  --surface-container: 229 238 255;
+  --surface-high: 220 233 255;
   --background: #f8fafc;
   --foreground: #0f172a;
   --card: #ffffff;
@@ -12,11 +19,19 @@
 }
 
 .dark {
+  color-scheme: dark;
+  --on-surface: 241 245 249;
+  --on-surface-variant: 226 232 240;
+  --surface: 11 15 25;
+  --surface-lowest: 15 23 42;
+  --surface-low: 23 32 51;
+  --surface-container: 30 41 59;
+  --surface-high: 51 65 85;
   --background: #0b0f19;
   --foreground: #f1f5f9;
   --card: #111827;
   --card-border: #1f2937;
-  --muted: #94a3b8;
+  --muted: #cbd5e1;
   --accent: #6366f1;
 }
 
@@ -26,6 +41,122 @@ body {
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
   min-height: 100vh;
   transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* Keep editor text and native form controls readable independently of light palette utilities. */
+.dark .video-editor,
+.dark .audio-editor,
+.dark .image-editor {
+  --on-surface: 241 245 249;
+  --on-surface-variant: 226 232 240;
+  color: #f1f5f9;
+}
+
+.dark .video-editor select,
+.dark .video-editor option,
+.dark .video-editor input[type="number"],
+.dark .audio-editor select,
+.dark .audio-editor option,
+.dark .audio-editor input[type="number"],
+.dark .image-editor select,
+.dark .image-editor option,
+.dark .image-editor input[type="number"] {
+  color: #f1f5f9;
+  background-color: #1e293b;
+  border-color: #475569;
+  color-scheme: dark;
+}
+
+/* Image tools use brighter accent text while retaining saturated action buttons. */
+.dark .image-editor .text-primary,
+.dark .image-editor .dark\:text-primary {
+  color: #c4b5fd;
+}
+.dark .image-editor .text-outline {
+  color: #cbd5e1;
+}
+.dark .image-editor .text-on-surface {
+  color: #f1f5f9;
+}
+.dark .image-editor .text-on-surface-variant {
+  color: #cbd5e1;
+}
+.dark .image-editor fieldset:disabled {
+  opacity: 1;
+}
+.dark .image-editor input[type="range"]:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.dark .image-editor .text-tertiary {
+  color: #6ee7b7;
+}
+.dark .image-editor input::placeholder {
+  color: #94a3b8;
+  opacity: 1;
+}
+.dark .image-editor input[type="checkbox"],
+.dark .image-editor input[type="range"] {
+  accent-color: #a78bfa;
+}
+.dark .image-editor .bg-tertiary-fixed\/40 {
+  background-color: #052e26;
+  border-color: #065f46;
+}
+
+/* Batch queue, settings and native controls share the editor dark palette. */
+.dark .batch-editor {
+  --on-surface: 241 245 249;
+  --on-surface-variant: 203 213 225;
+  color: #f1f5f9;
+}
+.dark .batch-editor .text-on-surface {
+  color: #f1f5f9;
+}
+.dark .batch-editor .text-on-surface-variant,
+.dark .batch-editor .text-outline {
+  color: #cbd5e1;
+}
+.dark .batch-editor .text-primary {
+  color: #c4b5fd;
+}
+.dark .batch-editor .text-secondary {
+  color: #a5b4fc;
+}
+.dark .batch-editor .text-tertiary {
+  color: #6ee7b7;
+}
+.dark .batch-editor .bg-primary-fixed {
+  background-color: #312e61;
+}
+.dark .batch-editor .bg-tertiary-fixed,
+.dark .batch-editor .bg-tertiary-fixed\/40 {
+  background-color: #052e26;
+  color: #a7f3d0;
+  border-color: #065f46;
+}
+.dark .batch-editor select,
+.dark .batch-editor option,
+.dark .batch-editor input[type="number"] {
+  color: #f1f5f9;
+  background-color: #1e293b;
+  border-color: #475569;
+  color-scheme: dark;
+}
+.dark .batch-editor input[type="checkbox"] {
+  accent-color: #a78bfa;
+}
+.dark .batch-editor .text-rose-600 {
+  color: #fda4af;
+}
+.dark .batch-editor .hover\:bg-rose-50:hover {
+  background-color: #4c1525;
+}
+
+.audio-editor input[type="range"]:disabled,
+.video-editor input[type="range"]:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 /* Custom modern scrollbar */
@@ -55,3 +186,87 @@ body {
   background: #475569;
 }
 
+.downloader-page {
+  --download-accent: 147 51 234;
+  --download-hover: 126 34 206;
+  --download-text: 126 34 206;
+  --download-light: 216 180 254;
+  background-color: color-mix(in srgb, rgb(var(--download-accent)) 4%, #f8fafc);
+}
+.downloader-page[data-platform="youtube"] {
+  --download-accent: 220 38 38;
+  --download-hover: 185 28 28;
+  --download-text: 185 28 28;
+  --download-light: 252 165 165;
+}
+.downloader-page[data-platform="facebook"] {
+  --download-accent: 24 101 230;
+  --download-hover: 29 78 216;
+  --download-text: 29 78 216;
+  --download-light: 147 197 253;
+}
+.downloader-page[data-platform="instagram"] {
+  --download-accent: 193 53 132;
+  --download-hover: 157 23 77;
+  --download-text: 157 23 77;
+  --download-light: 249 168 212;
+}
+.downloader-page[data-platform="tiktok"] {
+  --download-accent: 15 118 125;
+  --download-hover: 17 94 99;
+  --download-text: 15 118 125;
+  --download-light: 94 234 212;
+}
+.downloader-page[data-platform="twitter"] {
+  --download-accent: 51 65 85;
+  --download-hover: 15 23 42;
+  --download-text: 30 41 59;
+  --download-light: 203 213 225;
+}
+.dark .downloader-page {
+  background-color: color-mix(in srgb, rgb(var(--download-accent)) 7%, #0b0e14);
+}
+.dark .home-page {
+  --on-surface: 241 245 249;
+  --on-surface-variant: 203 213 225;
+  color: #f1f5f9;
+}
+.dark .home-page .text-on-surface {
+  color: #f1f5f9;
+}
+.dark .home-page .text-on-surface-variant,
+.dark .home-page .text-outline {
+  color: #cbd5e1;
+}
+.dark .home-page .text-primary,
+.dark .home-page .text-primary-container {
+  color: #c4b5fd;
+}
+.dark .home-page .text-secondary,
+.dark .home-page .text-secondary-container {
+  color: #a5b4fc;
+}
+.dark .home-page .text-tertiary,
+.dark .home-page .text-tertiary-container {
+  color: #6ee7b7;
+}
+.dark .home-page .bg-clip-text {
+  background-image: linear-gradient(to right, #c4b5fd, #a5b4fc, #f0abfc);
+}
+.dark .home-page input,
+.dark .home-page select,
+.dark .home-page option {
+  color: #f1f5f9;
+  color-scheme: dark;
+}
+.dark .home-page select,
+.dark .home-page option {
+  background-color: #1e293b;
+}
+.dark .home-page input::placeholder {
+  color: #94a3b8;
+  opacity: 1;
+}
+.dark .home-page input[type="range"] {
+  accent-color: #a78bfa;
+}

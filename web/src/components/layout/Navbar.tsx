@@ -2,44 +2,25 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
-import { api } from "@/services/apiClient";
+import { MediaForgeMark } from "@/components/ui/MediaForgeMark";
 import {
   DownloadCloud,
   Video,
   Music,
   Image as ImageIcon,
   Layers,
-  Sparkles,
+  Home,
   Menu,
   X,
-  Plus,
 } from "lucide-react";
 
 export function Navbar() {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [backendUp, setBackendUp] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    let isMounted = true;
-    api
-      .getHealth()
-      .then((res) => {
-        if (isMounted) setBackendUp(res.status === "UP");
-      })
-      .catch(() => {
-        if (isMounted) setBackendUp(false);
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
   const navLinks = [
-    { name: "Overview", href: "/", icon: Sparkles },
+    { name: "Overview", href: "/", icon: Home },
     { name: "Downloader", href: "/downloader", icon: DownloadCloud },
     { name: "Video Editor", href: "/converter/video", icon: Video },
     { name: "Audio Editor", href: "/converter/audio", icon: Music },
@@ -60,13 +41,10 @@ export function Navbar() {
         <div className="flex items-center gap-6">
           <Link href="/" className="flex items-center gap-2.5 group focus:outline-none">
             <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-primary to-primary-container flex items-center justify-center text-white shadow-md shadow-primary/25 group-hover:scale-105 transition-transform">
-              <Sparkles className="w-5 h-5" />
+              <MediaForgeMark />
             </div>
             <span className="font-bold text-xl tracking-tight text-on-surface dark:text-white flex items-center gap-2">
               MediaForge
-              <span className="px-2 py-0.5 rounded-full bg-primary-fixed text-on-primary-fixed-variant text-[11px] font-semibold uppercase tracking-wider dark:bg-primary-container dark:text-white">
-                Pro
-              </span>
             </span>
           </Link>
 
@@ -93,32 +71,9 @@ export function Navbar() {
 
         {/* Right Action Bar */}
         <div className="flex items-center gap-2 sm:gap-3">
-          {/* Telemetry Indicator */}
-          <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-surface-container-low border border-outline-variant/30 text-on-surface-variant text-xs font-mono dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300">
-            <span
-              className={`w-2 h-2 rounded-full ${
-                backendUp === true
-                  ? "bg-emerald-500 animate-pulse"
-                  : backendUp === false
-                  ? "bg-rose-500"
-                  : "bg-amber-400 animate-ping"
-              }`}
-            />
-            <span>{backendUp === true ? "Engine Online · Port 8081" : backendUp === false ? "Backend Offline" : "Connecting..."}</span>
-          </div>
+
 
           <ThemeToggle />
-
-          {/* New Import CTA */}
-          <Link href="/converter/video">
-            <button
-              type="button"
-              className="flex items-center gap-1.5 px-4 h-10 rounded-full bg-primary-container text-on-primary text-xs font-semibold hover:bg-primary transition-all shadow-[0_2px_8px_rgba(103,80,245,0.25)] hover:scale-[1.02] active:scale-95"
-            >
-              <Plus className="w-4 h-4" />
-              <span className="hidden sm:inline">New Import</span>
-            </button>
-          </Link>
 
           {/* Mobile Menu Hamburger */}
           <button

@@ -38,6 +38,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Import(SecurityConfig.class)
 class DownloadControllerIntegrationTest {
 
+    @Test void rejectsAudioFormatSubmittedAsVideo() throws Exception {
+        mockMvc.perform(post("/api/v1/downloads").contentType(MediaType.APPLICATION_JSON).content("""
+                {"url":"https://example.com/video","selectedFormat":"m4a","selectedQuality":"source","mediaType":"video"}
+                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.validationErrors.mediaTypeCompatible").value("Selected format conflicts with requested media type"));
+    }
+
     @Autowired
     private MockMvc mockMvc;
 

@@ -19,7 +19,7 @@ public class VideoConversionServiceImpl implements VideoConversionService {
 
     private static final Logger log = LoggerFactory.getLogger(VideoConversionServiceImpl.class);
 
-    private static final Set<String> SUPPORTED_FORMATS = Set.of("mp4", "webm", "mkv", "mov", "avi");
+    private static final Set<String> SUPPORTED_FORMATS = Set.of("mp4", "webm", "mkv", "mov", "avi", "flv");
 
     private final FFmpegProcessExecutor ffmpegExecutor;
     private final MediaProbeService probeService;
@@ -75,7 +75,7 @@ public class VideoConversionServiceImpl implements VideoConversionService {
 
         List<TimeRange> keptSegments = calculateKeptSegments(options, sourceDuration);
 
-        if (!keptSegments.isEmpty() && (hasCut || keptSegments.size() > 1)) {
+        if (!keptSegments.isEmpty() && (hasCut || hasTrim || keptSegments.size() > 1)) {
             // Build filter_complex with segment trims + concat
             buildFilterComplexWithSegments(args, keptSegments, includeAudio, options, probeResult, format);
         } else {
@@ -186,6 +186,13 @@ public class VideoConversionServiceImpl implements VideoConversionService {
         ffmpegExecutor.execute(jobId, args, effectiveDuration, progressConsumer);
 
         long fileSize = Files.size(outputFile.toPath());
+        int expectedHeight = resolutionHeight(options != null ? options.getTargetResolution() : null);
+        if (expectedHeight > 0) {
+            MediaProbeResult outputProbe = probeService.probe(outputFile);
+            if (!outputProbe.hasVideo() || outputProbe.getHeight() != expectedHeight) {
+                throw new IllegalStateException("Requested " + expectedHeight + "p video, but the exported video has height " + outputProbe.getHeight() + ".");
+            }
+        }
         String mimeType = getMimeType(format);
 
         log.info("Video conversion finished for job {}: format={}, effectiveDuration={}s, size={} bytes",
@@ -380,85 +387,49 @@ public class VideoConversionServiceImpl implements VideoConversionService {
             filters.add(String.format(Locale.ROOT, "crop=%d:%d:%d:%d", cropW, cropH, cropX, cropY));
         }
 
-        // 2. Resolution Scaling & Upscaling Prevention
+        // 2. Honor the selected output resolution, including explicit upscaling.
         String scaleFilter = buildScaleFilter(probe, options.getTargetResolution(), options.hasCrop() ? options.getCropHeight() : null);
         if (scaleFilter != null) {
             filters.add(scaleFilter);
         }
 
+        double duration = options.calculateEffectiveDuration(probe.getDurationSeconds());
+        if (options.getVideoFadeInDuration() != null && options.getVideoFadeInDuration() > 0) {
+            filters.add("setpts=PTS-STARTPTS");
+            filters.add(String.format(Locale.ROOT, "fade=t=in:st=0:d=%.3f", Math.min(duration, options.getVideoFadeInDuration())));
+        }
+        if (options.getVideoFadeOutDuration() != null && options.getVideoFadeOutDuration() > 0) {
+            double fadeDuration = Math.min(duration, options.getVideoFadeOutDuration());
+            if (options.getVideoFadeInDuration() == null || options.getVideoFadeInDuration() <= 0) filters.add("setpts=PTS-STARTPTS");
+            filters.add(String.format(Locale.ROOT, "fade=t=out:st=%.3f:d=%.3f", duration - fadeDuration, fadeDuration));
+        }
         return filters;
     }
 
     private List<String> buildAudioFilters(ConversionOptions options, double effectiveDuration) {
-        List<String> filters = new ArrayList<>();
-        if (options == null) return filters;
-
-        // 1. Volume adjustment
-        if (options.getVolume() != null && options.getVolume() > 0.0 && Math.abs(options.getVolume() - 1.0) > 0.01) {
-            filters.add(String.format(Locale.ROOT, "volume=%.2f", options.getVolume()));
-        }
-
-        // 2. Silence removal
-        if (Boolean.TRUE.equals(options.getRemoveSilence())) {
-            filters.add("silenceremove=start_periods=1:stop_periods=1:stop_duration=1:stop_threshold=-50dB");
-        }
-
-        // 3. Fade in
-        if (options.getFadeInDuration() != null && options.getFadeInDuration() > 0.0) {
-            filters.add(String.format(Locale.ROOT, "afade=t=in:ss=0:d=%.2f", options.getFadeInDuration()));
-        }
-
-        // 4. Fade out
-        if (options.getFadeOutDuration() != null && options.getFadeOutDuration() > 0.0) {
-            double fadeStart = Math.max(0.0, effectiveDuration - options.getFadeOutDuration());
-            filters.add(String.format(Locale.ROOT, "afade=t=out:st=%.2f:d=%.2f", fadeStart, options.getFadeOutDuration()));
-        }
-
-        return filters;
+        return AudioFilterBuilder.build(options, effectiveDuration);
     }
 
     private String buildScaleFilter(MediaProbeResult probe, String targetResolution, Integer activeHeight) {
-        if (targetResolution == null || targetResolution.isBlank() || "source".equalsIgnoreCase(targetResolution) || "original".equalsIgnoreCase(targetResolution)) {
-            return null;
-        }
-
-        int targetHeight;
-        switch (targetResolution.toLowerCase(Locale.ROOT)) {
-            case "2160p":
-            case "4k":
-                targetHeight = 2160;
-                break;
-            case "1440p":
-            case "2k":
-                targetHeight = 1440;
-                break;
-            case "1080p":
-                targetHeight = 1080;
-                break;
-            case "720p":
-                targetHeight = 720;
-                break;
-            case "480p":
-                targetHeight = 480;
-                break;
-            case "360p":
-                targetHeight = 360;
-                break;
-            case "240p":
-                targetHeight = 240;
-                break;
-            default:
-                return null;
-        }
-
+        int targetHeight = resolutionHeight(targetResolution);
+        if (targetHeight == 0) return null;
         int currentHeight = (activeHeight != null && activeHeight > 0) ? activeHeight : probe.getHeight();
-        if (currentHeight > 0 && currentHeight <= targetHeight) {
-            log.info("Source height ({}p) is <= target resolution ({}p). Preserving source resolution to prevent upscaling.", currentHeight, targetHeight);
-            return null;
-        }
+        return currentHeight == targetHeight ? null : "scale=-2:" + targetHeight + ":flags=lanczos";
+    }
 
-        // -2 ensures width is an even number (divisible by 2)
-        return "scale=-2:" + targetHeight;
+    private static int resolutionHeight(String resolution) {
+        if (resolution == null || resolution.isBlank()) return 0;
+        return switch (resolution.toLowerCase(Locale.ROOT)) {
+            case "source", "original" -> 0;
+            case "4k", "2160p" -> 2160;
+            case "2k", "1440p" -> 1440;
+            case "1080p" -> 1080;
+            case "720p" -> 720;
+            case "480p" -> 480;
+            case "360p" -> 360;
+            case "240p" -> 240;
+            default -> throw new IllegalArgumentException("Unsupported target resolution: " + resolution);
+        };
     }
 
     private String resolveVideoCodec(String format, String requestedCodec) {

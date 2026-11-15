@@ -99,33 +99,41 @@ public class MediaProbeServiceImpl implements MediaProbeService {
         try {
             ProcessBuilder pb = new ProcessBuilder(command);
             Process process = pb.start();
+            var watchdog = java.util.concurrent.Executors.newSingleThreadScheduledExecutor();
+            var deadline = watchdog.schedule(process::destroyForcibly, 15, TimeUnit.SECONDS);
+            try {
 
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    output.append(line).append("\n");
+                try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        output.append(line).append("\n");
+                    }
                 }
-            }
 
-            try (BufferedReader errReader = new BufferedReader(new InputStreamReader(process.getErrorStream()))) {
-                String line;
-                while ((line = errReader.readLine()) != null) {
-                    errorOutput.append(line).append("\n");
+                try (BufferedReader errReader = new BufferedReader(new InputStreamReader(process.getErrorStream()))) {
+                    String line;
+                    while ((line = errReader.readLine()) != null) {
+                        errorOutput.append(line).append("\n");
+                    }
                 }
-            }
 
-            boolean completed = process.waitFor(15, TimeUnit.SECONDS);
-            if (!completed) {
-                process.destroyForcibly();
-                throw new IllegalStateException("FFprobe inspection timed out for file: " + file.getName());
-            }
+                boolean completed = process.waitFor(15, TimeUnit.SECONDS);
+                if (!completed) {
+                    process.destroyForcibly();
+                    throw new IllegalStateException("FFprobe inspection timed out for file: " + file.getName());
+                }
 
-            if (process.exitValue() != 0) {
-                log.warn("FFprobe returned non-zero exit code {}: {}", process.exitValue(), errorOutput);
-                throw new IllegalArgumentException("Corrupted or unsupported media file: " + errorOutput);
-            }
+                if (process.exitValue() != 0) {
+                    log.warn("FFprobe returned non-zero exit code {}: {}", process.exitValue(), errorOutput);
+                    throw new IllegalArgumentException("Corrupted or unsupported media file: " + errorOutput);
+                }
 
-            return parseProbeJson(output.toString(), file);
+                return parseProbeJson(output.toString(), file);
+            } finally {
+                deadline.cancel(false);
+                watchdog.shutdownNow();
+                if (process.isAlive()) process.destroyForcibly();
+            }
         } catch (IllegalArgumentException | IllegalStateException e) {
             throw e;
         } catch (Exception e) {
@@ -170,7 +178,7 @@ public class MediaProbeServiceImpl implements MediaProbeService {
                     String codecType = stream.has("codec_type") ? stream.get("codec_type").asText() : "";
                     String codecName = stream.has("codec_name") ? stream.get("codec_name").asText() : "";
 
-                    if ("video".equalsIgnoreCase(codecType)) {
+                    if ("video".equalsIgnoreCase(codecType) && !stream.path("disposition").path("attached_pic").asBoolean(false)) {
                         VideoStreamInfo vInfo = new VideoStreamInfo();
                         vInfo.setCodecName(codecName);
                         if (stream.has("width")) {

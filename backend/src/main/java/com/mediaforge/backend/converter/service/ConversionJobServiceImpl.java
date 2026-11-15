@@ -158,6 +158,8 @@ public class ConversionJobServiceImpl implements ConversionJobService {
         convRequest.setFlipVertical(request.getFlipVertical());
         convRequest.setBrightness(request.getBrightness());
         convRequest.setContrast(request.getContrast());
+        convRequest.setSaturation(request.getSaturation());
+        convRequest.setWarmth(request.getWarmth());
         convRequest.setStripMetadata(request.getStripMetadata());
 
         conversionRequestRepository.save(convRequest);
@@ -198,9 +200,13 @@ public class ConversionJobServiceImpl implements ConversionJobService {
         options.setCropHeight(request.getCropHeight());
         options.setAspectRatio(request.getAspectRatio());
         options.setVolume(request.getVolume());
+        options.setAudioEffects(request.getAudioEffects());
+        options.setAudioEffectLevels(request.getAudioEffectLevels());
         options.setRemoveSilence(request.getRemoveSilence());
         options.setFadeInDuration(request.getFadeInDuration());
         options.setFadeOutDuration(request.getFadeOutDuration());
+        options.setVideoFadeInDuration(request.getVideoFadeInDuration());
+        options.setVideoFadeOutDuration(request.getVideoFadeOutDuration());
         options.setImageWidth(request.getImageWidth());
         options.setImageHeight(request.getImageHeight());
         options.setImageQuality(request.getImageQuality());
@@ -210,6 +216,8 @@ public class ConversionJobServiceImpl implements ConversionJobService {
         options.setFlipVertical(request.getFlipVertical());
         options.setBrightness(request.getBrightness());
         options.setContrast(request.getContrast());
+        options.setSaturation(request.getSaturation());
+        options.setWarmth(request.getWarmth());
         options.setStripMetadata(request.getStripMetadata());
         options.normalizePresets();
 

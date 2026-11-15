@@ -3,6 +3,8 @@ package com.mediaforge.backend.downloader.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mediaforge.backend.converter.service.FFmpegProcessExecutor;
+import com.mediaforge.backend.converter.service.MediaProbeServiceImpl;
+import com.mediaforge.backend.converter.model.MediaProbeResult;
 import com.mediaforge.backend.downloader.model.DownloadProgress;
 import com.mediaforge.backend.downloader.model.DownloadTask;
 import com.mediaforge.backend.downloader.model.DownloadedMedia;
@@ -15,20 +17,24 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.BufferedReader;
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 @Service
 public class YtDlpProcessExecutor {
@@ -36,9 +42,8 @@ public class YtDlpProcessExecutor {
     private static final Logger log = LoggerFactory.getLogger(YtDlpProcessExecutor.class);
 
     private static final Pattern PROGRESS_PERCENT_PATTERN = Pattern.compile("\\[download\\]\\s+([0-9.]+)%");
-    private static final Pattern PROGRESS_SPEED_PATTERN = Pattern.compile("at\\s+([0-9.]+\\S+/s)");
-    private static final Pattern PROGRESS_ETA_PATTERN = Pattern.compile("ETA\\s+([0-9:]+)");
 
+    private final DownloadOutputVerifier outputVerifier;
     private final ObjectMapper objectMapper;
     private final FFmpegProcessExecutor ffmpegExecutor;
     private final Map<UUID, Process> activeProcesses = new ConcurrentHashMap<>();
@@ -52,6 +57,13 @@ public class YtDlpProcessExecutor {
     private List<String> resolvedExecutableCommand;
 
     public YtDlpProcessExecutor(ObjectMapper objectMapper, FFmpegProcessExecutor ffmpegExecutor) {
+        this(objectMapper, ffmpegExecutor, new DownloadOutputVerifier(new MediaProbeServiceImpl(objectMapper)));
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public YtDlpProcessExecutor(ObjectMapper objectMapper, FFmpegProcessExecutor ffmpegExecutor,
+                                DownloadOutputVerifier outputVerifier) {
+        this.outputVerifier = outputVerifier;
         this.objectMapper = objectMapper != null ? objectMapper : new ObjectMapper();
         this.ffmpegExecutor = ffmpegExecutor;
     }
@@ -118,6 +130,7 @@ public class YtDlpProcessExecutor {
      */
     public MediaMetadata extractMetadata(URI uri) {
         List<String> cmd = new ArrayList<>(getExecutableCommand());
+        cmd.add("--ignore-config");
         cmd.add("-J");
         cmd.add("--no-playlist");
         cmd.add(uri.toString());
@@ -178,8 +191,8 @@ public class YtDlpProcessExecutor {
             MediaMetadata metadata = new MediaMetadata();
             metadata.setTitle(title);
             metadata.setSourceName(uploader != null ? "YouTube (" + uploader + ")" : "YouTube");
-            metadata.setMediaType("VIDEO");
-            metadata.setMimeType("video/mp4");
+            metadata.setMediaType(sourceHasStream(root, "vcodec") ? "VIDEO" : "AUDIO");
+            metadata.setMimeType(DownloadOutputVerifier.mimeType(ext));
             metadata.setContainerFormat(ext);
             metadata.setThumbnailUri(thumbnail);
             if (duration > 0) {
@@ -197,7 +210,7 @@ public class YtDlpProcessExecutor {
                         hasDrm = true;
                     }
                     int height = fmt.path("height").asInt(0);
-                    if (height > 0) {
+                    if (height > 0 && usableStream(fmt, "vcodec")) {
                         availableHeights.add(height);
                     }
                     long fs = fmt.path("filesize").asLong(fmt.path("filesize_approx").asLong(0));
@@ -215,11 +228,6 @@ public class YtDlpProcessExecutor {
             if (hasDrm && availableHeights.isEmpty()) {
                 metadata.setMessage("This media stream is protected by DRM (Digital Rights Management) and cannot be downloaded directly.");
                 return metadata;
-            }
-
-            // Default heights if standard YouTube video
-            if (availableHeights.isEmpty()) {
-                availableHeights.addAll(List.of(1080, 720, 480, 360));
             }
 
             List<MediaFormatOption> formatOptions = new ArrayList<>();
@@ -263,7 +271,7 @@ public class YtDlpProcessExecutor {
             }
 
             // Add High Quality MP3 extraction option
-            qualityList.add("Audio Only (High Quality)");
+
             formatOptions.add(new MediaFormatOption(
                     "mp3",
                     "Audio Only (320 kbps)",
@@ -275,6 +283,9 @@ public class YtDlpProcessExecutor {
                     "MP3 Audio Extraction (High Quality)"
             ));
 
+            if (!sourceHasStream(root, "acodec")) formatOptions.removeIf(f -> DownloadOutputVerifier.isAudio(f.getFormat()));
+            else for (String audioFormat : List.of("m4a", "wav")) formatOptions.add(new MediaFormatOption(
+                    audioFormat, "Source Audio", null, DownloadOutputVerifier.mimeType(audioFormat), null, true, true, audioFormat.toUpperCase(Locale.ROOT) + " Audio"));
             metadata.setAvailableFormats(formatOptions);
             metadata.setAvailableQualities(qualityList);
 
@@ -298,145 +309,177 @@ public class YtDlpProcessExecutor {
      */
     public DownloadedMedia download(DownloadTask task, ProgressCallback progressCallback) throws IOException {
         UUID jobId = task.getJobId();
-        Path scratchDir = task.getOutputPath();
-        Files.createDirectories(scratchDir);
-
-        String targetFormat = task.getTargetFormat() != null ? task.getTargetFormat().toLowerCase(Locale.ROOT) : "mp4";
-        String targetQuality = task.getTargetQuality();
-
-        List<String> cmd = new ArrayList<>(getExecutableCommand());
-        cmd.add("--no-playlist");
-        cmd.add("--newline");
-
-        String ffmpegPath = ffmpegExecutor.getFfmpegExecutable();
-        if (ffmpegPath != null && !ffmpegPath.isBlank()) {
-            cmd.add("--ffmpeg-location");
-            cmd.add(ffmpegPath);
+        Path scratch = task.getOutputPath().toAbsolutePath().normalize();
+        Files.createDirectories(scratch);
+        String format = task.getTargetFormat() == null ? "mp4" : task.getTargetFormat().toLowerCase(Locale.ROOT);
+        if (!Set.of("mp4", "webm", "mkv", "mov", "avi", "flv", "mp3", "m4a", "wav").contains(format)) {
+            throw new IOException("Unsupported download format: " + format);
         }
+        boolean audioOnly = DownloadOutputVerifier.isAudio(format);
+        JsonNode source = inspectSource(task);
+        boolean hasVideo = sourceHasStream(source, "vcodec");
+        boolean hasAudio = sourceHasStream(source, "acodec");
+        if (!audioOnly && !hasVideo) throw new IOException("This source has no downloadable video stream. Choose an audio format instead.");
+        if (audioOnly && !hasAudio) throw new IOException("This source has no downloadable audio stream.");
+        if (task.isCancelled()) throw new IOException("Download cancelled.");
 
-        // Quality and format selection
-        if ("mp3".equalsIgnoreCase(targetFormat)) {
-            cmd.add("-x");
-            cmd.add("--audio-format");
-            cmd.add("mp3");
-            cmd.add("--audio-quality");
-            cmd.add("0"); // Best VBR
-        } else {
-            int maxH = extractHeightFromQuality(targetQuality);
-            if (maxH > 0) {
-                cmd.add("-f");
-                cmd.add(String.format("bestvideo[height<=%d][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=%d]+bestaudio/best[height<=%d]/best", maxH, maxH, maxH));
-            } else {
-                cmd.add("-f");
-                cmd.add("bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best[ext=mp4]/best");
+        List<String> command = new ArrayList<>(getExecutableCommand());
+        command.addAll(List.of("--ignore-config", "--no-playlist", "--newline", "--no-simulate", "--no-warnings"));
+        command.addAll(List.of("--ffmpeg-location", ffmpegExecutor.getFfmpegExecutable()));
+        command.addAll(List.of("-f", buildFormatSelector(format, task.getTargetQuality(), hasAudio)));
+        // A neutral merge container allows fallback codecs. We explicitly normalize after probing.
+        if (!audioOnly) command.addAll(List.of("--merge-output-format", "mkv"));
+        Path manifest = scratch.resolve("final-path.txt");
+        command.addAll(List.of("--print-to-file", "after_move:filepath", manifest.toString()));
+        command.addAll(List.of("-o", scratch.resolve("source.%(ext)s").toString()));
+        if (task.getMaxSizeBytes() > 0) command.addAll(List.of("--max-filesize", Long.toString(task.getMaxSizeBytes())));
+        command.add(task.getSourceUri().toString());
+        runProcess(task, command, 600, line -> {
+            Matcher matcher = PROGRESS_PERCENT_PATTERN.matcher(line);
+            if (matcher.find() && progressCallback != null) {
+                int percent = Math.min(80, (int) (Double.parseDouble(matcher.group(1)) * 0.8));
+                progressCallback.onProgress(new DownloadProgress(jobId, 0L, 0L, percent, 0.0,
+                        com.mediaforge.backend.enums.JobStatus.PROCESSING, "Downloading media streams..."));
             }
-
-            cmd.add("--merge-output-format");
-            cmd.add(targetFormat);
+        });
+        Path downloaded = readFinalOutput(scratch, manifest);
+        MediaProbeResult input = outputVerifier.inspect(downloaded);
+        if (!audioOnly && (!input.hasVideo() || hasAudio && !input.hasAudio())) {
+            throw new IOException("Video/audio stream merging failed: downloaded output is missing required streams.");
         }
-
-        Path outputTemplate = scratchDir.resolve(jobId.toString() + ".%(ext)s");
-        cmd.add("-o");
-        cmd.add(outputTemplate.toString());
-        cmd.add(task.getSourceUri().toString());
-
-        log.info("Starting yt-dlp download for job {}: {}", jobId, String.join(" ", cmd));
-
-        ProcessBuilder pb = new ProcessBuilder(cmd);
-        Process process = pb.start();
-        activeProcesses.put(jobId, process);
-
-        List<String> errorOutput = new ArrayList<>();
-
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
-             BufferedReader errReader = new BufferedReader(new InputStreamReader(process.getErrorStream()))) {
-
-            // Asynchronously collect stderr
-            Thread errThread = new Thread(() -> {
-                String line;
-                try {
-                    while ((line = errReader.readLine()) != null) {
-                        errorOutput.add(line);
-                    }
-                } catch (IOException ignored) {}
+        if (audioOnly && !input.hasAudio()) throw new IOException("Downloaded source contains no audio stream.");
+        Path output = scratch.resolve(jobId + "." + format);
+        List<String> args = normalizationArguments(downloaded, output, format, input, task.getTargetQuality());
+        try {
+            if (task.isCancelled()) throw new IOException("Download cancelled before processing.");
+            boolean success = ffmpegExecutor.execute(jobId, args, input.getDurationSeconds(), progress -> {
+                if (task.isCancelled()) ffmpegExecutor.cancelProcess(jobId);
+                if (progressCallback != null) progressCallback.onProgress(new DownloadProgress(jobId, 0L, 0L,
+                        Math.min(99, 80 + progress.getProgress() / 5), 0.0,
+                        com.mediaforge.backend.enums.JobStatus.PROCESSING, "Preparing and verifying " + format.toUpperCase(Locale.ROOT) + " output..."));
             });
-            errThread.start();
+            if (!success || task.isCancelled()) throw new IOException("FFmpeg could not create the requested output, or the job was cancelled.");
+        } catch (IOException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new IOException("FFmpeg processing failed: " + ex.getMessage(), ex);
+        }
+        MediaProbeResult verified = outputVerifier.verify(output, format, !audioOnly && hasAudio);
+        int requestedHeight = extractHeightFromQuality(task.getTargetQuality());
+        if (!audioOnly && requestedHeight > 0 && verified.getHeight() != requestedHeight) {
+            throw new IOException("Requested " + requestedHeight + "p video, but output is " + verified.getHeight() + "p.");
+        }
+        if (task.getMaxSizeBytes() > 0 && Files.size(output) > task.getMaxSizeBytes()) throw new IOException("Output exceeds the download size limit.");
+        DownloadedMedia result = new DownloadedMedia(output, "MediaForge_" + (audioOnly ? "Audio" : "Video") + "." + format,
+                output.getFileName().toString(), DownloadOutputVerifier.mimeType(format), Files.size(output), format);
+        result.setAudioExpected(!audioOnly && hasAudio);
+        result.setSelectionApplied(true);
+        return result;
+    }
 
-            String line;
-            while ((line = reader.readLine()) != null) {
-                if (task.isCancelled()) {
-                    process.destroyForcibly();
-                    throw new IOException("Download job cancelled by user request.");
+    JsonNode inspectSource(DownloadTask task) throws IOException {
+        List<String> command = new ArrayList<>(getExecutableCommand());
+        command.addAll(List.of("--ignore-config", "--no-playlist", "-J", task.getSourceUri().toString()));
+        StringBuilder json = new StringBuilder();
+        runProcess(task, command, Math.max(15, timeoutSeconds), line -> json.append(line).append('\n'));
+        JsonNode source = objectMapper.readTree(json.toString());
+        if (source == null || !source.isObject()) throw new IOException("Extractor did not return usable source metadata.");
+        return source;
+    }
+
+    static boolean sourceHasStream(JsonNode source, String codec) {
+        for (JsonNode format : source.path("formats")) {
+            if (usableStream(format, codec)) return true;
+        }
+        return usableStream(source, codec);
+    }
+
+    private static boolean usableStream(JsonNode format, String codec) {
+        String value = format.path(codec).asText("none");
+        return !value.isBlank() && !"none".equals(value) && !format.path("has_drm").asBoolean(false)
+                && !"mhtml".equals(format.path("ext").asText()) && !"images".equals(format.path("protocol").asText());
+    }
+
+    static String buildFormatSelector(String format, String quality, boolean sourceHasAudio) {
+        if (DownloadOutputVerifier.isAudio(format)) return "bestaudio[acodec!=none]/best[acodec!=none]";
+        Matcher height = Pattern.compile("(\\d{2,4})p", Pattern.CASE_INSENSITIVE).matcher(quality == null ? "" : quality);
+        String resolution = height.find() ? "[height=" + height.group(1) + "]" : "";
+        String preferred = "webm".equals(format) ? "[ext=webm]" : "[ext=mp4]";
+        String audio = "webm".equals(format) ? "[ext=webm]" : "[ext=m4a]";
+        String video = "bestvideo[vcodec!=none]" + resolution;
+        String combined = "best[vcodec!=none]" + resolution;
+        if (!sourceHasAudio) return video + preferred + "/" + video + "/" + combined;
+        return video + preferred + "+bestaudio[acodec!=none]" + audio + "/"
+                + video + "+bestaudio[acodec!=none]/" + combined + "[acodec!=none]";
+    }
+
+    static List<String> normalizationArguments(Path input, Path output, String format, MediaProbeResult probe, String quality) {
+        List<String> args = new ArrayList<>(List.of("-i", input.toString()));
+        if (DownloadOutputVerifier.isAudio(format)) {
+            args.addAll(List.of("-map", "0:a:0", "-vn", "-c:a", switch (format) {
+                case "mp3" -> "libmp3lame";
+                case "wav" -> "pcm_s16le";
+                default -> probe.getAudioStreams().stream().allMatch(a -> "aac".equals(a.getCodecName())) ? "copy" : "aac";
+            }));
+            if ("mp3".equals(format)) args.addAll(List.of("-b:a", quality != null && quality.matches("\\d{2,3}k") ? quality : "320k"));
+        } else {
+            args.addAll(List.of("-map", "0:v:0", "-map", "0:a:0?"));
+            boolean webm = "webm".equals(format);
+            Set<String> videoCodecs = webm ? Set.of("vp8", "vp9", "av1") : Set.of("h264");
+            Set<String> audioCodecs = webm ? Set.of("opus", "vorbis") : Set.of("aac");
+            boolean copyVideo = !"avi".equals(format) && probe.getVideoStreams().stream().allMatch(v -> videoCodecs.contains(v.getCodecName()));
+            boolean copyAudio = !"avi".equals(format) && probe.getAudioStreams().stream().allMatch(a -> audioCodecs.contains(a.getCodecName()));
+            args.addAll(List.of("-c:v", copyVideo ? "copy" : webm ? "libvpx-vp9" : "avi".equals(format) ? "msmpeg4v2" : "libx264"));
+            args.addAll(List.of("-c:a", copyAudio ? "copy" : webm ? "libopus" : "avi".equals(format) ? "libmp3lame" : "aac"));
+            if (!copyVideo) args.addAll(List.of("-pix_fmt", "yuv420p"));
+            if (!copyVideo && !webm && !"avi".equals(format)) args.addAll(List.of("-preset", "fast"));
+            if (Set.of("mp4", "mov").contains(format)) args.addAll(List.of("-movflags", "+faststart"));
+        }
+        args.add(output.toString());
+        return args;
+    }
+
+    private void runProcess(DownloadTask task, List<String> command, int seconds, Consumer<String> stdout) throws IOException {
+        if (task.isCancelled()) throw new IOException("Download cancelled.");
+        Process process = new ProcessBuilder(command).start();
+        activeProcesses.put(task.getJobId(), process);
+        var readers = Executors.newFixedThreadPool(2);
+        List<String> errors = new CopyOnWriteArrayList<>();
+        Future<?> out = readers.submit(() -> {
+            try (var reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) stdout.accept(line);
+            } catch (IOException ex) { throw new java.io.UncheckedIOException(ex); }
+        });
+        Future<?> err = readers.submit(() -> {
+            try (var reader = new BufferedReader(new InputStreamReader(process.getErrorStream(), StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    errors.add(line);
+                    if (errors.size() > 60) errors.remove(0);
                 }
-
-                Matcher m = PROGRESS_PERCENT_PATTERN.matcher(line);
-                if (m.find()) {
-                    try {
-                        double percentVal = Double.parseDouble(m.group(1));
-                        int intPercent = (int) Math.round(percentVal);
-                        if (progressCallback != null) {
-                            String speed = null;
-                            Matcher sm = PROGRESS_SPEED_PATTERN.matcher(line);
-                            if (sm.find()) speed = sm.group(1);
-
-                            progressCallback.onProgress(new DownloadProgress(
-                                    jobId,
-                                    0L,
-                                    0L,
-                                    intPercent,
-                                    0.0,
-                                    com.mediaforge.backend.enums.JobStatus.PROCESSING,
-                                    speed != null ? "Downloading at " + speed : "Downloading stream..."
-                            ));
-                        }
-                    } catch (NumberFormatException ignored) {}
-                }
-            }
-
-            boolean finished = process.waitFor(600, TimeUnit.SECONDS);
-            if (!finished) {
-                process.destroyForcibly();
-                throw new IOException("Media download timed out after 600 seconds.");
-            }
-
-            errThread.join(1000);
-
-            if (process.exitValue() != 0) {
-                String errorReason = sanitizeExtractorError(String.join("\n", errorOutput));
-                throw new IOException("Download engine error: " + errorReason);
-            }
-
-        } catch (InterruptedException e) {
+            } catch (IOException ex) { throw new java.io.UncheckedIOException(ex); }
+        });
+        try {
+            if (!process.waitFor(seconds, TimeUnit.SECONDS)) throw new IOException("Media extractor timed out after " + seconds + " seconds.");
+            out.get(5, TimeUnit.SECONDS);
+            err.get(5, TimeUnit.SECONDS);
+            if (task.isCancelled()) throw new IOException("Download cancelled.");
+            if (process.exitValue() != 0) throw new IOException("Media extractor failed: " + sanitizeExtractorError(String.join("\n", errors)));
+        } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
-            throw new IOException("Download interrupted: " + e.getMessage(), e);
+            throw new IOException("Media extraction interrupted.", ex);
+        } catch (ExecutionException | TimeoutException ex) {
+            throw new IOException("Failed reading media extractor output.", ex);
         } finally {
-            activeProcesses.remove(jobId);
+            process.destroyForcibly();
+            activeProcesses.remove(task.getJobId(), process);
+            readers.shutdownNow();
         }
-
-        // Locate resulting media file in scratch directory
-        Path resultingFile = findDownloadedFile(scratchDir, jobId.toString());
-        if (resultingFile == null || !Files.exists(resultingFile) || Files.size(resultingFile) == 0) {
-            throw new IOException("Downloaded media output file was not produced or is 0 bytes.");
-        }
-
-        long fileSize = Files.size(resultingFile);
-        String fileName = resultingFile.getFileName().toString();
-        String fileExt = fileName.contains(".") ? fileName.substring(fileName.lastIndexOf('.') + 1).toLowerCase(Locale.ROOT) : targetFormat;
-        String mimeType = resolveMimeType(fileExt);
-
-        log.info("Media download completed for job {}: file={}, size={} bytes, format={}", jobId, fileName, fileSize, fileExt);
-
-        return new DownloadedMedia(
-                resultingFile,
-                fileName,
-                jobId.toString() + "." + fileExt,
-                mimeType,
-                fileSize,
-                fileExt
-        );
     }
 
     public void cancel(UUID jobId) {
+        ffmpegExecutor.cancelProcess(jobId);
         Process p = activeProcesses.remove(jobId);
         if (p != null && p.isAlive()) {
             p.destroyForcibly();
@@ -444,18 +487,16 @@ public class YtDlpProcessExecutor {
         }
     }
 
-    private Path findDownloadedFile(Path scratchDir, String jobIdPrefix) {
-        try (Stream<Path> files = Files.list(scratchDir)) {
-            return files
-                    .filter(p -> p.getFileName().toString().startsWith(jobIdPrefix))
-                    .filter(p -> !p.getFileName().toString().endsWith(".part"))
-                    .filter(p -> !p.getFileName().toString().endsWith(".ytdl"))
-                    .findFirst()
-                    .orElse(null);
-        } catch (IOException e) {
-            log.warn("Failed to list files in scratch directory {}: {}", scratchDir, e.getMessage());
-            return null;
+    static Path readFinalOutput(Path scratch, Path manifest) throws IOException {
+        if (!Files.isRegularFile(manifest)) throw new IOException("Extractor did not report a final media file. Merge may have failed.");
+        List<String> paths = Files.readAllLines(manifest, StandardCharsets.UTF_8).stream().filter(l -> !l.isBlank()).toList();
+        if (paths.size() != 1) throw new IOException("Extractor returned an ambiguous output file list.");
+        Path downloaded = Paths.get(paths.get(0)).toAbsolutePath().normalize();
+        if (!downloaded.startsWith(scratch.toAbsolutePath().normalize()) || !Files.isRegularFile(downloaded)
+                || downloaded.toString().endsWith(".part") || downloaded.toString().endsWith(".ytdl")) {
+            throw new IOException("Extractor reported an invalid output path.");
         }
+        return downloaded;
     }
 
     private int extractHeightFromQuality(String quality) {
@@ -465,18 +506,6 @@ public class YtDlpProcessExecutor {
             return Integer.parseInt(m.group(1));
         }
         return 0;
-    }
-
-    private String resolveMimeType(String ext) {
-        return switch (ext.toLowerCase(Locale.ROOT)) {
-            case "mp4" -> "video/mp4";
-            case "webm" -> "video/webm";
-            case "mkv" -> "video/x-matroska";
-            case "mp3" -> "audio/mpeg";
-            case "m4a" -> "audio/mp4";
-            case "wav" -> "audio/wav";
-            default -> "application/octet-stream";
-        };
     }
 
     private void readStream(java.io.InputStream in, StringBuilder sb) {

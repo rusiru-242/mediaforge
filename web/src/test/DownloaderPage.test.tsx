@@ -23,8 +23,64 @@ vi.mock('@/services/apiClient', () => ({
 }));
 
 describe('Online Downloader Page Redesign', () => {
+  it('locks platform tabs to the URL, detects replacement links, and unlocks when cleared', () => {
+    render(<DownloaderPage />);
+    const input = screen.getByRole('textbox');
+    fireEvent.change(input, { target: { value: 'https://www.youtube.com/watch?v=owned' } });
+    const facebook = screen.getByRole('button', { name: 'Facebook' }) as HTMLButtonElement;
+    expect(facebook.disabled).toBe(true);
+    fireEvent.click(facebook);
+    expect(screen.getByRole('button', { name: 'YouTube' }).getAttribute('aria-pressed')).toBe('true');
+    fireEvent.change(input, { target: { value: 'https://www.instagram.com/reel/owned/' } });
+    expect(screen.getByRole('button', { name: 'Instagram' }).getAttribute('aria-pressed')).toBe('true');
+    expect((screen.getByRole('button', { name: 'YouTube' }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByTitle('Clear input'));
+    expect(facebook.disabled).toBe(false);
+    fireEvent.click(facebook);
+    expect(facebook.getAttribute('aria-pressed')).toBe('true');
+  });
   beforeEach(() => {
     vi.clearAllMocks();
+    sessionStorage.clear();
+  });
+
+  it('restores analyzed details and selections after leaving and returning, until explicitly cleared', async () => {
+    vi.mocked(apiClient.getMediaMetadata).mockResolvedValueOnce({
+      success: true, url: 'https://example.com/retained.mp4', platform: 'Direct Media URL',
+      title: 'Retained analysis', mediaType: 'VIDEO', mimeType: 'video/mp4', containerFormat: 'mp4',
+      availableFormats: [], availableQualities: ['1080p', '720p'], duration: 120, directDownloadSupported: true,
+    });
+    const firstVisit = render(<DownloaderPage />);
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'https://example.com/retained.mp4' } });
+    fireEvent.click(screen.getByText('Analyze'));
+    await screen.findByText('Retained analysis');
+    fireEvent.click(screen.getByRole('button', { name: /webm/i }));
+    fireEvent.click(screen.getByRole('button', { name: /720p/ }));
+    firstVisit.unmount(); // Next.js unmounts the page when navigating elsewhere.
+
+    const returnVisit = render(<DownloaderPage />);
+    await screen.findByText('Retained analysis');
+    expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe('https://example.com/retained.mp4');
+    expect(apiClient.getMediaMetadata).toHaveBeenCalledTimes(1);
+    vi.mocked(apiClient.createDownloadJob).mockResolvedValueOnce({ id: 'retained-job', status: 'COMPLETED' } as any);
+    fireEvent.click(screen.getByRole('button', { name: 'Download Video' }));
+    await waitFor(() => expect(apiClient.createDownloadJob).toHaveBeenCalledWith(expect.objectContaining({
+      url: 'https://example.com/retained.mp4', selectedFormat: 'webm', selectedQuality: '720p',
+    })));
+
+    fireEvent.click(screen.getByTitle('Clear input'));
+    returnVisit.unmount();
+    render(<DownloaderPage />);
+    expect(screen.queryByText('Retained analysis')).toBeNull();
+    expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe('');
+    expect(sessionStorage.getItem('mediaforge.downloader.draft.v1')).toBeNull();
+  });
+
+  it('opens normally when the saved draft is corrupt', () => {
+    sessionStorage.setItem('mediaforge.downloader.draft.v1', '{invalid json');
+    render(<DownloaderPage />);
+    expect(screen.getByText('Analyze')).toBeDefined();
+    expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe('');
   });
 
   it('renders platform selection tabs and initial input state', () => {
@@ -66,7 +122,7 @@ describe('Online Downloader Page Redesign', () => {
       title: 'Sample Mountain Expedition',
       mediaType: 'VIDEO',
       mimeType: 'video/mp4',
-      containerFormat: 'mp4',
+      containerFormat: 'm4a', // Source metadata must not override a video output request.
       fileSize: 104857600, // 100 MB
       resolution: '1080p',
       duration: 125,
@@ -110,7 +166,16 @@ describe('Online Downloader Page Redesign', () => {
     });
 
     expect(screen.getByText('Ready for download')).toBeDefined();
-    expect(screen.getByText('Estimated file size:')).toBeDefined();
+    expect(screen.queryByText('Estimated file size:')).toBeNull();
+    for (const format of ['avi', 'mkv', 'mov', 'flv', 'wav']) {
+      expect(screen.getByRole('button', { name: new RegExp(format, 'i') })).toBeDefined();
+    }
+    vi.mocked(apiClient.createDownloadJob).mockResolvedValueOnce({ id: 'mp4-job', status: 'COMPLETED' } as any);
+    fireEvent.click(screen.getByRole('button', { name: /720p/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Download Video' }));
+    await waitFor(() => expect(apiClient.createDownloadJob).toHaveBeenCalledWith(expect.objectContaining({
+      selectedFormat: 'mp4', selectedQuality: '720p', targetResolution: '720p', mediaType: 'video',
+    })));
   });
 
   it('switches to audio bitrates and Download Audio button when MP3 is selected', async () => {
@@ -147,11 +212,25 @@ describe('Online Downloader Page Redesign', () => {
     await waitFor(() => {
       expect(screen.getByText('Audio Quality (Bitrate)')).toBeDefined();
       expect(screen.getAllByText('320 kbps').length).toBeGreaterThan(0);
-      expect(screen.getByText('Download Audio')).toBeDefined();
+      expect(screen.getByRole('button', { name: 'Download Audio' })).toBeDefined();
     });
+    fireEvent.click(screen.getByRole('button', { name: 'm4a' }));
+    vi.mocked(apiClient.createDownloadJob).mockResolvedValueOnce({ id: 'm4a-job', status: 'FAILED' } as any);
+    fireEvent.click(screen.getByRole('button', { name: 'Download Audio' }));
+    await waitFor(() => expect(apiClient.createDownloadJob).toHaveBeenCalledWith(expect.objectContaining({
+      selectedFormat: 'm4a', mediaType: 'audio', targetResolution: undefined,
+    })));
+    fireEvent.click(screen.getByRole('button', { name: 'wav' }));
+    expect(screen.getByText('Lossless WAV audio')).toBeDefined();
+    expect(screen.queryByText('Audio Quality (Bitrate)')).toBeNull();
+    vi.mocked(apiClient.createDownloadJob).mockResolvedValueOnce({ id: 'wav-job', status: 'COMPLETED' } as any);
+    fireEvent.click(screen.getByRole('button', { name: 'Download Audio' }));
+    await waitFor(() => expect(apiClient.createDownloadJob).toHaveBeenCalledWith(expect.objectContaining({
+      selectedFormat: 'wav', selectedQuality: 'lossless', targetResolution: undefined, audioBitrate: undefined,
+    })));
   });
 
-  it('toggles Edit Before Download accordion and reveals trim controls', async () => {
+  it('omits editing controls after analyzing downloadable media', async () => {
     vi.mocked(apiClient.getMediaMetadata).mockResolvedValueOnce({
       success: true,
       url: 'https://example.com/editable.mp4',
@@ -172,17 +251,9 @@ describe('Online Downloader Page Redesign', () => {
     fireEvent.change(input, { target: { value: 'https://example.com/editable.mp4' } });
     fireEvent.click(screen.getByText('Analyze'));
 
-    await waitFor(() => {
-      expect(screen.getByText('Edit Before Download')).toBeDefined();
-    });
-
-    const editAccordionBtn = screen.getByText('Edit Before Download');
-    fireEvent.click(editAccordionBtn);
-
-    await waitFor(() => {
-      expect(screen.getByText('Trim Duration (Seconds)')).toBeDefined();
-      expect(screen.getByText('Crop Aspect Ratio')).toBeDefined();
-      expect(screen.getByText('Processing Preset')).toBeDefined();
-    });
+    await screen.findByText('Editable Video');
+    expect(screen.queryByText('Edit Before Download')).toBeNull();
+    expect(screen.queryByText('Trim Duration (Seconds)')).toBeNull();
+    expect(screen.queryByText('Crop Aspect Ratio')).toBeNull();
   });
 });

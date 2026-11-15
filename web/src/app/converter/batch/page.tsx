@@ -1,5 +1,7 @@
 'use client';
 
+import { useNavigationGuard } from '@/hooks/useNavigationGuard';
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import Link from 'next/link';
 import {
@@ -16,25 +18,24 @@ import {
   Music,
   Video as VideoIcon,
   Image as ImageIcon,
-  Shield,
-  Sparkles,
   Sliders,
-  TrendingDown,
   AlertCircle,
   FolderArchive,
-  Cpu,
 } from 'lucide-react';
 import { apiClient } from '@/services/apiClient';
 import {
   detectMediaType,
   getCompatibleOutputFormats,
   getDefaultOutputFormat,
+  VIDEO_PRESETS,
 } from '@/utils/presets';
 
 interface BatchQueueItem {
   id: string;
   file: File;
   targetFormat: string;
+  imageQuality: number;
+  videoQuality: string;
   status: 'PENDING' | 'UPLOADING' | 'QUEUED' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
   jobId?: string;
   errorMessage?: string;
@@ -43,11 +44,10 @@ interface BatchQueueItem {
 export default function BatchConverterPage() {
   const [queue, setQueue] = useState<BatchQueueItem[]>([]);
   const [filterType, setFilterType] = useState<'all' | 'video' | 'audio' | 'image'>('all');
-  const [globalStrategy, setGlobalStrategy] = useState<'web' | 'master' | 'audio' | 'custom'>('web');
   const [packageZip, setPackageZip] = useState(true);
-  const [stripMetadata, setStripMetadata] = useState(true);
 
   const [isProcessing, setIsProcessing] = useState(false);
+  useNavigationGuard(isProcessing);
   const [overallProgress, setOverallProgress] = useState(0);
   const [batchId, setBatchId] = useState<string | null>(null);
   const [batchCompleted, setBatchCompleted] = useState(false);
@@ -80,6 +80,8 @@ export default function BatchConverterPage() {
       id: 'batch-' + Math.random().toString(36).substring(2, 9),
       file: f,
       targetFormat: getDefaultOutputFormat(f.name),
+      imageQuality: 85,
+      videoQuality: 'high',
       status: 'PENDING',
     }));
     setQueue((prev) => [...prev, ...newItems]);
@@ -114,28 +116,6 @@ export default function BatchConverterPage() {
     );
   };
 
-  const applyGlobalStrategy = (strategy: 'web' | 'master' | 'audio' | 'custom') => {
-    setGlobalStrategy(strategy);
-    setQueue((prev) =>
-      prev.map((item) => {
-        if (item.status !== 'PENDING') return item;
-        const type = detectMediaType(item.file.name);
-        if (strategy === 'audio') {
-          return { ...item, targetFormat: 'mp3' };
-        } else if (strategy === 'web') {
-          if (type === 'video') return { ...item, targetFormat: 'mp4' };
-          if (type === 'audio') return { ...item, targetFormat: 'mp3' };
-          if (type === 'image') return { ...item, targetFormat: 'webp' };
-        } else if (strategy === 'master') {
-          if (type === 'video') return { ...item, targetFormat: 'mkv' };
-          if (type === 'audio') return { ...item, targetFormat: 'flac' };
-          if (type === 'image') return { ...item, targetFormat: 'png' };
-        }
-        return item;
-      })
-    );
-  };
-
   // Queue metrics
   const totalOriginalBytes = useMemo(() => {
     return queue.reduce((acc, item) => acc + item.file.size, 0);
@@ -146,7 +126,6 @@ export default function BatchConverterPage() {
   const imageCount = queue.filter((i) => detectMediaType(i.file.name) === 'image').length;
   const completedCount = queue.filter((i) => i.status === 'COMPLETED').length;
 
-  const estimatedOutputBytes = Math.round(totalOriginalBytes * 0.35); // ~65% reduction on average
 
   const filteredQueue = queue.filter((item) => {
     if (filterType === 'all') return true;
@@ -176,10 +155,17 @@ export default function BatchConverterPage() {
         const uploadResp = await apiClient.uploadFile(item.file);
         const inputFormat = item.file.name.split('.').pop()?.toLowerCase();
 
+        const videoPreset = detectMediaType(item.file.name) === 'video' && !['mp3', 'wav', 'aac', 'flac', 'ogg', 'm4a'].includes(item.targetFormat)
+          ? VIDEO_PRESETS.find(preset => preset.id === item.videoQuality) : undefined;
         conversionItems.push({
           inputFileId: uploadResp.id || uploadResp.fileId,
           inputFormat,
           outputFormat: item.targetFormat,
+          imageQuality: detectMediaType(item.file.name) === 'image' ? item.imageQuality : undefined,
+          qualityPreset: videoPreset?.id,
+          targetResolution: videoPreset?.resolution,
+          videoBitrate: videoPreset?.videoBitrate,
+          audioBitrate: videoPreset ? parseInt(videoPreset.audioBitrate, 10) : undefined,
         });
 
         const uploadProgress = Math.round(((i + 1) / queue.length) * 20);
@@ -262,7 +248,7 @@ export default function BatchConverterPage() {
   };
 
   return (
-    <div className="w-full max-w-7xl mx-auto px-gutter py-space-md flex flex-col gap-space-md">
+    <div className="batch-editor w-full max-w-7xl mx-auto px-gutter py-space-md flex flex-col gap-space-md text-slate-900 dark:text-slate-100">
       {/* Hidden file input */}
       <input
         ref={fileInputRef}
@@ -426,6 +412,7 @@ export default function BatchConverterPage() {
                       <div className="flex items-center gap-1.5">
                         <ArrowRight className="w-3.5 h-3.5 text-outline" />
                         <select
+                          aria-label={`Output format for ${item.file.name}`}
                           value={item.targetFormat}
                           onChange={(e) => handleItemFormatChange(item.id, e.target.value)}
                           disabled={item.status !== 'PENDING' && item.status !== 'FAILED'}
@@ -437,11 +424,23 @@ export default function BatchConverterPage() {
                             </option>
                           ))}
                         </select>
+                        {type === 'video' && !['mp3', 'wav', 'aac', 'flac', 'ogg', 'm4a'].includes(item.targetFormat) && <select aria-label={`Video quality for ${item.file.name}`} value={item.videoQuality}
+                          disabled={isProcessing || (item.status !== 'PENDING' && item.status !== 'FAILED')}
+                          onChange={e => setQueue(prev => prev.map(q => q.id === item.id ? { ...q, videoQuality: e.target.value } : q))}
+                          className="px-2 py-1 bg-surface-container-low dark:bg-slate-800 text-on-surface dark:text-slate-100 rounded-lg text-xs font-semibold">
+                          <option value="small">Low (480p)</option><option value="balanced">Medium (720p)</option><option value="high">High (1080p)</option>
+                        </select>}
+                        {type === 'image' && <select aria-label={`Image quality for ${item.file.name}`} value={item.imageQuality}
+                          disabled={isProcessing || (item.status !== 'PENDING' && item.status !== 'FAILED')}
+                          onChange={e => setQueue(prev => prev.map(q => q.id === item.id ? { ...q, imageQuality: Number(e.target.value) } : q))}
+                          className="px-2 py-1 bg-surface-container-low dark:bg-slate-800 text-on-surface dark:text-slate-100 rounded-lg text-xs font-semibold">
+                          <option value={50}>Low</option><option value={75}>Medium</option><option value={85}>High</option>
+                        </select>}
                       </div>
 
                       <div className="flex items-center gap-2 pl-2">
                         {item.status === 'PENDING' && (
-                          <span className="px-2.5 py-0.5 rounded-full bg-surface-container-low text-on-surface-variant text-[11px] font-semibold">
+                          <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-600 text-[11px] font-semibold">
                             Ready
                           </span>
                         )}
@@ -488,14 +487,6 @@ export default function BatchConverterPage() {
             </div>
           )}
 
-          {/* Engine Banner */}
-          <div className="p-space-md rounded-2xl bg-surface-container-lowest dark:bg-slate-900 border border-outline-variant/30 flex items-center justify-between text-xs text-on-surface-variant">
-            <div className="flex items-center gap-2">
-              <Cpu className="w-4 h-4 text-primary" />
-              <span>FFmpeg 7.0 Multi-Threaded Engine · In-Memory Queue</span>
-            </div>
-            <span className="font-mono">4 Parallel Workers</span>
-          </div>
         </div>
 
         {/* Right Column (4 cols) */}
@@ -512,32 +503,6 @@ export default function BatchConverterPage() {
               </span>
             </div>
 
-            {/* Global Pipeline Strategy */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-semibold text-on-surface">Global Strategy Preset</label>
-              <div className="grid grid-cols-2 gap-1 p-1 bg-surface-container-low dark:bg-slate-800 rounded-2xl text-xs">
-                {[
-                  { id: 'web', label: 'Web Optimized' },
-                  { id: 'master', label: 'Archive / Master' },
-                  { id: 'audio', label: 'Extract Audio' },
-                  { id: 'custom', label: 'Custom' },
-                ].map((strat) => (
-                  <button
-                    key={strat.id}
-                    type="button"
-                    onClick={() => applyGlobalStrategy(strat.id as any)}
-                    className={`py-2 px-2 rounded-xl font-semibold transition-all ${
-                      globalStrategy === strat.id
-                        ? 'bg-surface-container-lowest dark:bg-slate-700 text-primary shadow-xs'
-                        : 'text-on-surface-variant hover:text-on-surface'
-                    }`}
-                  >
-                    {strat.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
             {/* Pipeline Flags */}
             <div className="space-y-2 pt-1 border-t border-outline-variant/20 text-xs">
               <label className="flex items-center gap-2 text-on-surface cursor-pointer font-medium">
@@ -549,38 +514,6 @@ export default function BatchConverterPage() {
                 />
                 <span>Package output into single ZIP</span>
               </label>
-              <label className="flex items-center gap-2 text-on-surface cursor-pointer font-medium">
-                <input
-                  type="checkbox"
-                  checked={stripMetadata}
-                  onChange={(e) => setStripMetadata(e.target.checked)}
-                  className="rounded accent-primary"
-                />
-                <span>Strip private EXIF & author metadata</span>
-              </label>
-            </div>
-
-            {/* Size Estimation Card */}
-            <div className="bg-surface-container-low dark:bg-slate-800/60 rounded-2xl p-space-md flex flex-col gap-2 border border-outline-variant/30">
-              <div className="flex items-center justify-between">
-                <span className="text-xs uppercase tracking-wider text-outline font-bold">Estimated Batch Payload</span>
-                <span className="px-2 py-0.5 rounded-full bg-tertiary-fixed text-on-tertiary-fixed font-mono text-xs font-bold">
-                  ↓ -65% Reduction
-                </span>
-              </div>
-
-              <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-extrabold text-on-surface font-mono">
-                  ~{formatFileSize(estimatedOutputBytes)}
-                </span>
-                <span className="font-mono text-xs text-outline line-through">
-                  {formatFileSize(totalOriginalBytes)}
-                </span>
-              </div>
-
-              <p className="text-xs text-on-surface-variant leading-snug">
-                Combined output calculation across {queue.length} assets.
-              </p>
             </div>
 
             {/* Error Message */}
@@ -600,7 +533,6 @@ export default function BatchConverterPage() {
                   disabled={queue.length === 0}
                   className="w-full h-12 rounded-full bg-primary-container hover:bg-primary text-white font-semibold text-sm flex items-center justify-center gap-2 shadow-md shadow-primary/25 transition-all hover:scale-[1.01] active:scale-95 disabled:opacity-50"
                 >
-                  <Sparkles className="w-4 h-4" />
                   <span>Convert All ({queue.length} Files)</span>
                 </button>
               )}
@@ -628,7 +560,7 @@ export default function BatchConverterPage() {
                   </div>
                   {batchId && (
                     <a
-                      href={apiClient.getDownloadUrl(batchId)}
+                      href={apiClient.getBatchZipUrl(batchId)}
                       download
                       className="w-full h-12 rounded-full bg-tertiary-container hover:bg-tertiary text-white font-semibold text-sm flex items-center justify-center gap-2 shadow-md transition-all active:scale-95"
                     >
@@ -639,17 +571,12 @@ export default function BatchConverterPage() {
                   <button
                     type="button"
                     onClick={handleClear}
-                    className="w-full h-10 rounded-full bg-surface-container-low text-on-surface text-xs font-semibold hover:bg-surface-container transition-colors"
+                    className="w-full h-10 rounded-full bg-slate-100 text-slate-900 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-600 text-xs font-semibold transition-colors"
                   >
                     Convert Another Batch
                   </button>
                 </div>
               )}
-
-              <div className="flex items-center justify-center gap-1.5 text-center text-on-surface-variant text-xs pt-1">
-                <Shield className="w-3.5 h-3.5 text-tertiary" />
-                <span>Zero Database · Ephemeral Queue Memory</span>
-              </div>
             </div>
           </div>
         </div>

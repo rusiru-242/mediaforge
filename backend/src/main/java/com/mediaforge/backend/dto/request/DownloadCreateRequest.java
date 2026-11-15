@@ -15,13 +15,27 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 public class DownloadCreateRequest {
+    @jakarta.validation.constraints.Pattern(regexp = "(?i)video|audio", message = "mediaType must be video or audio")
+    private String mediaType;
+
+    public String getMediaType() { return mediaType; }
+    public void setMediaType(String mediaType) { this.mediaType = mediaType; }
 
     @NotBlank(message = "url is required")
     private String url;
 
     @NotBlank(message = "selectedFormat is required")
+    @jakarta.validation.constraints.Pattern(regexp = "(?i)mp4|webm|mkv|mov|avi|flv|mp3|m4a|wav", message = "Unsupported download format")
     @Size(max = 32, message = "selectedFormat cannot exceed 32 characters")
     private String selectedFormat;
+
+    @jakarta.validation.constraints.AssertTrue(message = "Selected format conflicts with requested media type")
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public boolean isMediaTypeCompatible() {
+        return mediaType == null || selectedFormat == null ||
+                com.mediaforge.backend.downloader.service.DownloadOutputVerifier.isAudio(selectedFormat)
+                        == "audio".equalsIgnoreCase(mediaType);
+    }
 
     @NotBlank(message = "selectedQuality is required")
     @Size(max = 64, message = "selectedQuality cannot exceed 64 characters")

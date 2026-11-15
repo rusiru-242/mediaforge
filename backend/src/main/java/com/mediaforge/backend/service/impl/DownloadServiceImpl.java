@@ -4,6 +4,7 @@ import com.mediaforge.backend.downloader.model.MediaFormatOption;
 import com.mediaforge.backend.downloader.model.MediaMetadata;
 import com.mediaforge.backend.downloader.service.MediaDownloadService;
 import com.mediaforge.backend.downloader.service.MediaMetadataService;
+import com.mediaforge.backend.downloader.service.DownloadOutputVerifier;
 import com.mediaforge.backend.dto.request.DownloadCreateRequest;
 import com.mediaforge.backend.dto.request.DownloadValidateRequest;
 import com.mediaforge.backend.dto.response.DownloadResponse;
@@ -89,7 +90,7 @@ public class DownloadServiceImpl implements DownloadService {
             formats = List.of("mp4", "webm", "mkv", "mp3");
         }
         if (qualities.isEmpty()) {
-            qualities = List.of("Original Quality", "1080p", "720p", "480p", "audio-only");
+            qualities = List.of("source");
         }
 
         return new DownloadValidateResponse(
@@ -205,6 +206,14 @@ public class DownloadServiceImpl implements DownloadService {
 
     @Override
     public DownloadResponse createDownload(DownloadCreateRequest request) {
+        String requestedFormat = request.getSelectedFormat().toLowerCase(java.util.Locale.ROOT);
+        if (!java.util.Set.of("mp4", "webm", "mkv", "mov", "avi", "flv", "mp3", "m4a", "wav").contains(requestedFormat)) {
+            throw new IllegalArgumentException("Unsupported download format: " + requestedFormat);
+        }
+        boolean audioOnly = DownloadOutputVerifier.isAudio(requestedFormat);
+        if (request.getMediaType() != null && audioOnly != "audio".equalsIgnoreCase(request.getMediaType())) {
+            throw new IllegalArgumentException("Selected format conflicts with requested media type.");
+        }
         URI validatedUri = urlValidator.validate(request.getUrl());
         String platform = urlValidator.extractPlatform(validatedUri);
 

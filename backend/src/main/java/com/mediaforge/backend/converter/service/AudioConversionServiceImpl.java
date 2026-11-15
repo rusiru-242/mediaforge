@@ -70,7 +70,7 @@ public class AudioConversionServiceImpl implements AudioConversionService {
 
         List<TimeRange> keptSegments = calculateKeptSegments(options, sourceDuration);
 
-        if (!keptSegments.isEmpty() && (hasCut || keptSegments.size() > 1)) {
+        if (!keptSegments.isEmpty() && (hasCut || hasTrim || keptSegments.size() > 1)) {
             // Build filter_complex with atrim + concat + audio filters
             buildAudioFilterComplex(args, keptSegments, options, effectiveDuration);
         } else {
@@ -259,31 +259,7 @@ public class AudioConversionServiceImpl implements AudioConversionService {
     }
 
     private List<String> buildAudioFilters(ConversionOptions options, double effectiveDuration) {
-        List<String> filters = new ArrayList<>();
-        if (options == null) return filters;
-
-        // 1. Volume adjustment
-        if (options.getVolume() != null && options.getVolume() > 0.0 && Math.abs(options.getVolume() - 1.0) > 0.01) {
-            filters.add(String.format(Locale.ROOT, "volume=%.2f", options.getVolume()));
-        }
-
-        // 2. Silence removal
-        if (Boolean.TRUE.equals(options.getRemoveSilence())) {
-            filters.add("silenceremove=start_periods=1:stop_periods=1:stop_duration=1:stop_threshold=-50dB");
-        }
-
-        // 3. Fade in
-        if (options.getFadeInDuration() != null && options.getFadeInDuration() > 0.0) {
-            filters.add(String.format(Locale.ROOT, "afade=t=in:ss=0:d=%.2f", options.getFadeInDuration()));
-        }
-
-        // 4. Fade out
-        if (options.getFadeOutDuration() != null && options.getFadeOutDuration() > 0.0) {
-            double fadeStart = Math.max(0.0, effectiveDuration - options.getFadeOutDuration());
-            filters.add(String.format(Locale.ROOT, "afade=t=out:st=%.2f:d=%.2f", fadeStart, options.getFadeOutDuration()));
-        }
-
-        return filters;
+        return AudioFilterBuilder.build(options, effectiveDuration);
     }
 
     private String resolveAudioCodec(String format, String requestedCodec) {

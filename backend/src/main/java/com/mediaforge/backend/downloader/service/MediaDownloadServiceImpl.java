@@ -22,6 +22,7 @@ import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 
 import java.io.File;
+import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Path;
 import java.time.OffsetDateTime;
@@ -45,6 +46,7 @@ public class MediaDownloadServiceImpl implements MediaDownloadService {
     private final Map<UUID, DownloadTask> activeTasks = new ConcurrentHashMap<>();
     private final YtDlpProcessExecutor ytDlpExecutor;
     private final MediaConversionService mediaConversionService;
+    private final DownloadOutputVerifier outputVerifier;
 
     @Value("${app.downloader.max-file-size-bytes:524288000}")
     private long maxFileSizeBytes;
@@ -58,7 +60,6 @@ public class MediaDownloadServiceImpl implements MediaDownloadService {
         this(adapterRegistry, storageService, jobRepository, eventRepository, poolSize, null, null);
     }
 
-    @org.springframework.beans.factory.annotation.Autowired
     public MediaDownloadServiceImpl(
             MediaSourceAdapterRegistry adapterRegistry,
             MediaStorageService storageService,
@@ -67,6 +68,17 @@ public class MediaDownloadServiceImpl implements MediaDownloadService {
             @Value("${app.downloader.pool-size:5}") int poolSize,
             @Nullable YtDlpProcessExecutor ytDlpExecutor,
             @Nullable MediaConversionService mediaConversionService) {
+        this(adapterRegistry, storageService, jobRepository, eventRepository, poolSize, ytDlpExecutor,
+                mediaConversionService, new DownloadOutputVerifier(new com.mediaforge.backend.converter.service.MediaProbeServiceImpl(new com.fasterxml.jackson.databind.ObjectMapper())));
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public MediaDownloadServiceImpl(MediaSourceAdapterRegistry adapterRegistry, MediaStorageService storageService,
+            MediaJobRepository jobRepository, JobEventRepository eventRepository,
+            @Value("${app.downloader.pool-size:5}") int poolSize,
+            @Nullable YtDlpProcessExecutor ytDlpExecutor, @Nullable MediaConversionService mediaConversionService,
+            DownloadOutputVerifier outputVerifier) {
+        this.outputVerifier = outputVerifier;
         this.adapterRegistry = adapterRegistry;
         this.storageService = storageService;
         this.jobRepository = jobRepository;
@@ -137,23 +149,41 @@ public class MediaDownloadServiceImpl implements MediaDownloadService {
             String finalContainerFormat = downloadedMedia.getContainerFormat();
             String finalMimeType = downloadedMedia.getMimeType();
             long finalFileSize = downloadedMedia.getFileSize();
+            String requestedFormat = task.getTargetFormat();
+            String outputFormat = requestedFormat == null || requestedFormat.isBlank()
+                    ? finalContainerFormat : requestedFormat.toLowerCase(java.util.Locale.ROOT);
+            boolean needsConversion = !outputFormat.equalsIgnoreCase(finalContainerFormat);
+            var sourceProbe = outputVerifier.inspect(finalFilePath);
+            boolean audioExpected = !DownloadOutputVerifier.isAudio(outputFormat)
+                    && (downloadedMedia.isAudioExpected() || sourceProbe.hasAudio());
+            if (task.getEditOptions() != null && Boolean.TRUE.equals(task.getEditOptions().getRemoveAudio())) {
+                audioExpected = false;
+            }
+            if (!DownloadOutputVerifier.isAudio(outputFormat) && !sourceProbe.hasVideo()) {
+                throw new IOException("Requested video, but the downloaded source contains only audio. Video output cannot be created.");
+            }
 
             // Post-download editing / conversion if options were requested
-            if (task.getEditOptions() != null && mediaConversionService != null) {
+            boolean needsEdits = task.getEditOptions() != null
+                    && (!downloadedMedia.isSelectionApplied() || hasContentEdits(task.getEditOptions()));
+            if (needsConversion || needsEdits) {
+                if (mediaConversionService == null) {
+                    throw new IllegalStateException("Media conversion is unavailable for the requested format.");
+                }
                 log.info("Applying post-download media editing with FFmpeg for job {}", jobId);
                 if (activeJob != null) {
                     eventRepository.save(new JobEvent(UUID.randomUUID(), activeJob,
                             "EDIT_STARTED", "Post-download media editing and transcoding initiated"));
                 }
 
-                File scratchEditOutput = new File(task.getOutputPath().toFile(), "edited_" + UUID.randomUUID() + "." + finalContainerFormat);
+                File scratchEditOutput = new File(task.getOutputPath().toFile(), "edited_" + UUID.randomUUID() + "." + outputFormat);
                 try {
                     ConversionResult editResult = mediaConversionService.convert(
                             jobId,
                             downloadedMedia.getFilePath().toFile(),
                             scratchEditOutput,
-                            finalContainerFormat,
-                            task.getEditOptions(),
+                            outputFormat,
+                            task.getEditOptions() != null ? task.getEditOptions() : new ConversionOptions(),
                             convProgress -> {
                                 if (!task.isCancelled()) {
                                     // Scale editing progress between 75% and 99%
@@ -164,10 +194,13 @@ public class MediaDownloadServiceImpl implements MediaDownloadService {
                     );
                     if (editResult.isSuccess() && scratchEditOutput.exists() && scratchEditOutput.length() > 0) {
                         finalFilePath = scratchEditOutput.toPath();
+                        finalContainerFormat = outputFormat;
                         finalFileSize = scratchEditOutput.length();
                         if (editResult.getMimeType() != null) {
                             finalMimeType = editResult.getMimeType();
                         }
+                    } else {
+                        throw new IOException("Media conversion did not produce the requested output.");
                     }
                 } catch (Exception editEx) {
                     log.error("Post-download editing failed for job {}: {}", jobId, editEx.getMessage(), editEx);
@@ -175,13 +208,21 @@ public class MediaDownloadServiceImpl implements MediaDownloadService {
                 }
             }
 
+            // Verify the final bytes after all edits, before persisting a successful output.
+            outputVerifier.verify(finalFilePath, outputFormat, audioExpected);
+            finalFileSize = java.nio.file.Files.size(finalFilePath);
+            finalMimeType = DownloadOutputVerifier.mimeType(outputFormat);
+            if (task.isCancelled()) {
+                handleCancellation(jobId);
+                return;
+            }
             // Store file into storage and complete job
             MediaJob job = jobRepository.findById(jobId).orElse(null);
             if (job != null) {
                 try {
                     MediaFile savedFile = storageService.storeDownloadedFile(
                             job,
-                            downloadedMedia.getOriginalFilename(),
+                            downloadedMedia.getOriginalFilename().replaceFirst("\\.[^.]+$", "") + "." + finalContainerFormat,
                             finalFilePath,
                             finalMimeType,
                             finalFileSize
@@ -228,6 +269,19 @@ public class MediaDownloadServiceImpl implements MediaDownloadService {
         } catch (Exception ex) {
             log.debug("Progress update skipped for job {}: {}", jobId, ex.getMessage());
         }
+    }
+
+    private static boolean hasContentEdits(ConversionOptions options) {
+        // Resolution/bitrate alone have already been applied by the extractor's verified normalization.
+        return options.hasTrim() || options.hasCut() || options.hasCrop()
+                || options.getAspectRatio() != null && !"original".equals(options.getAspectRatio())
+                || options.getQualityPreset() != null || options.getVideoBitrate() != null
+                || options.getCrf() != null || options.getFrameRate() != null
+                || options.getVideoCodec() != null || options.getAudioCodec() != null
+                || Boolean.TRUE.equals(options.getRemoveAudio()) || Boolean.TRUE.equals(options.getRemoveSilence())
+                || options.getVolume() != null && Math.abs(options.getVolume() - 1.0) > 0.01
+                || options.getFadeInDuration() != null && options.getFadeInDuration() > 0
+                || options.getFadeOutDuration() != null && options.getFadeOutDuration() > 0;
     }
 
     private void handleCancellation(UUID jobId) {

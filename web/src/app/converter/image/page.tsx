@@ -1,5 +1,7 @@
 'use client';
 
+import { useNavigationGuard } from '@/hooks/useNavigationGuard';
+
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import {
@@ -13,12 +15,10 @@ import {
   RefreshCw,
   CheckCircle2,
   AlertCircle,
-  Shield,
   Layers,
   ChevronDown,
   Trash2,
   Plus,
-  TrendingDown,
   Sparkles,
   FlipHorizontal,
   FlipVertical,
@@ -30,7 +30,10 @@ import {
   Maximize2,
 } from 'lucide-react';
 import { apiClient } from '@/services/apiClient';
-import { JobResponse, ConversionProgressResponse, SizeEstimationResponse } from '@/types/api';
+import { JobResponse, ConversionProgressResponse } from '@/types/api';
+import { ImageCropPreview } from '@/components/editor/ImageCropPreview';
+import { IMAGE_FILTERS, IMAGE_RATIOS } from '@/utils/imageFilters';
+import { clampCrop, CropRect } from '@/utils/videoCrop';
 import { IMAGE_PRESETS } from '@/utils/presets';
 
 export default function ImageConverterPage() {
@@ -53,7 +56,7 @@ export default function ImageConverterPage() {
   // Active Tab & Tool
   const [activeTab, setActiveTab] = useState<'light' | 'transform'>('light');
   const [showCrop, setShowCrop] = useState(false);
-  const [cropAspectRatio, setCropAspectRatio] = useState<string>('16:9');
+  const [cropAspectRatio, setCropAspectRatio] = useState<string>('original');
   const [cropX, setCropX] = useState<number>(0);
   const [cropY, setCropY] = useState<number>(0);
   const [cropWidth, setCropWidth] = useState<number>(0);
@@ -66,20 +69,36 @@ export default function ImageConverterPage() {
   const [brightness, setBrightness] = useState<number>(0); // -1.0 to 1.0 (displayed as -100 to 100)
   const [contrast, setContrast] = useState<number>(1.0); // 0.0 to 2.0 (displayed as 0 to 200)
 
-  // Output Size Estimation
-  const [sizeEstimate, setSizeEstimate] = useState<SizeEstimationResponse | null>(null);
-  const [isEstimating, setIsEstimating] = useState<boolean>(false);
-
+  const [saturation, setSaturation] = useState(1);
+  const [warmth, setWarmth] = useState(0);
+  const [imageFilter, setImageFilter] = useState('original');
+  const updateCrop = (rect: CropRect) => {
+    const next = clampCrop(rect, naturalWidth, naturalHeight);
+    setCropX(next.x); setCropY(next.y); setCropWidth(next.width); setCropHeight(next.height);
+  };
+  const applyFilter = (id: string) => {
+    const preset = IMAGE_FILTERS.find(p => p.id === id); if (!preset) return;
+    setImageFilter(id); setBrightness(preset.brightness); setContrast(preset.contrast); setSaturation(preset.saturation); setWarmth(preset.warmth);
+  };
   // Stages & Job Tracking
   const [stage, setStage] = useState<'IDLE' | 'UPLOADING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'CANCELLED'>('IDLE');
+  useNavigationGuard(stage === 'UPLOADING' || stage === 'PROCESSING');
   const [error, setError] = useState<string | null>(null);
   const [currentJob, setCurrentJob] = useState<JobResponse | null>(null);
   const [progress, setProgress] = useState<ConversionProgressResponse | null>(null);
   const [outputFileId, setOutputFileId] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const exportSettings = JSON.stringify({ selectedFile: selectedFile && [selectedFile.name, selectedFile.lastModified], targetFormat,
+    quality, customWidth, customHeight, preserveAspectRatio, showCrop, cropX, cropY, cropWidth, cropHeight,
+    rotateDegrees, flipH, flipV, brightness, contrast, saturation, warmth });
+  const completedSettings = useRef(exportSettings);
+  useEffect(() => {
+    if (stage === 'COMPLETED' && completedSettings.current !== exportSettings) {
+      setStage('IDLE'); setOutputFileId(null);
+    }
+  }, [stage, exportSettings]);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const estimateTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Preview Object URL
   useEffect(() => {
@@ -119,32 +138,12 @@ export default function ImageConverterPage() {
     setShowCrop(true);
     if (!naturalWidth || !naturalHeight) return;
 
-    let targetW = naturalWidth;
-    let targetH = naturalHeight;
-
-    if (preset === '16:9') {
-      targetH = Math.round((naturalWidth * 9) / 16);
-      if (targetH > naturalHeight) {
-        targetH = naturalHeight;
-        targetW = Math.round((naturalHeight * 16) / 9);
-      }
-    } else if (preset === '9:16') {
-      targetW = Math.round((naturalHeight * 9) / 16);
-      if (targetW > naturalWidth) {
-        targetW = naturalWidth;
-        targetH = Math.round((naturalWidth * 16) / 9);
-      }
-    } else if (preset === '1:1') {
-      const minDim = Math.min(naturalWidth, naturalHeight);
-      targetW = minDim;
-      targetH = minDim;
-    } else if (preset === '4:3') {
-      targetH = Math.round((naturalWidth * 3) / 4);
-      if (targetH > naturalHeight) {
-        targetH = naturalHeight;
-        targetW = Math.round((naturalHeight * 4) / 3);
-      }
-    }
+    if (preset === 'original') { setShowCrop(false); setCropX(0); setCropY(0); setCropWidth(naturalWidth); setCropHeight(naturalHeight); return; }
+    if (preset === 'custom') return;
+    const [rw, rh] = preset.split(':').map(Number);
+    const ratio = rw / rh;
+    const targetW = Math.floor(Math.min(naturalWidth, naturalHeight * ratio));
+    const targetH = Math.floor(targetW / ratio);
 
     const startX = Math.max(0, Math.floor((naturalWidth - targetW) / 2));
     const startY = Math.max(0, Math.floor((naturalHeight - targetH) / 2));
@@ -172,54 +171,6 @@ export default function ImageConverterPage() {
   const isLossOfAlpha =
     (selectedFile?.name.toLowerCase().endsWith('.png') || selectedFile?.name.toLowerCase().endsWith('.webp')) &&
     (targetFormat === 'jpg' || targetFormat === 'jpeg');
-
-  // Debounced Size Estimation
-  useEffect(() => {
-    if (estimateTimerRef.current) {
-      clearTimeout(estimateTimerRef.current);
-    }
-
-    estimateTimerRef.current = setTimeout(async () => {
-      try {
-        setIsEstimating(true);
-        const w = customWidth ? parseInt(customWidth, 10) : showCrop && cropWidth > 0 ? cropWidth : naturalWidth;
-        const h = customHeight ? parseInt(customHeight, 10) : showCrop && cropHeight > 0 ? cropHeight : naturalHeight;
-
-        const est = await apiClient.estimateOutputSize({
-          mediaType: 'image',
-          outputFormat: targetFormat,
-          sourceWidth: naturalWidth || 1920,
-          sourceHeight: naturalHeight || 1080,
-          sourceFileSize: selectedFile ? selectedFile.size : undefined,
-          imageWidth: w > 0 ? w : undefined,
-          imageHeight: h > 0 ? h : undefined,
-          imageQuality: parseInt(quality, 10) || 85,
-          cropWidth: showCrop && cropWidth > 0 ? cropWidth : undefined,
-          cropHeight: showCrop && cropHeight > 0 ? cropHeight : undefined,
-        });
-        setSizeEstimate(est);
-      } catch {
-        // Fallback
-      } finally {
-        setIsEstimating(false);
-      }
-    }, 300);
-
-    return () => {
-      if (estimateTimerRef.current) clearTimeout(estimateTimerRef.current);
-    };
-  }, [
-    selectedFile,
-    targetFormat,
-    quality,
-    customWidth,
-    customHeight,
-    showCrop,
-    cropWidth,
-    cropHeight,
-    naturalWidth,
-    naturalHeight,
-  ]);
 
   const cleanupPolling = () => {
     if (pollIntervalRef.current) {
@@ -281,6 +232,7 @@ export default function ImageConverterPage() {
       return;
     }
 
+    completedSettings.current = exportSettings;
     setError(null);
     setStage('UPLOADING');
     setCurrentJob(null);
@@ -318,6 +270,7 @@ export default function ImageConverterPage() {
         flipVertical: flipV ? true : undefined,
         brightness: brightness !== 0 ? brightness : undefined,
         contrast: contrast !== 1.0 ? contrast : undefined,
+        saturation, warmth,
       });
 
       const effectiveJobId = job.id || (job as any).jobId;
@@ -345,12 +298,14 @@ export default function ImageConverterPage() {
   };
 
   const handleResetAdjustments = () => {
+    setSaturation(1); setWarmth(0); setImageFilter('original');
     setBrightness(0);
     setContrast(1.0);
     setRotateDegrees(0);
     setFlipH(false);
     setFlipV(false);
     setShowCrop(false);
+    setCropAspectRatio('original');
     setCustomWidth('');
     setCustomHeight('');
   };
@@ -364,7 +319,7 @@ export default function ImageConverterPage() {
   };
 
   return (
-    <div className="w-full max-w-7xl mx-auto px-gutter py-space-md flex flex-col gap-space-md">
+    <div className="image-editor w-full max-w-7xl mx-auto px-gutter py-space-md flex flex-col gap-space-md text-slate-900 dark:text-slate-100">
       {/* Top Workspace Status Bar */}
       <div className="w-full bg-surface-container-lowest dark:bg-slate-900 rounded-2xl p-space-md shadow-sm border border-outline-variant/30 flex flex-wrap items-center justify-between gap-space-sm">
         <div className="flex items-center gap-space-sm min-w-0">
@@ -372,16 +327,16 @@ export default function ImageConverterPage() {
             <span className="w-8 h-8 rounded-full bg-primary-fixed dark:bg-slate-800 text-primary flex items-center justify-center font-bold">
               <ImageIcon className="w-4 h-4" />
             </span>
-            <Link href="/" className="text-xs text-on-surface-variant hover:text-on-surface font-semibold">
+            <Link href="/" className="text-xs text-on-surface-variant dark:text-slate-300 hover:text-on-surface font-semibold">
               Image Editor
             </Link>
             <span className="text-outline-variant text-xs">/</span>
-            <span className="text-sm font-bold text-on-surface truncate max-w-[280px] sm:max-w-md">
+            <span className="text-sm font-bold text-on-surface dark:text-slate-100 truncate max-w-[280px] sm:max-w-md">
               {selectedFile ? selectedFile.name : 'No image loaded'}
             </span>
           </div>
           {selectedFile && naturalWidth > 0 && (
-            <div className="hidden lg:flex items-center gap-2 px-3 py-1 rounded-full bg-surface-container-low dark:bg-slate-800 text-on-surface-variant font-mono text-xs">
+            <div className="hidden lg:flex items-center gap-2 px-3 py-1 rounded-full bg-surface-container-low dark:bg-slate-800 text-on-surface-variant dark:text-slate-300 font-mono text-xs">
               <span className="w-1.5 h-1.5 rounded-full bg-tertiary-container animate-pulse" />
               <span>
                 {naturalWidth} × {naturalHeight} · 24-bit RGB · {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB
@@ -395,7 +350,7 @@ export default function ImageConverterPage() {
             type="button"
             onClick={handleResetAdjustments}
             disabled={!selectedFile}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-container-low dark:bg-slate-800 text-on-surface-variant hover:bg-surface-container font-semibold text-xs disabled:opacity-40"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-container-low dark:bg-slate-800 text-on-surface-variant dark:text-slate-300 hover:bg-surface-container font-semibold text-xs disabled:opacity-40"
           >
             <RefreshCw className="w-3.5 h-3.5" />
             <span>Revert</span>
@@ -419,35 +374,12 @@ export default function ImageConverterPage() {
         {/* Left Workspace (8 cols) */}
         <div className="lg:col-span-8 flex flex-col gap-space-md min-w-0">
           {/* Viewport Card */}
-          <div className="relative bg-inverse-surface rounded-3xl overflow-hidden shadow-xl aspect-[16/10] flex items-center justify-center group select-none border border-outline-variant/30">
+          <div className="relative bg-slate-50 dark:bg-slate-900 rounded-3xl overflow-hidden shadow-sm aspect-[16/10] flex items-center justify-center group select-none border border-outline-variant/30 transition-colors">
             {previewUrl ? (
-              <div className="relative w-full h-full flex items-center justify-center overflow-hidden p-4">
-                <img
-                  src={previewUrl}
-                  alt={selectedFile?.name || 'Preview'}
-                  onLoad={handleImageLoaded}
-                  className="max-w-full max-h-full object-contain transition-all duration-150"
-                  style={{
-                    transform: `scale(${zoomLevel / 100}) rotate(${rotateDegrees}deg) scaleX(${flipH ? -1 : 1}) scaleY(${flipV ? -1 : 1})`,
-                    filter: `brightness(${1 + brightness}) contrast(${contrast})`,
-                  }}
-                />
-
-                {/* Rule of Thirds Crop Guidelines Overlay (when crop active) */}
-                {showCrop && (
-                  <div className="absolute inset-8 border-2 border-primary-container rounded pointer-events-none shadow-[0_0_0_9999px_rgba(11,28,48,0.5)]">
-                    <div className="absolute inset-0 grid grid-cols-3 grid-rows-3 opacity-40">
-                      <div className="bg-white/40 w-px h-full absolute left-1/3" />
-                      <div className="bg-white/40 w-px h-full absolute left-2/3" />
-                      <div className="bg-white/40 h-px w-full absolute top-1/3" />
-                      <div className="bg-white/40 h-px w-full absolute top-2/3" />
-                    </div>
-                    <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded-full bg-black/70 font-mono text-[11px] text-white">
-                      Crop: {cropAspectRatio} ({cropWidth}×{cropHeight})
-                    </div>
-                  </div>
-                )}
-              </div>
+              <ImageCropPreview src={previewUrl} name={selectedFile?.name || 'Preview'} width={naturalWidth} height={naturalHeight}
+                crop={{ x: cropX, y: cropY, width: cropWidth, height: cropHeight }} enabled={showCrop} onCrop={rect => { setCropAspectRatio('custom'); updateCrop(rect); }} onLoad={handleImageLoaded}
+                filter={`brightness(${1 + brightness}) contrast(${contrast}) saturate(${saturation}) sepia(${Math.abs(warmth) * 0.3}) hue-rotate(${warmth < 0 ? 180 : 0}deg)`}
+                transform={`scale(${zoomLevel / 100}) rotate(${rotateDegrees}deg) scaleX(${flipH ? -1 : 1}) scaleY(${flipV ? -1 : 1})`} />
             ) : (
               <div
                 onClick={() => fileInputRef.current?.click()}
@@ -456,8 +388,8 @@ export default function ImageConverterPage() {
                 <div className="w-16 h-16 rounded-full bg-primary/20 text-primary flex items-center justify-center mb-4">
                   <Upload className="w-8 h-8" />
                 </div>
-                <h3 className="text-lg font-bold text-white mb-1">Click to Upload Image</h3>
-                <p className="text-xs text-slate-400 max-w-sm">
+                <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 mb-1">Click to Upload Image</h3>
+                <p className="text-xs text-slate-600 dark:text-slate-300 max-w-sm">
                   Drag and drop PNG, JPEG, WebP, AVIF, or BMP images to edit and convert.
                 </p>
               </div>
@@ -465,7 +397,7 @@ export default function ImageConverterPage() {
 
             {/* Top Right Zoom Controls */}
             {previewUrl && (
-              <div className="absolute top-3 right-3 flex items-center gap-1 bg-surface-container-lowest/90 dark:bg-slate-900/90 backdrop-blur-md px-2 py-1 rounded-full shadow-md text-on-surface">
+              <div className="absolute top-3 right-3 flex items-center gap-1 bg-surface-container-lowest/90 dark:bg-slate-900/90 backdrop-blur-md px-2 py-1 rounded-full shadow-md text-on-surface dark:text-slate-100">
                 <button
                   type="button"
                   onClick={() => setZoomLevel((z) => Math.max(25, z - 25))}
@@ -503,7 +435,7 @@ export default function ImageConverterPage() {
                     type="button"
                     onClick={() => setShowCrop(false)}
                     className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${
-                      !showCrop ? 'bg-primary text-white shadow-xs' : 'text-on-surface-variant hover:text-on-surface'
+                      !showCrop ? 'bg-primary text-white shadow-xs' : 'text-on-surface-variant dark:text-slate-300 hover:text-on-surface'
                     }`}
                   >
                     Full Image
@@ -516,7 +448,7 @@ export default function ImageConverterPage() {
                       className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${
                         showCrop && cropAspectRatio === ratio
                           ? 'bg-primary text-white shadow-xs'
-                          : 'text-on-surface-variant hover:text-on-surface'
+                          : 'text-on-surface-variant dark:text-slate-300 hover:text-on-surface'
                       }`}
                     >
                       {ratio}
@@ -529,7 +461,7 @@ export default function ImageConverterPage() {
                   <button
                     type="button"
                     onClick={() => setRotateDegrees((d) => (d - 90 + 360) % 360)}
-                    className="w-7 h-7 rounded-full hover:bg-surface-container flex items-center justify-center text-on-surface-variant hover:text-on-surface transition-colors"
+                    className="w-7 h-7 rounded-full hover:bg-surface-container flex items-center justify-center text-on-surface-variant dark:text-slate-300 hover:text-on-surface transition-colors"
                     title="Rotate 90° CCW"
                   >
                     <RotateCcw className="w-3.5 h-3.5" />
@@ -537,7 +469,7 @@ export default function ImageConverterPage() {
                   <button
                     type="button"
                     onClick={() => setRotateDegrees((d) => (d + 90) % 360)}
-                    className="w-7 h-7 rounded-full hover:bg-surface-container flex items-center justify-center text-on-surface-variant hover:text-on-surface transition-colors"
+                    className="w-7 h-7 rounded-full hover:bg-surface-container flex items-center justify-center text-on-surface-variant dark:text-slate-300 hover:text-on-surface transition-colors"
                     title="Rotate 90° CW"
                   >
                     <RotateCw className="w-3.5 h-3.5" />
@@ -546,7 +478,7 @@ export default function ImageConverterPage() {
                     type="button"
                     onClick={() => setFlipH(!flipH)}
                     className={`w-7 h-7 rounded-full hover:bg-surface-container flex items-center justify-center transition-colors ${
-                      flipH ? 'bg-primary/20 text-primary' : 'text-on-surface-variant'
+                      flipH ? 'bg-primary/20 text-primary' : 'text-on-surface-variant dark:text-slate-300'
                     }`}
                     title="Flip Horizontal"
                   >
@@ -556,7 +488,7 @@ export default function ImageConverterPage() {
                     type="button"
                     onClick={() => setFlipV(!flipV)}
                     className={`w-7 h-7 rounded-full hover:bg-surface-container flex items-center justify-center transition-colors ${
-                      flipV ? 'bg-primary/20 text-primary' : 'text-on-surface-variant'
+                      flipV ? 'bg-primary/20 text-primary' : 'text-on-surface-variant dark:text-slate-300'
                     }`}
                     title="Flip Vertical"
                   >
@@ -576,8 +508,8 @@ export default function ImageConverterPage() {
                   onClick={() => setActiveTab('light')}
                   className={`px-4 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all ${
                     activeTab === 'light'
-                      ? 'bg-surface-container-lowest dark:bg-slate-700 text-on-surface shadow-xs'
-                      : 'text-on-surface-variant hover:text-on-surface'
+                      ? 'bg-surface-container-lowest dark:bg-slate-700 text-on-surface dark:text-slate-100 shadow-xs'
+                      : 'text-on-surface-variant dark:text-slate-300 hover:text-on-surface'
                   }`}
                 >
                   <Sun className="w-3.5 h-3.5 text-primary" />
@@ -588,8 +520,8 @@ export default function ImageConverterPage() {
                   onClick={() => setActiveTab('transform')}
                   className={`px-4 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all ${
                     activeTab === 'transform'
-                      ? 'bg-surface-container-lowest dark:bg-slate-700 text-on-surface shadow-xs'
-                      : 'text-on-surface-variant hover:text-on-surface'
+                      ? 'bg-surface-container-lowest dark:bg-slate-700 text-on-surface dark:text-slate-100 shadow-xs'
+                      : 'text-on-surface-variant dark:text-slate-300 hover:text-on-surface'
                   }`}
                 >
                   <CropIcon className="w-3.5 h-3.5 text-primary" />
@@ -600,12 +532,27 @@ export default function ImageConverterPage() {
               <button
                 type="button"
                 onClick={handleResetAdjustments}
-                className="text-on-surface-variant hover:text-primary text-xs font-semibold flex items-center gap-1 px-3 py-1 rounded-full hover:bg-surface-container transition-colors"
+                className="text-on-surface-variant dark:text-slate-300 hover:text-primary text-xs font-semibold flex items-center gap-1 px-3 py-1 rounded-full hover:bg-surface-container transition-colors"
               >
                 <RefreshCw className="w-3 h-3" />
                 <span>Reset Sliders</span>
               </button>
             </div>
+
+            <fieldset disabled={!selectedFile || stage === 'UPLOADING' || stage === 'PROCESSING'} className="space-y-4 ">
+              <div className="space-y-2"><h3 className="text-sm font-semibold">Photo Filters</h3>
+                <div className="flex flex-wrap gap-2">{IMAGE_FILTERS.map(preset => <button type="button" key={preset.id} aria-pressed={imageFilter === preset.id} onClick={() => applyFilter(preset.id)}
+                  className={`rounded-full px-3 py-2 text-xs font-semibold ${imageFilter === preset.id ? 'bg-primary-container text-white' : 'bg-surface-container-low dark:bg-slate-800 text-on-surface dark:text-slate-100'}`}>{preset.label}</button>)}</div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">{[
+                { name: 'Saturation', value: saturation, min: 0, max: 2, set: setSaturation },
+                { name: 'Warmth', value: warmth, min: -1, max: 1, set: setWarmth },
+              ].map(control => <label key={control.name} className="text-xs font-semibold space-y-2 block">
+                <span className="flex justify-between"><span>{control.name}</span><span>{Math.round(control.value * 100)}%</span></span>
+                <input aria-label={control.name} disabled={!selectedFile} type="range" min={control.min} max={control.max} step="0.01" value={control.value}
+                  onChange={e => { control.set(Number(e.target.value)); setImageFilter('custom'); }} className="w-full accent-primary dark:accent-violet-400" />
+              </label>)}</div>
+            </fieldset>
 
             {/* TAB 1: Light & Color */}
             {activeTab === 'light' && (
@@ -613,13 +560,13 @@ export default function ImageConverterPage() {
                 {/* Brightness */}
                 <div className="flex flex-col gap-1.5">
                   <div className="flex items-center justify-between text-xs font-semibold">
-                    <span className="text-on-surface">Brightness</span>
+                    <span className="text-on-surface dark:text-slate-100">Brightness</span>
                     <span className="font-mono text-primary font-bold">
                       {brightness >= 0 ? `+${Math.round(brightness * 100)}` : Math.round(brightness * 100)}
                     </span>
                   </div>
                   <input
-                    type="range"
+                    disabled={!selectedFile} type="range"
                     min="-1"
                     max="1"
                     step="0.05"
@@ -632,13 +579,13 @@ export default function ImageConverterPage() {
                 {/* Contrast */}
                 <div className="flex flex-col gap-1.5">
                   <div className="flex items-center justify-between text-xs font-semibold">
-                    <span className="text-on-surface">Contrast</span>
+                    <span className="text-on-surface dark:text-slate-100">Contrast</span>
                     <span className="font-mono text-primary font-bold">
                       {Math.round(contrast * 100)}%
                     </span>
                   </div>
                   <input
-                    type="range"
+                    disabled={!selectedFile} type="range"
                     min="0"
                     max="2"
                     step="0.05"
@@ -653,44 +600,20 @@ export default function ImageConverterPage() {
             {/* TAB 2: Transform & Canvas */}
             {activeTab === 'transform' && (
               <div className="space-y-3 pt-1">
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono">
-                  <div>
-                    <label className="block text-outline text-[10px] mb-1">Custom Width (px)</label>
-                    <input
-                      type="number"
-                      placeholder={naturalWidth ? naturalWidth.toString() : 'Auto'}
-                      value={customWidth}
-                      onChange={(e) => setCustomWidth(e.target.value)}
-                      className="w-full px-2 py-1.5 rounded-lg bg-surface-container-low dark:bg-slate-800 border border-outline-variant/30 text-xs focus:outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-outline text-[10px] mb-1">Custom Height (px)</label>
-                    <input
-                      type="number"
-                      placeholder={naturalHeight ? naturalHeight.toString() : 'Auto'}
-                      value={customHeight}
-                      onChange={(e) => setCustomHeight(e.target.value)}
-                      className="w-full px-2 py-1.5 rounded-lg bg-surface-container-low dark:bg-slate-800 border border-outline-variant/30 text-xs focus:outline-none"
-                    />
-                  </div>
-                  <div className="flex items-center pt-4">
-                    <label className="flex items-center gap-1.5 text-xs text-on-surface cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={preserveAspectRatio}
-                        onChange={(e) => setPreserveAspectRatio(e.target.checked)}
-                        className="rounded accent-primary"
-                      />
-                      <span>Lock Aspect Ratio</span>
-                    </label>
-                  </div>
-                  <div className="flex items-center pt-4">
-                    <span className="text-xs text-on-surface-variant font-mono">
-                      Current: {customWidth || naturalWidth || 0} × {customHeight || naturalHeight || 0}
-                    </span>
-                  </div>
-                </div>
+                <fieldset disabled={!selectedFile} className="space-y-3 ">
+                  <h3 className="text-sm font-semibold">Crop & Aspect Ratio</h3>
+                  <div className="flex flex-wrap gap-2">{IMAGE_RATIOS.map(ratio => <button key={ratio} type="button" aria-pressed={cropAspectRatio === ratio} onClick={() => handleAspectRatioPreset(ratio)}
+                    className={`rounded-full px-3 py-1.5 text-xs font-semibold ${cropAspectRatio === ratio ? 'bg-primary-container text-white' : 'bg-surface-container-low dark:bg-slate-800'}`}>{ratio === 'original' ? 'Original' : ratio === 'custom' ? 'Custom' : ratio}</button>)}</div>
+                  {showCrop && <p className="text-xs text-on-surface-variant dark:text-slate-300">Drag the corners or edges to crop freely. Drag inside to reposition.</p>}
+                  <div className="flex flex-wrap gap-2">{[
+                    { name: 'Rotate Left', run: () => setRotateDegrees(v => (v + 270) % 360) },
+                    { name: 'Rotate Right', run: () => setRotateDegrees(v => (v + 90) % 360) },
+                    { name: 'Flip Horizontal', run: () => setFlipH(v => !v) },
+                    { name: 'Flip Vertical', run: () => setFlipV(v => !v) },
+                  ].map(tool => <button key={tool.name} type="button" onClick={tool.run} className="rounded-full bg-surface-container-low dark:bg-slate-800 px-3 py-2 text-xs">{tool.name}</button>)}</div>
+                </fieldset>
+
+
               </div>
             )}
           </div>
@@ -701,7 +624,7 @@ export default function ImageConverterPage() {
           <div className="bg-surface-container-lowest dark:bg-slate-900 rounded-3xl shadow-sm border border-outline-variant/30 p-space-lg flex flex-col gap-space-md">
             {/* Header */}
             <div className="flex items-center justify-between border-b border-outline-variant/20 pb-2">
-              <h2 className="text-base font-bold text-on-surface flex items-center gap-2">
+              <h2 className="text-base font-bold text-on-surface dark:text-slate-100 flex items-center gap-2">
                 <Sliders className="w-4 h-4 text-primary" />
                 <span>Export Settings</span>
               </h2>
@@ -712,7 +635,7 @@ export default function ImageConverterPage() {
 
             {/* Target Format Pills */}
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-semibold text-on-surface flex items-center justify-between">
+              <label className="text-xs font-semibold text-on-surface dark:text-slate-100 flex items-center justify-between">
                 <span>Target Format</span>
                 <span className="text-tertiary font-mono text-xs font-semibold">Lossless & WebP</span>
               </label>
@@ -725,7 +648,7 @@ export default function ImageConverterPage() {
                     className={`py-2 rounded-xl text-xs font-bold uppercase transition-all ${
                       targetFormat === fmt
                         ? 'bg-surface-container-lowest dark:bg-slate-700 text-primary shadow-xs'
-                        : 'text-on-surface-variant hover:text-on-surface'
+                        : 'text-on-surface-variant dark:text-slate-300 hover:text-on-surface'
                     }`}
                   >
                     {fmt}
@@ -737,11 +660,11 @@ export default function ImageConverterPage() {
             {/* Quality & Compression Slider */}
             <div className="flex flex-col gap-1.5">
               <div className="flex items-center justify-between text-xs font-semibold">
-                <span className="text-on-surface">Quality Level</span>
+                <span className="text-on-surface dark:text-slate-100">Quality Level</span>
                 <span className="font-mono text-primary font-bold">{quality}% (Visually Lossless)</span>
               </div>
               <input
-                type="range"
+                disabled={!selectedFile} type="range"
                 min="10"
                 max="100"
                 step="5"
@@ -758,7 +681,7 @@ export default function ImageConverterPage() {
 
             {/* Target Resolution Scaling */}
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-semibold text-on-surface">Resolution Scaling</label>
+              <label className="text-xs font-semibold text-on-surface dark:text-slate-100">Resolution Scaling</label>
               <div className="grid grid-cols-3 gap-1 p-1 bg-surface-container-low dark:bg-slate-800 rounded-2xl">
                 {[
                   { pct: 100, label: 'Original 100%' },
@@ -769,7 +692,7 @@ export default function ImageConverterPage() {
                     key={tier.pct}
                     type="button"
                     onClick={() => handleResolutionScale(tier.pct)}
-                    className="py-1.5 px-1 rounded-xl text-[11px] font-semibold text-on-surface hover:bg-surface-container-lowest transition-all"
+                    className="py-1.5 px-1 rounded-xl text-[11px] font-semibold text-on-surface dark:text-slate-100 hover:bg-surface-container-lowest transition-all"
                   >
                     {tier.label}
                   </button>
@@ -784,40 +707,6 @@ export default function ImageConverterPage() {
                 <span>JPEG does not support transparency. Alpha channels will flatten to solid white.</span>
               </div>
             )}
-
-            {/* Real-time Output Size Estimation */}
-            <div className="bg-surface-container-low dark:bg-slate-800/60 rounded-2xl p-space-md flex flex-col gap-2 border border-outline-variant/30">
-              <div className="flex items-center justify-between">
-                <span className="text-xs uppercase tracking-wider text-outline font-bold">Estimated Output Size</span>
-                {sizeEstimate && sizeEstimate.reductionPercentage !== undefined && (
-                  <span className="px-2.5 py-0.5 rounded-full bg-tertiary-fixed text-on-tertiary-fixed font-mono text-xs font-bold flex items-center gap-1">
-                    <TrendingDown className="w-3.5 h-3.5" />
-                    <span>{sizeEstimate.reductionPercentage}% vs source</span>
-                  </span>
-                )}
-              </div>
-
-              <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-extrabold text-on-surface font-mono">
-                  {isEstimating ? (
-                    <span className="animate-pulse">Calculating...</span>
-                  ) : sizeEstimate ? (
-                    sizeEstimate.formattedEstimate || sizeEstimate.formattedEstimatedSize
-                  ) : (
-                    '~924 KB'
-                  )}
-                </span>
-                {selectedFile && (
-                  <span className="font-mono text-xs text-outline line-through">
-                    {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB
-                  </span>
-                )}
-              </div>
-
-              <p className="text-xs text-on-surface-variant leading-relaxed">
-                Calculated for <strong>{targetFormat.toUpperCase()}</strong> at <strong>{quality}% Quality</strong>.
-              </p>
-            </div>
 
             {/* Error Message */}
             {error && (
@@ -856,7 +745,7 @@ export default function ImageConverterPage() {
                       style={{ width: `${progress ? (progress.percentage ?? progress.progressPercentage ?? 30) : 30}%` }}
                     />
                   </div>
-                  <div className="flex items-center justify-between text-xs text-on-surface-variant font-mono">
+                  <div className="flex items-center justify-between text-xs text-on-surface-variant dark:text-slate-300 font-mono">
                     <span>{progress ? (progress.stage || 'Compressing image...') : 'Compressing image...'}</span>
                     <span>{progress ? `${progress.percentage ?? progress.progressPercentage ?? 0}%` : 'Processing...'}</span>
                   </div>
@@ -890,7 +779,7 @@ export default function ImageConverterPage() {
                       setStage('IDLE');
                       setError(null);
                     }}
-                    className="w-full h-10 rounded-full bg-surface-container-low text-on-surface text-xs font-semibold hover:bg-surface-container transition-colors"
+                    className="w-full h-10 rounded-full bg-surface-container-low text-on-surface dark:text-slate-100 text-xs font-semibold hover:bg-surface-container transition-colors"
                   >
                     Edit Another
                   </button>
@@ -901,16 +790,11 @@ export default function ImageConverterPage() {
                 <button
                   type="button"
                   onClick={() => setStage('IDLE')}
-                  className="w-full h-11 rounded-full bg-surface-container-low hover:bg-surface-container text-on-surface font-semibold text-xs transition-colors"
+                  className="w-full h-11 rounded-full bg-surface-container-low hover:bg-surface-container text-on-surface dark:text-slate-100 font-semibold text-xs transition-colors"
                 >
                   Try Again
                 </button>
               )}
-
-              <div className="flex items-center justify-center gap-1.5 text-center text-on-surface-variant text-xs pt-1">
-                <Shield className="w-3.5 h-3.5 text-tertiary" />
-                <span>Zero Database · Complete Client Privacy</span>
-              </div>
             </div>
           </div>
         </div>

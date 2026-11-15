@@ -28,7 +28,7 @@ public class FFmpegProcessExecutor {
     private String configuredFfmpegPath;
 
     @Value("${app.converter.timeout-seconds:600}")
-    private int timeoutSeconds;
+    private int timeoutSeconds = 600;
 
     private final Map<UUID, Process> activeProcesses = new ConcurrentHashMap<>();
     private String resolvedFfmpegExecutable;
@@ -94,6 +94,8 @@ public class FFmpegProcessExecutor {
         ProcessBuilder pb = new ProcessBuilder(fullCommand);
         Process process = pb.start();
         activeProcesses.put(jobId, process);
+        ScheduledExecutorService watchdog = Executors.newSingleThreadScheduledExecutor();
+        var deadline = watchdog.schedule(process::destroyForcibly, Math.max(1, timeoutSeconds), TimeUnit.SECONDS);
 
         long startTimeMs = System.currentTimeMillis();
         List<String> errorLines = new CopyOnWriteArrayList<>();
@@ -172,7 +174,12 @@ public class FFmpegProcessExecutor {
                     }
                 }
             }
+        } catch (Exception ex) {
+            process.destroyForcibly();
+            throw ex;
         } finally {
+            deadline.cancel(false);
+            watchdog.shutdownNow();
             activeProcesses.remove(jobId);
         }
 

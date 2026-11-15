@@ -88,6 +88,7 @@ export interface SizeEstimationResponse {
 }
 
 export interface DownloadCreateRequest {
+  mediaType?: 'video' | 'audio';
   url: string;
   selectedFormat?: string;
   selectedQuality?: string;
@@ -127,6 +128,10 @@ export interface DownloadResponse {
 }
 
 export interface ConversionCreateRequest {
+  audioEffects?: string[];
+  audioEffectLevels?: Record<string, number>;
+  videoFadeInDuration?: number;
+  videoFadeOutDuration?: number;
   inputFileId?: string;
   inputFormat?: string;
   outputFormat?: string;
@@ -164,6 +169,8 @@ export interface ConversionCreateRequest {
   flipVertical?: boolean;
   brightness?: number;
   contrast?: number;
+  saturation?: number;
+  warmth?: number;
   imageWidth?: number;
   imageHeight?: number;
   imageQuality?: number;

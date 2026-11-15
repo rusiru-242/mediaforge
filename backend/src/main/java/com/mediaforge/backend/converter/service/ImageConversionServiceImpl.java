@@ -101,6 +101,14 @@ public class ImageConversionServiceImpl implements ImageConversionService {
             filters.add(String.format(Locale.ROOT, "eq=brightness=%.2f:contrast=%.2f", b, c));
         }
 
+        if (options != null && options.getSaturation() != null) {
+            filters.add(String.format(Locale.ROOT, "eq=saturation=%.4f", Math.max(0, Math.min(2, options.getSaturation()))));
+        }
+        if (options != null && options.getWarmth() != null && options.getWarmth() != 0) {
+            double warmth = Math.max(-1, Math.min(1, options.getWarmth())) * 0.15;
+            filters.add(String.format(Locale.ROOT, "colorbalance=rm=%.4f:bm=%.4f", warmth, -warmth));
+        }
+
         // 5. Resize
         if (options != null && (options.getImageWidth() != null || options.getImageHeight() != null)) {
             Integer targetW = options.getImageWidth();

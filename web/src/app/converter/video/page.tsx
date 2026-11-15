@@ -1,5 +1,9 @@
 'use client';
 
+import { useTrimmedPlayback } from '@/hooks/useTrimmedPlayback';
+import { useNavigationGuard } from '@/hooks/useNavigationGuard';
+import { TrimHandles } from '@/components/editor/TrimHandles';
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import Link from 'next/link';
 import {
@@ -8,7 +12,6 @@ import {
   Pause,
   RotateCcw,
   RotateCw,
-  Scissors,
   Crop as CropIcon,
   Sliders,
   Volume2,
@@ -20,16 +23,15 @@ import {
   CheckCircle2,
   AlertCircle,
   XCircle,
-  Shield,
   Layers,
   ChevronDown,
-  Trash2,
-  Plus,
-  TrendingDown,
   Sparkles,
 } from 'lucide-react';
 import { apiClient } from '@/services/apiClient';
-import { JobResponse, ConversionProgressResponse, SizeEstimationResponse, TimeRangeDto } from '@/types/api';
+import { JobResponse, ConversionProgressResponse } from '@/types/api';
+import { clampCrop, zoomCrop, CropRect } from '@/utils/videoCrop';
+import { useAudioPreview } from '@/hooks/useAudioPreview';
+import { AUDIO_EFFECTS, AudioEffect } from '@/utils/audioEffects';
 import { VIDEO_PRESETS } from '@/utils/presets';
 
 export default function VideoConverterPage() {
@@ -43,22 +45,30 @@ export default function VideoConverterPage() {
 
   // Conversion Parameters
   const [targetFormat, setTargetFormat] = useState('mp4');
+  const [exportMode, setExportMode] = useState<'video' | 'audio'>('video');
+  const [audioFormat, setAudioFormat] = useState('mp3');
+  const [downloaded, setDownloaded] = useState(false);
+  const [exportKey, setExportKey] = useState<string | null>(null);
+  const outputFormat = exportMode === 'audio' ? audioFormat : targetFormat;
   const [selectedPreset, setSelectedPreset] = useState<string>('high');
   const [resolution, setResolution] = useState('1080p');
-  const [videoBitrate, setVideoBitrate] = useState('4500k');
-  const [audioBitrate, setAudioBitrate] = useState('192k');
+  const [videoBitrate, setVideoBitrate] = useState('2500k');
+  const [audioBitrate, setAudioBitrate] = useState('256k');
+  const [audioEffects, setAudioEffects] = useState<AudioEffect[]>([]);
+  const [audioEffectLevels, setAudioEffectLevels] = useState<Partial<Record<AudioEffect, number>>>({});
   const [stripAudio, setStripAudio] = useState(false);
 
   // Active Tool Mode in Workspace
-  const [activeTool, setActiveTool] = useState<'select' | 'split' | 'cut' | 'crop'>('select');
+  const [activeTool, setActiveTool] = useState<'select' | 'crop'>('select');
 
   // Trim & Cut
   const [startTime, setStartTime] = useState<number>(0);
   const [endTime, setEndTime] = useState<number>(0);
-  const [cutSegments, setCutSegments] = useState<TimeRangeDto[]>([]);
 
   // Crop
-  const [cropAspectRatio, setCropAspectRatio] = useState<string>('16:9');
+  const [cropAspectRatio, setCropAspectRatio] = useState<string>('original');
+  const [cropMenuOpen, setCropMenuOpen] = useState(false);
+  const cropMenuButton = useRef<HTMLButtonElement | null>(null);
   const [cropX, setCropX] = useState<number>(0);
   const [cropY, setCropY] = useState<number>(0);
   const [cropWidth, setCropWidth] = useState<number>(0);
@@ -66,16 +76,10 @@ export default function VideoConverterPage() {
 
   // Advanced Quality & Audio
   const [crf, setCrf] = useState<number>(23);
-  const [videoCodec, setVideoCodec] = useState<string>('auto');
+  const videoCodec = 'auto';
   const [frameRate, setFrameRate] = useState<number | undefined>(undefined);
   const [volume, setVolume] = useState<number>(1.0);
   const [removeSilence, setRemoveSilence] = useState<boolean>(false);
-  const [fadeInDuration, setFadeInDuration] = useState<number>(0);
-  const [fadeOutDuration, setFadeOutDuration] = useState<number>(0);
-
-  // Output Size Estimation
-  const [sizeEstimate, setSizeEstimate] = useState<SizeEstimationResponse | null>(null);
-  const [isEstimating, setIsEstimating] = useState<boolean>(false);
 
   // Stages & Job Tracking
   const [stage, setStage] = useState<'IDLE' | 'UPLOADING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'CANCELLED'>('IDLE');
@@ -85,9 +89,37 @@ export default function VideoConverterPage() {
   const [outputFileId, setOutputFileId] = useState<string | null>(null);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const audioPreview = useAudioPreview(videoRef, previewUrl, { effects: stripAudio && exportMode === 'video' ? [] : audioEffects, levels: audioEffectLevels, volume: stripAudio && exportMode === 'video' ? 0 : volume, start: startTime, end: endTime, fadeIn: 0, fadeOut: 0 });
+  const playback = useTrimmedPlayback(videoRef, previewUrl, startTime, endTime, videoDuration, setCurrentTime, setIsPlaying);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const estimateTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const cropDrag = useRef<{clientX: number; clientY: number; rect: CropRect; scaleX: number; scaleY: number; resize?: boolean} | null>(null);
+  const settingsKey = JSON.stringify({ selectedFile: selectedFile && [selectedFile.name, selectedFile.size, selectedFile.lastModified],
+    exportMode, outputFormat, selectedPreset, resolution, videoBitrate, audioBitrate, stripAudio, startTime, endTime,
+    cropX, cropY, cropWidth, cropHeight, crf, videoCodec, frameRate, volume, removeSilence, audioEffects, audioEffectLevels });
+  const isProcessing = stage === 'UPLOADING' || stage === 'PROCESSING';
+  const hasUnsavedWork = Boolean(selectedFile && (!downloaded || settingsKey !== exportKey));
+  useNavigationGuard(isProcessing || hasUnsavedWork, isProcessing
+    ? 'Your video is uploading or processing. Leave this page?'
+    : 'This clip has unsaved work. Leave this page and discard it?');
+  useEffect(() => {
+    if (stage === 'COMPLETED' && exportKey !== settingsKey) {
+      setStage('IDLE'); setOutputFileId(null); setDownloaded(false);
+    }
+  }, [settingsKey, exportKey, stage]);
+
+  const updateCrop = (rect: CropRect) => {
+    if (!videoWidth || !videoHeight) return;
+    const next = clampCrop(rect, videoWidth, videoHeight);
+    setCropX(next.x); setCropY(next.y); setCropWidth(next.width); setCropHeight(next.height);
+  };
+  const cropRatio = cropAspectRatio === 'original' ? videoWidth / videoHeight
+    : cropAspectRatio === 'custom' ? cropWidth / cropHeight
+    : Number(cropAspectRatio.split(':')[0]) / Number(cropAspectRatio.split(':')[1]);
+  const cropZoom = cropWidth > 0 && Number.isFinite(cropRatio)
+    ? Math.max(100, Math.round(Math.min(videoWidth, videoHeight * cropRatio) / cropWidth * 100)) : 100;
+  const handleCropZoom = (percent: number) => updateCrop(zoomCrop(
+    { x: cropX, y: cropY, width: cropWidth, height: cropHeight }, videoWidth, videoHeight, percent, cropRatio));
 
   // Object URL lifecycle
   useEffect(() => {
@@ -117,19 +149,10 @@ export default function VideoConverterPage() {
     setCropHeight(video.videoHeight);
     setCropX(0);
     setCropY(0);
+    setCropAspectRatio('original');
   };
 
-  const handleTimeUpdate = () => {
-    if (videoRef.current) {
-      setCurrentTime(videoRef.current.currentTime);
-      if (endTime > 0 && videoRef.current.currentTime >= endTime) {
-        videoRef.current.pause();
-        setIsPlaying(false);
-      }
-    }
-  };
-
-  const togglePlay = () => {
+  const togglePlay = async () => {
     if (!videoRef.current) return;
     if (isPlaying) {
       videoRef.current.pause();
@@ -138,23 +161,23 @@ export default function VideoConverterPage() {
       if (videoRef.current.currentTime < startTime || (endTime > 0 && videoRef.current.currentTime >= endTime)) {
         videoRef.current.currentTime = startTime;
       }
-      videoRef.current.play();
+      if (typeof AudioContext !== 'undefined') await audioPreview.start();
+      await videoRef.current.play();
       setIsPlaying(true);
     }
   };
 
   const seekRelative = (seconds: number) => {
     if (!videoRef.current) return;
-    videoRef.current.currentTime = Math.max(0, Math.min(videoDuration, videoRef.current.currentTime + seconds));
+    playback.seek(videoRef.current.currentTime + seconds);
   };
 
   const handleTimelineScrub = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!videoRef.current || videoDuration <= 0) return;
     const rect = e.currentTarget.getBoundingClientRect();
+    if (rect.width <= 0) return;
     const pos = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    const target = pos * videoDuration;
-    videoRef.current.currentTime = target;
-    setCurrentTime(target);
+    playback.seek(pos * videoDuration);
   };
 
   const formatTime = (sec: number) => {
@@ -179,135 +202,19 @@ export default function VideoConverterPage() {
   };
 
   const handleAspectRatioPreset = (preset: string) => {
-    setCropAspectRatio(preset);
-    if (!videoWidth || !videoHeight) return;
-
-    let targetW = videoWidth;
-    let targetH = videoHeight;
-
-    if (preset === '16:9') {
-      targetH = Math.round((videoWidth * 9) / 16);
-      if (targetH > videoHeight) {
-        targetH = videoHeight;
-        targetW = Math.round((videoHeight * 16) / 9);
-      }
-    } else if (preset === '9:16') {
-      targetW = Math.round((videoHeight * 9) / 16);
-      if (targetW > videoWidth) {
-        targetW = videoWidth;
-        targetH = Math.round((videoWidth * 16) / 9);
-      }
-    } else if (preset === '1:1') {
-      const minDim = Math.min(videoWidth, videoHeight);
-      targetW = minDim;
-      targetH = minDim;
-    } else if (preset === '4:3') {
-      targetH = Math.round((videoWidth * 3) / 4);
-      if (targetH > videoHeight) {
-        targetH = videoHeight;
-        targetW = Math.round((videoHeight * 4) / 3);
-      }
+    setCropAspectRatio(preset); setActiveTool('crop');
+    if (!videoWidth || !videoHeight || preset === 'custom') return;
+    let width = videoWidth, height = videoHeight;
+    if (preset !== 'original') {
+      const [rw, rh] = preset.split(':').map(Number);
+      const ratio = rw / rh;
+      if (videoWidth / videoHeight > ratio) width = videoHeight * ratio;
+      else height = videoWidth / ratio;
     }
-
-    targetW = targetW - (targetW % 2);
-    targetH = targetH - (targetH % 2);
-    const startX = Math.max(0, Math.floor((videoWidth - targetW) / 2));
-    const startY = Math.max(0, Math.floor((videoHeight - targetH) / 2));
-
-    setCropWidth(targetW);
-    setCropHeight(targetH);
-    setCropX(startX);
-    setCropY(startY);
+    updateCrop({ x: (videoWidth - width) / 2, y: (videoHeight - height) / 2, width, height });
   };
 
-  const addCutSegment = () => {
-    if (videoDuration <= 0) return;
-    const defaultStart = Math.min(videoDuration * 0.25, 5);
-    const defaultEnd = Math.min(videoDuration * 0.5, 10);
-    setCutSegments([...cutSegments, { start: Math.round(defaultStart), end: Math.round(defaultEnd) }]);
-  };
-
-  const removeCutSegment = (idx: number) => {
-    setCutSegments(cutSegments.filter((_, i) => i !== idx));
-  };
-
-  const updateCutSegment = (idx: number, field: 'start' | 'end', val: number) => {
-    const updated = [...cutSegments];
-    updated[idx] = { ...updated[idx], [field]: Math.max(0, val) };
-    setCutSegments(updated);
-  };
-
-  const effectiveDuration = useMemo(() => {
-    if (!videoDuration) return 0;
-    let dur = Math.max(0, (endTime > 0 ? endTime : videoDuration) - startTime);
-    cutSegments.forEach((seg) => {
-      const s = Math.max(startTime, seg.start);
-      const e = Math.min(endTime > 0 ? endTime : videoDuration, seg.end);
-      if (e > s) {
-        dur -= e - s;
-      }
-    });
-    return Math.max(0.1, Math.round(dur * 10) / 10);
-  }, [videoDuration, startTime, endTime, cutSegments]);
-
-  // Debounced Output Size Estimation
-  useEffect(() => {
-    if (estimateTimerRef.current) {
-      clearTimeout(estimateTimerRef.current);
-    }
-
-    estimateTimerRef.current = setTimeout(async () => {
-      try {
-        setIsEstimating(true);
-        const est = await apiClient.estimateOutputSize({
-          mediaType: 'video',
-          outputFormat: targetFormat,
-          sourceDuration: videoDuration > 0 ? videoDuration : 60,
-          sourceWidth: videoWidth || 1920,
-          sourceHeight: videoHeight || 1080,
-          sourceFileSize: selectedFile ? selectedFile.size : undefined,
-          targetResolution: resolution !== 'source' ? resolution : undefined,
-          videoBitrate: videoBitrate !== 'auto' ? videoBitrate : undefined,
-          audioBitrate: audioBitrate !== 'auto' ? parseInt(audioBitrate.replace('k', ''), 10) : undefined,
-          qualityPreset: selectedPreset !== 'custom' ? selectedPreset : undefined,
-          crf: selectedPreset === 'custom' ? crf : undefined,
-          stripAudio,
-          startTime: startTime > 0 ? startTime : undefined,
-          endTime: endTime > 0 && endTime < videoDuration ? endTime : undefined,
-          removeSegments: cutSegments.length > 0 ? cutSegments : undefined,
-          cropWidth: activeTool === 'crop' && cropWidth > 0 ? cropWidth : undefined,
-          cropHeight: activeTool === 'crop' && cropHeight > 0 ? cropHeight : undefined,
-        });
-        setSizeEstimate(est);
-      } catch {
-        // Fallback gracefully
-      } finally {
-        setIsEstimating(false);
-      }
-    }, 300);
-
-    return () => {
-      if (estimateTimerRef.current) clearTimeout(estimateTimerRef.current);
-    };
-  }, [
-    selectedFile,
-    targetFormat,
-    resolution,
-    videoBitrate,
-    audioBitrate,
-    selectedPreset,
-    crf,
-    stripAudio,
-    startTime,
-    endTime,
-    cutSegments,
-    activeTool,
-    cropWidth,
-    cropHeight,
-    videoDuration,
-    videoWidth,
-    videoHeight,
-  ]);
+  const effectiveDuration = Math.max(0, (endTime || videoDuration) - startTime);
 
   const cleanupPolling = () => {
     if (pollIntervalRef.current) {
@@ -371,6 +278,8 @@ export default function VideoConverterPage() {
 
     setError(null);
     setStage('UPLOADING');
+    setExportKey(settingsKey);
+    setDownloaded(false);
     setCurrentJob(null);
     setProgress(null);
     setOutputFileId(null);
@@ -382,7 +291,7 @@ export default function VideoConverterPage() {
 
       const hasTrim = startTime > 0 || (endTime > 0 && endTime < videoDuration);
       const hasCropConfig =
-        activeTool === 'crop' &&
+        exportMode === 'video' &&
         cropWidth > 0 &&
         cropHeight > 0 &&
         (cropWidth !== videoWidth || cropHeight !== videoHeight || cropX > 0 || cropY > 0);
@@ -390,27 +299,26 @@ export default function VideoConverterPage() {
       const job = await apiClient.createConversionJob({
         inputFileId: uploadResp.id || uploadResp.fileId,
         inputFormat,
-        outputFormat: targetFormat,
-        qualityPreset: selectedPreset !== 'custom' ? selectedPreset : undefined,
-        targetResolution: resolution !== 'source' ? resolution : undefined,
-        videoBitrate: videoBitrate !== 'auto' ? videoBitrate : undefined,
-        audioBitrate: audioBitrate !== 'auto' ? parseInt(audioBitrate.replace('k', ''), 10) : undefined,
-        stripAudio,
+        outputFormat,
+        qualityPreset: exportMode === 'video' && selectedPreset !== 'custom' ? selectedPreset : undefined,
+        targetResolution: exportMode === 'video' && resolution !== 'source' ? resolution : undefined,
+        videoBitrate: exportMode === 'video' && videoBitrate !== 'auto' ? videoBitrate : undefined,
+        audioBitrate: outputFormat !== 'wav' && audioBitrate !== 'auto' ? parseInt(audioBitrate.replace('k', ''), 10) : undefined,
+        stripAudio: exportMode === 'video' ? stripAudio : false,
         startTime: hasTrim && startTime > 0 ? startTime : undefined,
         endTime: hasTrim && endTime > 0 ? endTime : undefined,
-        removeSegments: cutSegments.length > 0 ? cutSegments : undefined,
         cropX: hasCropConfig ? cropX : undefined,
         cropY: hasCropConfig ? cropY : undefined,
         cropWidth: hasCropConfig ? cropWidth : undefined,
         cropHeight: hasCropConfig ? cropHeight : undefined,
-        aspectRatio: activeTool === 'crop' ? cropAspectRatio : undefined,
-        crf: selectedPreset === 'custom' ? crf : undefined,
-        videoCodec: videoCodec !== 'auto' ? videoCodec : undefined,
-        frameRate: frameRate && frameRate > 0 ? frameRate : undefined,
+        aspectRatio: undefined, // Explicit crop coordinates are the authoritative rectangle.
+        crf: exportMode === 'video' && selectedPreset === 'custom' ? crf : undefined,
+        videoCodec: exportMode === 'video' && videoCodec !== 'auto' ? videoCodec : undefined,
+        frameRate: exportMode === 'video' && frameRate && frameRate > 0 ? frameRate : undefined,
         volume: volume !== 1.0 ? volume : undefined,
         removeSilence: removeSilence ? true : undefined,
-        fadeInDuration: fadeInDuration > 0 ? fadeInDuration : undefined,
-        fadeOutDuration: fadeOutDuration > 0 ? fadeOutDuration : undefined,
+        audioEffects: exportMode === 'video' && stripAudio ? [] : audioEffects,
+        audioEffectLevels,
       });
 
       const effectiveJobId = job.id || (job as any).jobId;
@@ -440,7 +348,7 @@ export default function VideoConverterPage() {
   const handleResetTrims = () => {
     setStartTime(0);
     setEndTime(videoDuration);
-    setCutSegments([]);
+
     if (videoRef.current) {
       videoRef.current.currentTime = 0;
       setCurrentTime(0);
@@ -449,6 +357,8 @@ export default function VideoConverterPage() {
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
+      cleanupPolling();
+      setOutputFileId(null); setDownloaded(false); setCropMenuOpen(false);
       setSelectedFile(e.target.files[0]);
       setStage('IDLE');
       setError(null);
@@ -456,25 +366,25 @@ export default function VideoConverterPage() {
   };
 
   return (
-    <div className="w-full max-w-7xl mx-auto px-gutter py-space-md flex flex-col gap-space-md">
+    <div className="video-editor w-full max-w-7xl mx-auto px-gutter py-space-md flex flex-col gap-space-md text-slate-900 dark:text-slate-100">
       {/* Top Workspace Status Bar */}
       <div className="w-full bg-surface-container-lowest dark:bg-slate-900 rounded-2xl p-space-sm sm:px-space-md shadow-sm border border-outline-variant/30 flex flex-wrap items-center justify-between gap-space-sm">
         <div className="flex items-center gap-space-sm flex-wrap min-w-0">
-          <div className="flex items-center gap-1.5 text-on-surface-variant font-medium text-xs">
-            <Film className="w-4 h-4 text-primary" />
+          <div className="flex items-center gap-1.5 text-on-surface-variant dark:text-slate-200 font-medium text-xs">
+            <Film className="w-4 h-4 text-primary dark:text-violet-200" />
             <Link href="/" className="hover:text-on-surface transition-colors">
               Studio
             </Link>
-            <span className="text-outline-variant">/</span>
-            <span className="font-semibold text-on-surface truncate max-w-[220px] sm:max-w-xs">
+            <span className="text-outline-variant dark:text-slate-500">/</span>
+            <span className="font-semibold text-on-surface dark:text-slate-100 truncate max-w-[220px] sm:max-w-xs">
               {selectedFile ? selectedFile.name : 'No video selected'}
             </span>
           </div>
           {selectedFile && videoDuration > 0 && (
-            <div className="hidden lg:flex items-center gap-1.5 px-3 py-1 rounded-full bg-surface-container-low dark:bg-slate-800 text-on-surface-variant font-mono text-xs">
+            <div className="hidden lg:flex items-center gap-1.5 px-3 py-1 rounded-full bg-surface-container-low dark:bg-slate-800 text-on-surface-variant dark:text-slate-200 font-mono text-xs">
               <span className="w-1.5 h-1.5 rounded-full bg-tertiary-container animate-pulse" />
               <span>
-                {videoWidth}×{videoHeight} · {formatTime(videoDuration)} · {(selectedFile.size / (1024 * 1024)).toFixed(1)} MB
+                {videoWidth}×{videoHeight} · {formatTime(videoDuration)}
               </span>
             </div>
           )}
@@ -485,13 +395,13 @@ export default function VideoConverterPage() {
             type="button"
             onClick={handleResetTrims}
             disabled={!selectedFile}
-            className="px-3 h-8 rounded-full bg-surface-container-low dark:bg-slate-800 text-on-surface-variant font-semibold text-xs hover:bg-surface-container hover:text-on-surface transition-colors flex items-center gap-1.5 disabled:opacity-40"
+            className="px-3 h-8 rounded-full bg-surface-container-low dark:bg-slate-800 text-on-surface-variant dark:text-slate-200 font-semibold text-xs hover:bg-surface-container hover:text-on-surface transition-colors flex items-center gap-1.5 disabled:opacity-40 dark:disabled:opacity-100 dark:disabled:text-slate-400"
           >
             <RefreshCw className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Reset Trims</span>
           </button>
 
-          <label className="px-3.5 h-8 rounded-full bg-primary-fixed text-on-primary-fixed-variant dark:bg-slate-800 dark:text-primary font-semibold text-xs hover:bg-primary-fixed/80 transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs">
+          <label className="px-3.5 h-8 rounded-full bg-primary-fixed text-on-primary-fixed-variant dark:bg-slate-800 dark:text-violet-200 font-semibold text-xs hover:bg-primary-fixed/80 dark:hover:bg-slate-700 transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs">
             <Upload className="w-3.5 h-3.5" />
             <span>{selectedFile ? 'Replace File' : 'Choose Video'}</span>
             <input
@@ -511,13 +421,13 @@ export default function VideoConverterPage() {
         <div className="lg:col-span-8 flex flex-col gap-space-md">
           {/* 16:9 Video Canvas Surface */}
           <div className="relative w-full bg-surface-container-lowest dark:bg-slate-900 rounded-3xl overflow-hidden shadow-sm border border-outline-variant/30 flex flex-col group">
-            <div className="relative w-full aspect-video bg-inverse-surface flex items-center justify-center overflow-hidden">
+            <div className="relative w-full aspect-video bg-slate-50 dark:bg-slate-900 flex items-center justify-center overflow-hidden">
               {previewUrl ? (
                 <video
                   ref={videoRef}
                   src={previewUrl}
                   onLoadedMetadata={handleLoadedMetadata}
-                  onTimeUpdate={handleTimeUpdate}
+                  
                   className="w-full h-full object-contain"
                   playsInline
                 />
@@ -526,16 +436,29 @@ export default function VideoConverterPage() {
                   onClick={() => fileInputRef.current?.click()}
                   className="flex flex-col items-center justify-center text-center p-8 cursor-pointer hover:opacity-90 transition-opacity"
                 >
-                  <div className="w-16 h-16 rounded-full bg-primary/20 text-primary flex items-center justify-center mb-4">
+                  <div className="w-16 h-16 rounded-full bg-violet-100 dark:bg-violet-500/20 text-primary dark:text-violet-200 flex items-center justify-center mb-4">
                     <Upload className="w-8 h-8" />
                   </div>
-                  <h3 className="text-lg font-bold text-white mb-1">Click to Upload Video</h3>
-                  <p className="text-xs text-slate-400 max-w-sm">
+                  <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 mb-1">Click to Upload Video</h3>
+                  <p className="text-xs text-slate-600 dark:text-slate-300 max-w-sm">
                     Drop MP4, MKV, WebM, MOV, or AVI files here to begin editing and trimming locally.
                   </p>
                 </div>
               )}
 
+              {previewUrl && videoWidth > 0 && videoHeight > 0 && activeTool === 'crop' && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="relative overflow-hidden" style={{width: videoWidth / videoHeight >= 16 / 9 ? '100%' : `${videoWidth / videoHeight / (16 / 9) * 100}%`, height: videoWidth / videoHeight >= 16 / 9 ? `${(16 / 9) / (videoWidth / videoHeight) * 100}%` : '100%'}}>
+                    <div role="region" aria-label="Crop selection" className="absolute border-2 border-white outline outline-2 outline-violet-500 cursor-move pointer-events-auto touch-none z-10"
+                      style={{left: `${cropX / videoWidth * 100}%`, top: `${cropY / videoHeight * 100}%`, width: `${cropWidth / videoWidth * 100}%`, height: `${cropHeight / videoHeight * 100}%`, boxShadow: '0 0 0 9999px rgba(0,0,0,0.55)'}}
+                      onPointerDown={e => { const bounds = e.currentTarget.parentElement!.getBoundingClientRect(); if (!bounds.width || !bounds.height) return; e.currentTarget.setPointerCapture(e.pointerId); cropDrag.current = {clientX: e.clientX, clientY: e.clientY, rect: {x: cropX, y: cropY, width: cropWidth, height: cropHeight}, scaleX: videoWidth / bounds.width, scaleY: videoHeight / bounds.height}; }}
+                      onPointerMove={e => { const drag = cropDrag.current; if (drag) updateCrop(drag.resize ? {...drag.rect, width: Math.min(videoWidth - drag.rect.x, drag.rect.width + (e.clientX - drag.clientX) * drag.scaleX), height: Math.min(videoHeight - drag.rect.y, drag.rect.height + (e.clientY - drag.clientY) * drag.scaleY)} : {...drag.rect, x: drag.rect.x + (e.clientX - drag.clientX) * drag.scaleX, y: drag.rect.y + (e.clientY - drag.clientY) * drag.scaleY}); }}
+                      onPointerUp={() => { cropDrag.current = null; }} onPointerCancel={() => { cropDrag.current = null; }}
+                    >{cropAspectRatio === 'custom' && <button type="button" aria-label="Resize custom crop" className="absolute bottom-0 right-0 w-5 h-5 bg-violet-500 border-2 border-white cursor-nwse-resize touch-none"
+                      onPointerDown={e => { e.preventDefault(); e.stopPropagation(); const bounds = e.currentTarget.parentElement!.parentElement!.getBoundingClientRect(); if (!bounds.width || !bounds.height) return; e.currentTarget.setPointerCapture(e.pointerId); cropDrag.current = {clientX: e.clientX, clientY: e.clientY, rect: {x: cropX, y: cropY, width: cropWidth, height: cropHeight}, scaleX: videoWidth / bounds.width, scaleY: videoHeight / bounds.height, resize: true}; }} />}</div>
+                  </div>
+                </div>
+              )}
               {/* Floating Top Badges */}
               {previewUrl && (
                 <div className="absolute top-4 left-4 flex items-center gap-2 z-10 pointer-events-none">
@@ -543,18 +466,18 @@ export default function VideoConverterPage() {
                     <span className="w-2 h-2 rounded-full bg-tertiary-fixed animate-ping" />
                     <span>HW PREVIEW</span>
                   </span>
-                  <span className="px-2.5 py-1 rounded-full bg-surface-container-lowest/80 backdrop-blur-md text-on-surface font-semibold text-xs shadow-sm">
+                  <span className="px-2.5 py-1 rounded-full bg-surface-container-lowest/80 backdrop-blur-md text-on-surface dark:text-slate-100 font-semibold text-xs shadow-sm">
                     {cropAspectRatio} {activeTool === 'crop' ? 'Crop' : 'Aspect'}
                   </span>
                 </div>
               )}
 
               {/* Big Centered Play/Pause Overlay */}
-              {previewUrl && (
+              {previewUrl && activeTool !== 'crop' && (
                 <button
                   type="button"
                   onClick={togglePlay}
-                  className="absolute z-20 w-16 h-16 rounded-full bg-surface-container-lowest/90 text-primary flex items-center justify-center shadow-xl hover:scale-105 active:scale-95 transition-all focus:outline-none"
+                  className="absolute z-20 w-16 h-16 rounded-full bg-surface-container-lowest/90 text-primary dark:text-violet-200 flex items-center justify-center shadow-xl hover:scale-105 active:scale-95 transition-all focus:outline-none"
                 >
                   {isPlaying ? <Pause className="w-8 h-8" /> : <Play className="w-8 h-8 ml-1" />}
                 </button>
@@ -621,7 +544,7 @@ export default function VideoConverterPage() {
                           {volume === 0 ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
                         </button>
                         <input
-                          type="range"
+                          type="range" disabled={!selectedFile}
                           min="0"
                           max="1.5"
                           step="0.05"
@@ -629,25 +552,18 @@ export default function VideoConverterPage() {
                           onChange={(e) => {
                             const val = parseFloat(e.target.value);
                             setVolume(val);
-                            if (videoRef.current) videoRef.current.volume = Math.min(1, val);
+                            if (videoRef.current && typeof AudioContext === 'undefined') videoRef.current.volume = Math.min(1, val);
                           }}
-                          className="w-14 h-1 accent-primary bg-white/30 rounded-full cursor-pointer hidden sm:block"
+                          className="w-14 h-1 accent-primary dark:accent-violet-400 bg-white/30 rounded-full cursor-pointer hidden sm:block"
                         />
                       </div>
-                      <div className="hidden sm:flex items-center bg-white/10 rounded-full p-0.5 text-xs font-semibold">
-                        {(['16:9', '9:16', '1:1'] as const).map((ratio) => (
-                          <button
-                            key={ratio}
-                            type="button"
-                            onClick={() => handleAspectRatioPreset(ratio)}
-                            className={`px-2 py-0.5 rounded-full transition-all ${
-                              cropAspectRatio === ratio ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-300 hover:text-white'
-                            }`}
-                          >
-                            {ratio}
-                          </button>
-                        ))}
-                      </div>
+                      <button ref={cropMenuButton} type="button" aria-label="Crop options" aria-controls="video-crop-options" aria-expanded={cropMenuOpen}
+                        onClick={() => { setCropMenuOpen(!cropMenuOpen); setActiveTool('crop'); }}
+                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/10 hover:bg-white/20 text-white text-xs font-semibold transition-colors">
+                        <CropIcon className="w-3.5 h-3.5" />
+                        <span>{cropAspectRatio === 'original' ? 'Original' : cropAspectRatio === 'custom' ? 'Custom' : cropAspectRatio}</span>
+                        <ChevronDown className={`w-3.5 h-3.5 transition-transform ${cropMenuOpen ? 'rotate-180' : ''}`} />
+                      </button>
                       <button
                         type="button"
                         onClick={() => {
@@ -669,6 +585,8 @@ export default function VideoConverterPage() {
                 </div>
               )}
             </div>
+
+
           </div>
 
           {/* Timeline Control Strip & Visual Editing Stage */}
@@ -678,56 +596,104 @@ export default function VideoConverterPage() {
               <div className="flex items-center p-1 bg-surface-container-low dark:bg-slate-800 rounded-full">
                 <button
                   type="button"
-                  onClick={() => setActiveTool('select')}
+                  onClick={() => { setActiveTool('select'); setCropMenuOpen(false); }}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
                     activeTool === 'select'
-                      ? 'bg-surface-container-lowest dark:bg-slate-700 text-on-surface shadow-xs'
-                      : 'text-on-surface-variant hover:text-on-surface'
+                      ? 'bg-surface-container-lowest dark:bg-slate-700 text-on-surface dark:text-slate-100 shadow-xs'
+                      : 'text-on-surface-variant dark:text-slate-200 hover:text-on-surface'
                   }`}
                 >
-                  <Film className="w-3.5 h-3.5 text-primary" />
+                  <Film className="w-3.5 h-3.5 text-primary dark:text-violet-200" />
                   <span>Select Range</span>
                 </button>
+
                 <button
                   type="button"
-                  onClick={() => {
-                    setActiveTool('cut');
-                    addCutSegment();
-                  }}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
-                    activeTool === 'cut'
-                      ? 'bg-surface-container-lowest dark:bg-slate-700 text-on-surface shadow-xs'
-                      : 'text-on-surface-variant hover:text-on-surface'
-                  }`}
-                >
-                  <Scissors className="w-3.5 h-3.5 text-primary" />
-                  <span>Cut Segments</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTool('crop')}
+                  onClick={() => { setActiveTool('crop'); setCropMenuOpen(true); }}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
                     activeTool === 'crop'
-                      ? 'bg-surface-container-lowest dark:bg-slate-700 text-on-surface shadow-xs'
-                      : 'text-on-surface-variant hover:text-on-surface'
+                      ? 'bg-surface-container-lowest dark:bg-slate-700 text-on-surface dark:text-slate-100 shadow-xs'
+                      : 'text-on-surface-variant dark:text-slate-200 hover:text-on-surface'
                   }`}
                 >
-                  <CropIcon className="w-3.5 h-3.5 text-primary" />
+                  <CropIcon className="w-3.5 h-3.5 text-primary dark:text-violet-200" />
                   <span>Crop Canvas</span>
                 </button>
               </div>
 
               <div className="flex items-center gap-2 font-mono text-xs">
-                <span className="px-3 py-1.5 rounded-full bg-primary-fixed text-on-primary-fixed-variant dark:bg-slate-800 dark:text-primary font-bold">
+                <span className="px-3 py-1.5 rounded-full bg-primary-fixed text-on-primary-fixed-variant dark:bg-violet-500/20 dark:text-violet-200 font-bold">
                   Effective: {effectiveDuration.toFixed(1)}s
                 </span>
               </div>
             </div>
 
+            {/* Crop Settings Drawer (When Active) */}
+            {cropMenuOpen && previewUrl && (
+              <div id="video-crop-options" role="region" aria-label="Crop options panel" onKeyDown={e => { if (e.key === 'Escape') { setCropMenuOpen(false); cropMenuButton.current?.focus(); } }} className="mt-2 p-4 rounded-2xl bg-surface-container-low dark:bg-slate-950 border border-outline-variant/30 space-y-3">
+                <div className="flex flex-col gap-3">
+                  <span className="text-xs font-bold text-on-surface dark:text-slate-100">Crop Dimensions & Placement:</span>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {(['original', '16:9', '9:16', '1:1', '4:3', '3:4', '4:5', '3:2', '2:3', '21:9', 'custom'] as const).map((ratio) => (
+                      <button
+                        key={ratio}
+                        type="button"
+                        onClick={() => handleAspectRatioPreset(ratio)}
+                        className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
+                          cropAspectRatio === ratio ? 'bg-primary text-white' : 'bg-surface-container dark:bg-slate-800 text-on-surface dark:text-slate-100'
+                        }`}
+                      >
+                        {ratio === 'original' ? 'Original' : ratio === 'custom' ? 'Custom' : ratio}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center justify-between text-xs font-semibold text-on-surface dark:text-slate-100">
+                    <label htmlFor="crop-zoom">Zoom</label>
+                    <div className="flex items-center gap-3">
+                      <span className="font-mono">{cropZoom}%</span>
+                      <button type="button" onClick={() => handleCropZoom(100)} className="text-primary dark:text-violet-200">Reset zoom</button>
+                    </div>
+                  </div>
+                  <input id="crop-zoom" type="range" disabled={!selectedFile} min="100" max={Math.max(300, cropZoom)} step="1" value={cropZoom}
+                    aria-valuetext={`${cropZoom} percent`} onChange={e => handleCropZoom(Number(e.target.value))}
+                    className="w-full h-2 accent-primary dark:accent-violet-400 rounded-full cursor-pointer" />
+                  <p className="text-xs text-on-surface-variant dark:text-slate-200">Drag the crop area in the preview to reposition it.</p>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-xs font-mono">
+                  <div>
+                    <label className="block text-outline dark:text-slate-300 text-[10px] mb-1">Crop Width</label>
+                    <input
+                      type="number"
+                      value={cropWidth}
+                      aria-label="Crop width"
+                      readOnly={cropAspectRatio !== 'custom'}
+                      step="2"
+                      onChange={(e) => updateCrop({ x: cropX, y: cropY, width: Number(e.target.value), height: cropHeight })}
+                      className="w-full px-2 py-1 rounded-lg bg-surface-container-lowest dark:bg-slate-900 border border-outline-variant/30"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-outline dark:text-slate-300 text-[10px] mb-1">Crop Height</label>
+                    <input
+                      type="number"
+                      value={cropHeight}
+                      aria-label="Crop height"
+                      readOnly={cropAspectRatio !== 'custom'}
+                      step="2"
+                      onChange={(e) => updateCrop({ x: cropX, y: cropY, width: cropWidth, height: Number(e.target.value) })}
+                      className="w-full px-2 py-1 rounded-lg bg-surface-container-lowest dark:bg-slate-900 border border-outline-variant/30"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Visual Timeline Canvas Area */}
-            <div className="w-full flex flex-col gap-2 pt-2">
+            {activeTool === 'select' && <div className="w-full flex flex-col gap-2 pt-2">
               {/* Ruler */}
-              <div className="relative w-full h-5 font-mono text-[11px] text-on-surface-variant flex justify-between px-1 select-none">
+              <div className="relative w-full h-5 font-mono text-[11px] text-on-surface-variant dark:text-slate-200 flex justify-between px-1 select-none">
                 <span>00:00</span>
                 <span>{formatTime(videoDuration * 0.25)}</span>
                 <span>{formatTime(videoDuration * 0.5)}</span>
@@ -743,13 +709,13 @@ export default function VideoConverterPage() {
                 {/* Visual Frame Strip Representation */}
                 <div className="w-full h-12 grid grid-cols-8 gap-0.5 opacity-40 overflow-hidden">
                   {[...Array(8)].map((_, i) => (
-                    <div key={i} className="h-full bg-gradient-to-br from-primary/30 to-secondary/30" />
+                    <div key={i} className="h-full bg-gradient-to-br from-primary/30 to-secondary/30 dark:from-violet-400/40 dark:to-sky-400/40" />
                   ))}
                 </div>
 
                 {/* Audio Waveform Sub-track */}
                 <div className="w-full h-8 bg-surface-container-high/40 dark:bg-slate-900/60 px-2 flex items-center justify-between">
-                  <svg className="w-full h-6 text-secondary/60" preserveAspectRatio="none" viewBox="0 0 500 24">
+                  <svg className="w-full h-6 text-secondary/60 dark:text-sky-400/80" preserveAspectRatio="none" viewBox="0 0 500 24">
                     <path
                       d="M0,12 L10,6 L20,16 L30,4 L40,20 L50,8 L60,16 L70,5 L80,19 L90,8 L100,12 L120,4 L140,20 L160,8 L180,18 L200,12 L220,6 L240,18 L260,8 L280,16 L300,12 L320,4 L340,20 L360,9 L380,17 L400,12 L420,6 L440,18 L460,9 L480,15 L500,12 Z"
                       fill="currentColor"
@@ -785,6 +751,8 @@ export default function VideoConverterPage() {
                 )}
 
                 {/* Needle Playhead */}
+                <TrimHandles duration={videoDuration} start={startTime} end={endTime || videoDuration}
+                  onStartChange={setStartTime} onEndChange={setEndTime} />
                 {videoDuration > 0 && (
                   <div
                     className="absolute inset-y-0 w-0.5 bg-rose-500 z-30 pointer-events-none flex flex-col items-center"
@@ -798,159 +766,39 @@ export default function VideoConverterPage() {
               {/* Start / End Trim Sliders */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
                 <div className="flex flex-col gap-1">
-                  <div className="flex justify-between text-xs text-on-surface-variant font-mono">
+                  <div className="flex justify-between text-xs text-on-surface-variant dark:text-slate-200 font-mono">
                     <span>Trim Start Time:</span>
-                    <strong className="text-primary">{formatTime(startTime)}</strong>
+                    <strong className="text-primary dark:text-violet-200">{formatTime(startTime)}</strong>
                   </div>
                   <input
-                    type="range"
+                    type="range" disabled={!selectedFile}
                     min="0"
                     max={endTime > 0 ? endTime - 0.1 : videoDuration}
                     step="0.1"
                     value={startTime}
                     onChange={(e) => setStartTime(parseFloat(e.target.value))}
-                    className="w-full accent-primary h-1.5 bg-surface-container-high dark:bg-slate-800 rounded-full cursor-pointer"
+                    className="w-full accent-primary dark:accent-violet-400 h-1.5 bg-surface-container-high dark:bg-slate-800 rounded-full cursor-pointer"
                   />
                 </div>
                 <div className="flex flex-col gap-1">
-                  <div className="flex justify-between text-xs text-on-surface-variant font-mono">
+                  <div className="flex justify-between text-xs text-on-surface-variant dark:text-slate-200 font-mono">
                     <span>Trim End Time:</span>
-                    <strong className="text-primary">{formatTime(endTime || videoDuration)}</strong>
+                    <strong className="text-primary dark:text-violet-200">{formatTime(endTime || videoDuration)}</strong>
                   </div>
                   <input
-                    type="range"
+                    type="range" disabled={!selectedFile}
                     min={startTime + 0.1}
                     max={videoDuration || 100}
                     step="0.1"
                     value={endTime || videoDuration}
                     onChange={(e) => setEndTime(parseFloat(e.target.value))}
-                    className="w-full accent-primary h-1.5 bg-surface-container-high dark:bg-slate-800 rounded-full cursor-pointer"
+                    className="w-full accent-primary dark:accent-violet-400 h-1.5 bg-surface-container-high dark:bg-slate-800 rounded-full cursor-pointer"
                   />
                 </div>
               </div>
-            </div>
+            </div>}
 
-            {/* Cut Segments Drawer (When Active) */}
-            {activeTool === 'cut' && (
-              <div className="mt-2 p-4 rounded-2xl bg-surface-container-low dark:bg-slate-950 border border-outline-variant/30 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-on-surface">Unwanted Segments to Splice & Remove:</span>
-                  <button
-                    type="button"
-                    onClick={addCutSegment}
-                    className="flex items-center gap-1 px-3 py-1 rounded-full bg-primary-container text-white text-xs font-semibold shadow-xs"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Add Cut Interval</span>
-                  </button>
-                </div>
-                {cutSegments.length === 0 ? (
-                  <p className="text-xs text-outline italic">No cut segments added yet.</p>
-                ) : (
-                  <div className="space-y-2">
-                    {cutSegments.map((seg, idx) => (
-                      <div
-                        key={idx}
-                        className="flex items-center gap-3 p-2 rounded-xl bg-surface-container-lowest dark:bg-slate-900 border border-outline-variant/20"
-                      >
-                        <span className="text-xs font-mono font-bold text-outline">#{idx + 1}</span>
-                        <div className="flex items-center gap-2 text-xs">
-                          <span className="text-on-surface-variant">Cut from:</span>
-                          <input
-                            type="number"
-                            min="0"
-                            max={seg.end}
-                            step="0.1"
-                            value={seg.start}
-                            onChange={(e) => updateCutSegment(idx, 'start', parseFloat(e.target.value) || 0)}
-                            className="w-20 px-2 py-1 rounded-lg bg-surface-container-low dark:bg-slate-800 font-mono text-xs focus:outline-none"
-                          />
-                          <span>s to</span>
-                          <input
-                            type="number"
-                            min={seg.start}
-                            max={videoDuration}
-                            step="0.1"
-                            value={seg.end}
-                            onChange={(e) => updateCutSegment(idx, 'end', parseFloat(e.target.value) || 0)}
-                            className="w-20 px-2 py-1 rounded-lg bg-surface-container-low dark:bg-slate-800 font-mono text-xs focus:outline-none"
-                          />
-                          <span>s</span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => removeCutSegment(idx)}
-                          className="ml-auto p-1.5 rounded-full hover:bg-rose-500/10 text-rose-500 transition-colors"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
 
-            {/* Crop Settings Drawer (When Active) */}
-            {activeTool === 'crop' && (
-              <div className="mt-2 p-4 rounded-2xl bg-surface-container-low dark:bg-slate-950 border border-outline-variant/30 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-on-surface">Crop Dimensions & Placement:</span>
-                  <div className="flex items-center gap-1">
-                    {(['16:9', '9:16', '1:1', '4:3'] as const).map((ratio) => (
-                      <button
-                        key={ratio}
-                        type="button"
-                        onClick={() => handleAspectRatioPreset(ratio)}
-                        className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
-                          cropAspectRatio === ratio ? 'bg-primary text-white' : 'bg-surface-container dark:bg-slate-800 text-on-surface'
-                        }`}
-                      >
-                        {ratio}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="grid grid-cols-4 gap-2 text-xs font-mono">
-                  <div>
-                    <label className="block text-outline text-[10px] mb-1">X Offset</label>
-                    <input
-                      type="number"
-                      value={cropX}
-                      onChange={(e) => setCropX(Math.max(0, parseInt(e.target.value, 10) || 0))}
-                      className="w-full px-2 py-1 rounded-lg bg-surface-container-lowest dark:bg-slate-900 border border-outline-variant/30"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-outline text-[10px] mb-1">Y Offset</label>
-                    <input
-                      type="number"
-                      value={cropY}
-                      onChange={(e) => setCropY(Math.max(0, parseInt(e.target.value, 10) || 0))}
-                      className="w-full px-2 py-1 rounded-lg bg-surface-container-lowest dark:bg-slate-900 border border-outline-variant/30"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-outline text-[10px] mb-1">Crop Width</label>
-                    <input
-                      type="number"
-                      value={cropWidth}
-                      onChange={(e) => setCropWidth(Math.max(2, parseInt(e.target.value, 10) || 2))}
-                      className="w-full px-2 py-1 rounded-lg bg-surface-container-lowest dark:bg-slate-900 border border-outline-variant/30"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-outline text-[10px] mb-1">Crop Height</label>
-                    <input
-                      type="number"
-                      value={cropHeight}
-                      onChange={(e) => setCropHeight(Math.max(2, parseInt(e.target.value, 10) || 2))}
-                      className="w-full px-2 py-1 rounded-lg bg-surface-container-lowest dark:bg-slate-900 border border-outline-variant/30"
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         </div>
 
@@ -960,29 +808,35 @@ export default function VideoConverterPage() {
             {/* Header */}
             <div className="flex items-center justify-between pb-1 border-b border-outline-variant/20">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-primary-fixed text-primary flex items-center justify-center font-bold">
+                <div className="w-8 h-8 rounded-full bg-primary-fixed dark:bg-violet-950 text-primary dark:text-violet-200 flex items-center justify-center font-bold">
                   <Sliders className="w-4 h-4" />
                 </div>
-                <h2 className="text-base font-bold text-on-surface">Export Settings</h2>
+                <h2 className="text-base font-bold text-on-surface dark:text-slate-100">Export Settings</h2>
               </div>
-              <span className="px-2.5 py-1 rounded-full bg-surface-container-low dark:bg-slate-800 text-on-surface-variant font-semibold text-xs">
+              <span className="px-2.5 py-1 rounded-full bg-surface-container-low dark:bg-slate-800 text-on-surface-variant dark:text-slate-200 font-semibold text-xs">
                 Web Ready
               </span>
             </div>
 
+            <div className="grid grid-cols-2 gap-2" aria-label="Export type">
+              {(['video', 'audio'] as const).map(mode => <button key={mode} type="button" aria-pressed={exportMode === mode}
+                onClick={() => setExportMode(mode)} className={`rounded-full px-4 py-2 text-sm font-semibold ${exportMode === mode ? 'bg-primary-container text-white' : 'bg-surface-container-low dark:bg-slate-800 text-on-surface dark:text-slate-100'}`}>
+                {mode === 'audio' ? 'Export Audio' : 'Export Video'}
+              </button>)}
+            </div>
             {/* Container Format Pills */}
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-semibold text-on-surface">Container Format</label>
+              <label className="text-xs font-semibold text-on-surface dark:text-slate-100">{exportMode === 'audio' ? 'Audio Format' : 'Container Format'}</label>
               <div className="grid grid-cols-4 gap-1 p-1 bg-surface-container-low dark:bg-slate-800 rounded-2xl">
-                {(['mp4', 'webm', 'mov', 'mkv'] as const).map((fmt) => (
+                {(exportMode === 'audio' ? ['mp3', 'm4a', 'wav'] : ['mp4', 'webm', 'mov', 'mkv']).map((fmt) => (
                   <button
                     key={fmt}
                     type="button"
-                    onClick={() => setTargetFormat(fmt)}
+                    onClick={() => exportMode === 'audio' ? setAudioFormat(fmt) : setTargetFormat(fmt)}
                     className={`py-2 rounded-xl text-xs font-bold uppercase transition-all ${
-                      targetFormat === fmt
-                        ? 'bg-surface-container-lowest dark:bg-slate-700 text-primary shadow-xs'
-                        : 'text-on-surface-variant hover:text-on-surface'
+                      outputFormat === fmt
+                        ? 'bg-surface-container-lowest dark:bg-slate-700 text-primary dark:text-violet-200 shadow-xs'
+                        : 'text-on-surface-variant dark:text-slate-200 hover:text-on-surface'
                     }`}
                   >
                     {fmt}
@@ -991,98 +845,48 @@ export default function VideoConverterPage() {
               </div>
             </div>
 
-            {/* Resolution Target Cards */}
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-semibold text-on-surface">Resolution Target</label>
-              <div className="grid grid-cols-2 gap-2">
-                {[
-                  { id: '4k', label: '4K UHD', sub: '3840×2160' },
-                  { id: '1080p', label: '1080p FHD', sub: '1920×1080 · Ideal' },
-                  { id: '720p', label: '720p HD', sub: '1280×720 · Compact' },
-                  { id: '480p', label: '480p SD', sub: '854×480 · Tiny' },
-                ].map((res) => (
-                  <button
-                    key={res.id}
-                    type="button"
-                    onClick={() => setResolution(res.id)}
-                    className={`p-2.5 rounded-2xl text-left flex flex-col transition-all border ${
-                      resolution === res.id
-                        ? 'bg-primary text-white border-primary shadow-xs'
-                        : 'bg-surface-container-low dark:bg-slate-800 text-on-surface border-transparent hover:bg-surface-container'
-                    }`}
-                  >
-                    <span className="text-xs font-bold">{res.label}</span>
-                    <span className={`text-[11px] font-mono ${resolution === res.id ? 'text-primary-fixed' : 'text-outline'}`}>
-                      {res.sub}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Quality Preset & Codec */}
-            <div className="grid grid-cols-2 gap-2">
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-semibold text-on-surface">Quality Preset</label>
-                <select
-                  value={selectedPreset}
-                  onChange={(e) => handlePresetChange(e.target.value)}
-                  className="w-full h-10 px-3 bg-surface-container-low dark:bg-slate-800 rounded-xl text-on-surface text-xs font-semibold focus:outline-none"
-                >
-                  <option value="best">Best (Lossless-tier)</option>
-                  <option value="high">High (Recommended)</option>
-                  <option value="medium">Medium</option>
-                  <option value="low">Low (Draft)</option>
-                </select>
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-semibold text-on-surface">Video Codec</label>
-                <select
-                  value={videoCodec}
-                  onChange={(e) => setVideoCodec(e.target.value)}
-                  className="w-full h-10 px-3 bg-surface-container-low dark:bg-slate-800 rounded-xl text-on-surface text-xs font-semibold focus:outline-none"
-                >
-                  <option value="auto">Auto-detect</option>
-                  <option value="h264">H.264 / AVC</option>
-                  <option value="hevc">H.265 / HEVC</option>
-                  <option value="av1">AV1</option>
-                  <option value="vp9">VP9</option>
-                </select>
-              </div>
+            {exportMode === 'video' && <div className="flex flex-col gap-space-md">
+            <div className="flex flex-col gap-2">
+              <label htmlFor="video-export-quality" className="text-xs font-semibold text-on-surface dark:text-slate-100">Video Quality</label>
+              <select id="video-export-quality" value={selectedPreset} onChange={e => handlePresetChange(e.target.value)}
+                className="w-full h-11 px-4 bg-surface-container-low dark:bg-slate-800 rounded-xl text-on-surface dark:text-slate-100 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary-container">
+                <option value="small">Low</option>
+                <option value="balanced">Medium</option>
+                <option value="high">High</option>
+              </select>
             </div>
 
             {/* Collapsible Bitrate & Audio Parameters */}
             <details className="group rounded-2xl bg-surface-container-low dark:bg-slate-800/60 overflow-hidden border border-outline-variant/20">
-              <summary className="flex items-center justify-between px-3.5 py-3 cursor-pointer select-none text-xs font-bold text-on-surface">
+              <summary className="flex items-center justify-between px-3.5 py-3 cursor-pointer select-none text-xs font-bold text-on-surface dark:text-slate-100">
                 <span className="flex items-center gap-2">
-                  <Sliders className="w-4 h-4 text-primary" />
+                  <Sliders className="w-4 h-4 text-primary dark:text-violet-200" />
                   <span>Bitrate & Audio Tuning</span>
                 </span>
-                <ChevronDown className="w-4 h-4 text-on-surface-variant transition-transform group-open:rotate-180" />
+                <ChevronDown className="w-4 h-4 text-on-surface-variant dark:text-slate-200 transition-transform group-open:rotate-180" />
               </summary>
               <div className="p-3.5 pt-1 flex flex-col gap-3">
                 {/* Video Bitrate */}
                 <div className="flex flex-col gap-1">
                   <div className="flex justify-between text-xs">
-                    <span className="text-on-surface-variant">Video Bitrate:</span>
-                    <span className="font-mono text-primary font-bold">{videoBitrate}</span>
+                    <span className="text-on-surface-variant dark:text-slate-200">Video Bitrate:</span>
+                    <span className="font-mono text-primary dark:text-violet-200 font-bold">{videoBitrate}</span>
                   </div>
                   <input
-                    type="range"
+                    type="range" disabled={!selectedFile}
                     min="1000"
                     max="15000"
                     step="500"
                     value={parseInt(videoBitrate.replace('k', ''), 10) || 4500}
                     onChange={(e) => setVideoBitrate(`${e.target.value}k`)}
-                    className="w-full h-1.5 accent-primary bg-surface-container-high dark:bg-slate-700 rounded-full cursor-pointer"
+                    className="w-full h-1.5 accent-primary dark:accent-violet-400 bg-surface-container-high dark:bg-slate-700 rounded-full cursor-pointer"
                   />
                 </div>
 
                 {/* Audio Stream */}
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="block text-[11px] text-on-surface-variant mb-1">Audio Bitrate</label>
+                    <label className="block text-[11px] text-on-surface-variant dark:text-slate-200 mb-1">Audio Bitrate</label>
                     <select
                       value={audioBitrate}
                       onChange={(e) => setAudioBitrate(e.target.value)}
@@ -1095,12 +899,12 @@ export default function VideoConverterPage() {
                     </select>
                   </div>
                   <div className="flex items-center pt-4">
-                    <label className="flex items-center gap-2 text-xs text-on-surface cursor-pointer">
+                    <label className="flex items-center gap-2 text-xs text-on-surface dark:text-slate-100 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={stripAudio}
                         onChange={(e) => setStripAudio(e.target.checked)}
-                        className="rounded accent-primary"
+                        className="rounded accent-primary dark:accent-violet-400"
                       />
                       <span>Mute Audio</span>
                     </label>
@@ -1109,40 +913,33 @@ export default function VideoConverterPage() {
               </div>
             </details>
 
-            {/* Output Size Estimation Card */}
-            <div className="w-full bg-gradient-to-br from-surface-container-low to-surface-container dark:from-slate-800 dark:to-slate-800/60 rounded-3xl p-space-md flex flex-col gap-2 relative overflow-hidden border border-outline-variant/30">
-              <div className="flex items-center justify-between">
-                <span className="text-xs uppercase tracking-wider text-outline font-bold">Estimated Output Size</span>
-                {sizeEstimate && sizeEstimate.reductionPercentage !== undefined && (
-                  <span className="px-2.5 py-0.5 rounded-full bg-tertiary-fixed text-on-tertiary-fixed-variant font-mono text-xs font-bold flex items-center gap-1">
-                    <TrendingDown className="w-3.5 h-3.5" />
-                    <span>{sizeEstimate.reductionPercentage}% vs source</span>
-                  </span>
-                )}
+            </div>}
+            {exportMode === 'audio' && audioFormat !== 'wav' && (
+              <label className="text-xs font-semibold text-on-surface dark:text-slate-100">Audio Bitrate
+                <select aria-label="Export audio bitrate" value={audioBitrate} onChange={e => setAudioBitrate(e.target.value)} className="block w-full mt-2 p-3 rounded-xl bg-surface-container-low dark:bg-slate-800">
+                  {['128k', '192k', '256k', '320k'].map(value => <option key={value} value={value}>{value.replace('k', ' kbps')}</option>)}
+                </select>
+              </label>
+            )}
+            {!(exportMode === 'video' && stripAudio) && (<div className="rounded-2xl bg-surface-container-low dark:bg-slate-800/60 p-4 border border-outline-variant/20 space-y-3">
+              <div className="flex items-center justify-between"><h3 className="text-sm font-bold text-on-surface dark:text-slate-100">Audio Effects</h3>
+                <button type="button" disabled={!selectedFile || isProcessing} onClick={() => setAudioEffects([])} className="text-xs font-semibold text-primary dark:text-violet-200 disabled:opacity-50">Clear effects</button></div>
+              <div className="flex flex-wrap gap-2">{AUDIO_EFFECTS.map(effect => <button type="button" key={effect.id} disabled={!selectedFile || isProcessing} aria-pressed={audioEffects.includes(effect.id)}
+                onClick={() => setAudioEffects(current => current.includes(effect.id) ? current.filter(id => id !== effect.id) : [...current, effect.id])}
+                className={`px-4 py-2 rounded-full text-xs font-semibold ${audioEffects.includes(effect.id) ? 'bg-primary-container text-white' : 'bg-white dark:bg-slate-700 text-on-surface dark:text-slate-100'}`}>{effect.label}</button>)}</div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {AUDIO_EFFECTS.filter(effect => audioEffects.includes(effect.id)).map(effect => (
+                  <label key={effect.id} className="flex flex-col gap-2 text-xs text-on-surface dark:text-slate-100">
+                    <span className="flex justify-between font-semibold"><span>{effect.label} level</span><span className="font-mono">{audioEffectLevels[effect.id] ?? 100}%</span></span>
+                    <input type="range" disabled={!selectedFile || isProcessing} aria-label={`${effect.label} level`} min="0" max="100" step="1" value={audioEffectLevels[effect.id] ?? 100}
+                      aria-valuetext={`${audioEffectLevels[effect.id] ?? 100} percent`}
+                      onChange={e => setAudioEffectLevels(current => ({...current, [effect.id]: Number(e.target.value)}))}
+                      className="w-full h-2 accent-primary dark:accent-violet-400 cursor-pointer rounded-full" />
+                  </label>
+                ))}
               </div>
-
-              <div className="flex items-baseline gap-2 pt-1">
-                <span className="text-3xl font-extrabold text-on-surface tracking-tight font-mono">
-                  {isEstimating ? (
-                    <span className="animate-pulse">Calculating...</span>
-                  ) : sizeEstimate ? (
-                    sizeEstimate.formattedEstimate || sizeEstimate.formattedEstimatedSize
-                  ) : (
-                    '~42.8 MB'
-                  )}
-                </span>
-                {selectedFile && (
-                  <span className="text-on-surface-variant font-mono text-xs line-through">
-                    {(selectedFile.size / (1024 * 1024)).toFixed(1)} MB
-                  </span>
-                )}
-              </div>
-
-              <p className="text-xs text-on-surface-variant leading-relaxed">
-                Duration: <strong>{effectiveDuration.toFixed(1)}s</strong> · Target: <strong>{videoBitrate}</strong> {targetFormat.toUpperCase()}.
-              </p>
-            </div>
-
+              <p className="text-xs text-on-surface-variant dark:text-slate-200">Set each effect from 0–100%. Listen with Play; levels also apply to the export.</p>
+            </div>)}
             {/* Error Message Alert */}
             {error && (
               <div className="p-3 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs flex items-start gap-2">
@@ -1158,10 +955,10 @@ export default function VideoConverterPage() {
                   type="button"
                   onClick={handleConvert}
                   disabled={!selectedFile}
-                  className="w-full h-12 rounded-full bg-primary-container hover:bg-primary text-white font-semibold text-sm flex items-center justify-center gap-2 shadow-md shadow-primary/25 transition-all hover:scale-[1.01] active:scale-95 disabled:opacity-50"
+                  className="w-full h-12 rounded-full bg-primary-container hover:bg-primary text-white font-semibold text-sm flex items-center justify-center gap-2 shadow-md shadow-primary/25 transition-all hover:scale-[1.01] active:scale-95 disabled:opacity-50 dark:disabled:opacity-100 dark:disabled:bg-violet-950 dark:disabled:text-violet-200"
                 >
                   <Download className="w-4 h-4" />
-                  <span>Export Trimmed Video</span>
+                  <span>{exportMode === 'audio' ? 'Export Audio Clip' : 'Export Trimmed Video'}</span>
                 </button>
               )}
 
@@ -1180,7 +977,7 @@ export default function VideoConverterPage() {
                       style={{ width: `${progress ? (progress.percentage ?? progress.progressPercentage ?? 15) : 15}%` }}
                     />
                   </div>
-                  <div className="flex items-center justify-between text-xs text-on-surface-variant font-mono">
+                  <div className="flex items-center justify-between text-xs text-on-surface-variant dark:text-slate-200 font-mono">
                     <span>{progress ? (progress.stage || 'Transcoding video...') : 'Transcoding video...'}</span>
                     <span>{progress ? `${progress.percentage ?? progress.progressPercentage ?? 0}%` : 'Starting...'}</span>
                   </div>
@@ -1196,25 +993,23 @@ export default function VideoConverterPage() {
 
               {stage === 'COMPLETED' && (
                 <div className="space-y-2">
-                  <div className="p-3 rounded-2xl bg-tertiary-fixed/40 border border-tertiary/40 flex items-center gap-2 text-tertiary text-xs font-semibold">
-                    <CheckCircle2 className="w-4 h-4 text-tertiary shrink-0" />
-                    <span>Conversion complete! Pristine media ready for download.</span>
+                  <div className="p-3 rounded-2xl bg-tertiary-fixed/40 dark:bg-emerald-950/60 border border-tertiary/40 dark:border-emerald-800 flex items-center gap-2 text-tertiary dark:text-emerald-300 text-xs font-semibold">
+                    <CheckCircle2 className="w-4 h-4 text-tertiary dark:text-emerald-300 shrink-0" />
+                    <span>{downloaded ? 'Download started. Edit this clip to export again.' : 'Conversion complete! Media ready for download.'}</span>
                   </div>
-                  <a
+                  {!downloaded && outputFileId && <a
+                    onClick={() => setDownloaded(true)}
                     href={outputFileId ? apiClient.getDownloadUrl(outputFileId) : '#'}
                     download
                     className="w-full h-12 rounded-full bg-tertiary-container hover:bg-tertiary text-white font-semibold text-sm flex items-center justify-center gap-2 shadow-md transition-all active:scale-95"
                   >
                     <Download className="w-4 h-4" />
-                    <span>Download Converted Video</span>
-                  </a>
+                    <span>{exportMode === 'audio' ? 'Download Exported Audio' : 'Download Converted Video'}</span>
+                  </a>}
                   <button
                     type="button"
-                    onClick={() => {
-                      setStage('IDLE');
-                      setError(null);
-                    }}
-                    className="w-full h-10 rounded-full bg-surface-container-low text-on-surface text-xs font-semibold hover:bg-surface-container transition-colors"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-full h-10 rounded-full bg-surface-container-low text-on-surface dark:text-slate-100 text-xs font-semibold hover:bg-surface-container transition-colors"
                   >
                     Edit Another
                   </button>
@@ -1225,16 +1020,11 @@ export default function VideoConverterPage() {
                 <button
                   type="button"
                   onClick={() => setStage('IDLE')}
-                  className="w-full h-11 rounded-full bg-surface-container-low hover:bg-surface-container text-on-surface font-semibold text-xs transition-colors"
+                  className="w-full h-11 rounded-full bg-surface-container-low hover:bg-surface-container text-on-surface dark:text-slate-100 font-semibold text-xs transition-colors"
                 >
                   Try Again
                 </button>
               )}
-
-              <div className="flex items-center justify-center gap-1.5 text-center text-on-surface-variant text-xs pt-1">
-                <Shield className="w-3.5 h-3.5 text-tertiary" />
-                <span>Zero Database · 24-Hour Ephemeral Retention</span>
-              </div>
             </div>
           </div>
         </div>
