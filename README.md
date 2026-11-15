@@ -253,6 +253,3 @@ MediaForge is designed to download and transcode media only from sources that th
 
 ---
 
-<p align="center">
-  Built with ❤️ by <a href="https://github.com/rusiru-242">rusiru-242</a>
-</p>
