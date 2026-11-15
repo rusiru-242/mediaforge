@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.mediaforge" "\0"
-            VALUE "FileDescription", "mediaforge_desktop" "\0"
+            VALUE "FileDescription", "MediaForge for Windows" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "mediaforge_desktop" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 com.mediaforge. All rights reserved." "\0"
             VALUE "OriginalFilename", "mediaforge_desktop.exe" "\0"
-            VALUE "ProductName", "mediaforge_desktop" "\0"
+            VALUE "ProductName", "MediaForge" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

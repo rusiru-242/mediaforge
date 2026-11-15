@@ -2,6 +2,11 @@
 cmake_minimum_required(VERSION 3.14)
 project(mediaforge_desktop LANGUAGES CXX)
 
+set(MEDIAFORGE_TOOLS "${CMAKE_CURRENT_SOURCE_DIR}/../vendor/windows/tools")
+if(NOT EXISTS "${MEDIAFORGE_TOOLS}/ffmpeg.exe" OR NOT EXISTS "${MEDIAFORGE_TOOLS}/ffprobe.exe" OR NOT EXISTS "${MEDIAFORGE_TOOLS}/yt-dlp.exe")
+  message(FATAL_ERROR "Stage bundled tools first: python tool/prepare_windows_tools.py")
+endif()
+
 # The name of the executable created for the application. Change this to change
 # the on-disk name of your application.
 set(BINARY_NAME "mediaforge_desktop")
@@ -74,6 +79,7 @@ set(INSTALL_BUNDLE_LIB_DIR "${CMAKE_INSTALL_PREFIX}")
 
 install(TARGETS ${BINARY_NAME} RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
   COMPONENT Runtime)
+install(DIRECTORY "${MEDIAFORGE_TOOLS}/" DESTINATION "${CMAKE_INSTALL_PREFIX}/tools" COMPONENT Runtime)
 
 install(FILES "${FLUTTER_ICU_DATA_FILE}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
   COMPONENT Runtime)
