@@ -16,16 +16,16 @@ it('downloads the completed batch through the ZIP endpoint rather than treating 
   const download=await screen.findByRole('link', { name: 'Download All as ZIP' }, { timeout: 3000 });
   expect(download.getAttribute('href')).toBe('/api/v1/conversions/batch/batch-group/zip');
 });
-it('applies the selected video quality to the actual batch request', async () => {
+it.each(['144p', '240p', '360p', '480p', '720p', '1080p', '1440p', '2160p'])('applies the selected %s resolution to the actual batch request', async resolution => {
   vi.mocked(apiClient.uploadFile).mockResolvedValue({ id: 'video' } as any);
   vi.mocked(apiClient.createBatchConversion).mockResolvedValue({ batchId: 'batch', jobs: [{ id: 'job' }] } as any);
   const page=render(<BatchConverterPage />);
   fireEvent.change(page.container.querySelector('input[type=file]')!, { target: { files: [new File(['clip'],'clip.mp4',{type:'video/mp4'})] } });
-  fireEvent.change(screen.getByLabelText('Video quality for clip.mp4'), { target: { value: 'balanced' } });
+  fireEvent.change(screen.getByLabelText('Video resolution for clip.mp4'), { target: { value: resolution } });
   expect(screen.queryByText('4 Parallel Workers')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: /Convert All/ }));
   await waitFor(() => expect(apiClient.createBatchConversion).toHaveBeenLastCalledWith({ items: [expect.objectContaining({
-    qualityPreset: 'balanced', targetResolution: '720p', videoBitrate: '1200k', audioBitrate: 192,
+    targetResolution: resolution, crf: 20, audioBitrate: 256,
   })] }));
 });
 it('sends the chosen format and independent quality for each batch image', async () => {

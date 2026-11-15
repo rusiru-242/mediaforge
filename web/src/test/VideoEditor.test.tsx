@@ -10,6 +10,7 @@ vi.mock('@/services/apiClient', () => ({ apiClient: {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
   URL.createObjectURL = vi.fn(() => 'blob:video');
   URL.revokeObjectURL = vi.fn();
   vi.mocked(apiClient.uploadFile).mockResolvedValue({ id: 'input' } as any);
@@ -70,7 +71,7 @@ it('hides the downloaded result, and requires a changed clip to create a new res
   expect(window.dispatchEvent(new Event('beforeunload', { cancelable: true }))).toBe(true);
   fireEvent.click(screen.getByRole('button', { name: 'Select Range' }));
   expect(screen.queryByRole('button', { name: 'Export Trimmed Video' })).toBeNull();
-  fireEvent.change(screen.getByLabelText('Video Quality'), { target: { value: 'balanced' } });
+  fireEvent.change(screen.getByLabelText('Output Resolution'), { target: { value: '720p' } });
   expect(window.dispatchEvent(new Event('beforeunload', { cancelable: true }))).toBe(false);
   fireEvent.click(await screen.findByRole('button', { name: 'Export Trimmed Video' }));
   expect(await screen.findByRole('link', { name: 'Download Converted Video' }, { timeout: 3000 })).toBeDefined();
@@ -171,17 +172,34 @@ it('hides trim controls in crop mode and restores the selected range on return',
   expect(screen.getByRole('slider', { name: 'Trim end' }).getAttribute('aria-valuenow')).toBe('60');
 });
 
-it.each([
-  ['small', '480p', '600k', 128],
-  ['balanced', '720p', '1200k', 192],
-  ['high', '1080p', '2500k', 256],
-])('applies the %s quality to the actual video export', async (quality, resolution, bitrate, audio) => {
+it.each(['144p', '240p', '360p', '480p', '720p', '1080p', '1440p', '2160p'])('sends the selected %s output resolution', async resolution => {
   openClip();
-  expect(screen.queryByText('Resolution Target')).toBeNull();
-  expect(screen.queryByText('Video Codec')).toBeNull();
-  fireEvent.change(screen.getByLabelText('Video Quality'), { target: { value: quality } });
+  fireEvent.change(screen.getByLabelText('Output Resolution'), { target: { value: resolution } });
   fireEvent.click(screen.getByRole('button', { name: 'Export Trimmed Video' }));
   await waitFor(() => expect(apiClient.createConversionJob).toHaveBeenCalledWith(expect.objectContaining({
-    qualityPreset: quality, targetResolution: resolution, videoBitrate: bitrate, audioBitrate: audio,
+    targetResolution: resolution, qualityPreset: undefined, crf: 20,
   })));
+});
+
+it('removes video and permits importing another clip', () => {
+  const page = openClip();
+  fireEvent.click(screen.getByRole('button', { name: 'Clear workspace' }));
+  expect(page.container.querySelector('video')).toBeNull();
+  expect(screen.getByText('No video selected')).toBeDefined();
+  expect(URL.revokeObjectURL).toHaveBeenCalled();
+  fireEvent.change(page.container.querySelector('input[type=file]')!, {
+    target: { files: [new File(['new'], 'replacement.mp4', { type: 'video/mp4' })] },
+  });
+  expect(screen.getByText('replacement.mp4')).toBeDefined();
+});
+
+it.each([
+  ['Vivid', .03, 1.12, 1.45, 0], ['Vivid Warm', .03, 1.1, 1.3, .3],
+  ['Vivid Cool', .02, 1.1, 1.3, -.3], ['Dramatic', -.04, 1.4, .8, 0], ['Mono', 0, 1.15, 0, 0],
+] as const)('previews and exports the %s photo filter on video', async (label, brightness, contrast, saturation, warmth) => {
+  const page = openClip();
+  fireEvent.click(screen.getByRole('button', { name: label }));
+  expect(page.container.querySelector('video')!.style.filter).toContain(`saturate(${saturation})`);
+  fireEvent.click(screen.getByRole('button', { name: 'Export Trimmed Video' }));
+  await waitFor(() => expect(apiClient.createConversionJob).toHaveBeenCalledWith(expect.objectContaining({ brightness, contrast, saturation, warmth })));
 });

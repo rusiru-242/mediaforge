@@ -2,6 +2,7 @@
 
 import { useTrimmedPlayback } from '@/hooks/useTrimmedPlayback';
 import { useNavigationGuard } from '@/hooks/useNavigationGuard';
+import { ClearWorkspaceButton } from '@/components/editor/ClearWorkspaceButton';
 
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
@@ -293,6 +294,17 @@ export default function AudioConverterPage() {
     setCurrentJob(null); setProgress(null); setOutputFileId(null);
     setAudioDuration(0); setStartTime(0); setEndTime(0); 
     setCurrentTime(0); setIsPlaying(false);
+  };
+
+  const removeClip = () => {
+    if (isBusy) return;
+    audioRef.current?.pause(); cleanupPolling();
+    setSelectedFile(null); setAudioDuration(0); setCurrentTime(0); setIsPlaying(false);
+    setStartTime(0); setEndTime(0); setFadeInDuration(0); setFadeOutDuration(0);
+    setAudioEffects([]); setAudioEffectLevels({}); setVolume(1); setPlaybackSpeed(1);
+    setStage('IDLE'); setError(null); setCurrentJob(null); setProgress(null); setOutputFileId(null);
+    exportKey.current = null;
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -707,6 +719,8 @@ export default function AudioConverterPage() {
                 <h2 className="text-base font-bold text-on-surface dark:text-slate-100">Export Settings</h2>
               </div>
             </div>
+
+            <ClearWorkspaceButton disabled={!selectedFile || isBusy} onClear={removeClip} />
 
             {/* Format Pills */}
             <div className="space-y-1.5">

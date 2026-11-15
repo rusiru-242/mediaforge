@@ -3,9 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/theme/app_theme.dart';
 import 'shared/providers/app_providers.dart';
 import 'features/shell/app_shell.dart';
+import 'features/desktop/desktop_workspace.dart';
 
 class MediaForgeApp extends ConsumerWidget {
-  const MediaForgeApp({super.key});
+  final bool desktop;
+  const MediaForgeApp({super.key, this.desktop = false});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -21,7 +23,9 @@ class MediaForgeApp extends ConsumerWidget {
           : themeMode == 'light'
               ? ThemeMode.light
               : ThemeMode.system,
-      home: const AppShell(),
+      home: desktop
+          ? const DesktopWorkspace(manageWindow: true)
+          : const AppShell(),
     );
   }
 }

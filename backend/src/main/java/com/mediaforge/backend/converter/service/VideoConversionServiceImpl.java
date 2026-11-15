@@ -186,9 +186,15 @@ public class VideoConversionServiceImpl implements VideoConversionService {
         ffmpegExecutor.execute(jobId, args, effectiveDuration, progressConsumer);
 
         long fileSize = Files.size(outputFile.toPath());
+        // Every video export, including source-resolution exports, must contain
+        // real video and the source audio unless the user explicitly muted it.
+        MediaProbeResult outputProbe = probeService.probe(outputFile);
+        if (fileSize <= 0 || !outputProbe.hasVideo() || outputProbe.getDurationSeconds() <= 0
+                || (includeAudio && !outputProbe.hasAudio())) {
+            throw new IllegalStateException("The exported file failed video/audio stream verification.");
+        }
         int expectedHeight = resolutionHeight(options != null ? options.getTargetResolution() : null);
         if (expectedHeight > 0) {
-            MediaProbeResult outputProbe = probeService.probe(outputFile);
             if (!outputProbe.hasVideo() || outputProbe.getHeight() != expectedHeight) {
                 throw new IllegalStateException("Requested " + expectedHeight + "p video, but the exported video has height " + outputProbe.getHeight() + ".");
             }
@@ -393,6 +399,18 @@ public class VideoConversionServiceImpl implements VideoConversionService {
             filters.add(scaleFilter);
         }
 
+        // The same color adjustments used by the image editor apply to every frame.
+        if (options.getBrightness() != null || options.getContrast() != null || options.getSaturation() != null) {
+            double brightness = options.getBrightness() == null ? 0 : Math.max(-1, Math.min(1, options.getBrightness()));
+            double contrast = options.getContrast() == null ? 1 : Math.max(0, Math.min(2, options.getContrast()));
+            double saturation = options.getSaturation() == null ? 1 : Math.max(0, Math.min(2, options.getSaturation()));
+            filters.add(String.format(Locale.ROOT, "eq=brightness=%.4f:contrast=%.4f:saturation=%.4f", brightness, contrast, saturation));
+        }
+        if (options.getWarmth() != null && options.getWarmth() != 0) {
+            double warmth = Math.max(-1, Math.min(1, options.getWarmth())) * 0.15;
+            filters.add(String.format(Locale.ROOT, "colorbalance=rm=%.4f:bm=%.4f", warmth, -warmth));
+        }
+
         double duration = options.calculateEffectiveDuration(probe.getDurationSeconds());
         if (options.getVideoFadeInDuration() != null && options.getVideoFadeInDuration() > 0) {
             filters.add("setpts=PTS-STARTPTS");
@@ -428,6 +446,7 @@ public class VideoConversionServiceImpl implements VideoConversionService {
             case "480p" -> 480;
             case "360p" -> 360;
             case "240p" -> 240;
+            case "144p" -> 144;
             default -> throw new IllegalArgumentException("Unsupported target resolution: " + resolution);
         };
     }

@@ -46,3 +46,10 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# Source artwork for the native MediaForge Windows executable.
+!windows/runner/resources/app_icon.ico
+
+# Staged runtime dependencies are reproducible with tool/prepare_windows_tools.py.
+/vendor/windows/
+/dist/

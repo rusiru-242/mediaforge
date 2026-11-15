@@ -10,6 +10,7 @@ vi.mock('@/services/apiClient', () => ({ apiClient: {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
   URL.createObjectURL = vi.fn(() => 'blob:imported-audio');
   URL.revokeObjectURL = vi.fn();
 });
@@ -90,4 +91,16 @@ it('exports timeline handles, fades, volume and selected effects together', asyn
   await waitFor(() => expect(apiClient.createConversionJob).toHaveBeenCalledWith(expect.objectContaining({
     startTime: 1, endTime: 19, fadeInDuration: 2, fadeOutDuration: 3, volume: 0, audioEffects: ['reverb', 'bass'], audioEffectLevels: { reverb: 35, bass: 70 },
   })));
+});
+
+it('removes audio and permits importing another clip', () => {
+  const page = render(<AudioConverterPage />);
+  const input = page.container.querySelector('input[type=file]')!;
+  fireEvent.change(input, { target: { files: [new File(['old'], 'old.mp3', { type: 'audio/mpeg' })] } });
+  fireEvent.click(screen.getByRole('button', { name: 'Clear workspace' }));
+  expect(page.container.querySelector('audio')).toBeNull();
+  expect(screen.getAllByText('No audio loaded').length).toBeGreaterThan(0);
+  expect(URL.revokeObjectURL).toHaveBeenCalled();
+  fireEvent.change(input, { target: { files: [new File(['new'], 'new.wav', { type: 'audio/wav' })] } });
+  expect(screen.getAllByText('new.wav').length).toBeGreaterThan(0);
 });

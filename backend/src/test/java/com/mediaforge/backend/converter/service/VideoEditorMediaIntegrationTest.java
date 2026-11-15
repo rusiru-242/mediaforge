@@ -59,7 +59,7 @@ class VideoEditorMediaIntegrationTest {
         assertThat(actual.getDurationSeconds()).isBetween(0.5, 0.8);
     }
 
-    @ParameterizedTest @ValueSource(strings = {"480p", "720p", "1080p", "4k"})
+    @ParameterizedTest @ValueSource(strings = {"144p", "240p", "360p", "480p", "720p", "1080p", "1440p", "2160p", "4k"})
     void selectedResolutionChangesActualOutputDimensions(String resolution) throws Exception {
         var options = new ConversionOptions();
         options.setTargetResolution(resolution);
@@ -94,6 +94,43 @@ class VideoEditorMediaIntegrationTest {
         assertThat(center).isGreaterThan(100);
         assertThat(rms(bytes, 0, 200)).isLessThan(center * 0.4);
         assertThat(rms(bytes, 4500, 200)).isLessThan(center * 0.4);
+    }
+
+    @ParameterizedTest @ValueSource(strings = {"vivid", "vivid-warm", "vivid-cool", "dramatic", "mono"})
+    void photoFiltersChangeDecodedVideoFrames(String filter) throws Exception {
+        var options = new ConversionOptions();
+        switch (filter) {
+            case "vivid" -> { options.setBrightness(.03); options.setContrast(1.12); options.setSaturation(1.45); }
+            case "vivid-warm" -> { options.setBrightness(.03); options.setContrast(1.1); options.setSaturation(1.3); options.setWarmth(.3); }
+            case "vivid-cool" -> { options.setBrightness(.02); options.setContrast(1.1); options.setSaturation(1.3); options.setWarmth(-.3); }
+            case "dramatic" -> { options.setBrightness(-.04); options.setContrast(1.4); options.setSaturation(.8); }
+            case "mono" -> { options.setBrightness(0.); options.setContrast(1.15); options.setSaturation(0.); }
+        }
+        options.setStartTime(.2); options.setEndTime(.6); options.setTargetResolution("360p");
+        var service = new VideoConversionServiceImpl(executor, probe);
+        Path output = dir.resolve("filtered.mp4"), clean = dir.resolve("clean.mp4");
+        assertThat(service.convertVideo(UUID.randomUUID(), source.toFile(), output.toFile(), "mp4", options, null).isSuccess()).isTrue();
+        var plain = new ConversionOptions(); plain.setStartTime(.2); plain.setEndTime(.6); plain.setTargetResolution("360p");
+        assertThat(service.convertVideo(UUID.randomUUID(), source.toFile(), clean.toFile(), "mp4", plain, null).isSuccess()).isTrue();
+        var actual = probe.probe(output.toFile());
+        assertThat(actual.hasVideo()).isTrue(); assertThat(actual.hasAudio()).isTrue(); assertThat(actual.getHeight()).isEqualTo(360);
+        Path filteredPixels = dir.resolve("filtered.rgb"), cleanPixels = dir.resolve("clean.rgb");
+        for (var entry : Map.of(output, filteredPixels, clean, cleanPixels).entrySet()) {
+            runDecode(List.of("-i", entry.getKey().toString(), "-frames:v", "1", "-vf", "scale=32:32", "-pix_fmt", "rgb24", "-f", "rawvideo", entry.getValue().toString()));
+        }
+        byte[] filtered = Files.readAllBytes(filteredPixels), original = Files.readAllBytes(cleanPixels);
+        double difference = 0;
+        for (int i = 0; i < filtered.length; i++) difference += Math.abs(Byte.toUnsignedInt(filtered[i]) - Byte.toUnsignedInt(original[i]));
+        assertThat(difference / filtered.length).isGreaterThan(.25);
+        if (filter.equals("mono")) {
+            double chroma = 0, sourceChroma = 0;
+            for (int i = 0; i < filtered.length; i += 3) {
+                chroma += Math.abs(Byte.toUnsignedInt(filtered[i]) - Byte.toUnsignedInt(filtered[i + 1]));
+                sourceChroma += Math.abs(Byte.toUnsignedInt(original[i]) - Byte.toUnsignedInt(original[i + 1]));
+            }
+            // RGB decoding/encoding rounding can leave tiny channel differences.
+            assertThat(chroma).isLessThan(sourceChroma * .1);
+        }
     }
 
     private double frameMean(Path input, String time) throws Exception {
@@ -170,6 +207,27 @@ class VideoEditorMediaIntegrationTest {
             sum += (double) sample * sample;
         }
         return Math.sqrt(sum / count);
+    }
+
+    @ParameterizedTest @ValueSource(booleans = {true, false})
+    void sourceResolutionExportsRejectMissingRequiredStreams(boolean audioOnly) throws Exception {
+        Path invalid = dir.resolve(audioOnly ? "audio-only.m4a" : "missing-audio.mp4");
+        runDecode(audioOnly
+                ? List.of("-i", source.toString(), "-vn", "-c:a", "copy", invalid.toString())
+                : List.of("-i", source.toString(), "-an", "-c:v", "copy", invalid.toString()));
+        // Simulate an encoder producing a valid media file with the wrong streams.
+        var wrongEncoder = org.mockito.Mockito.mock(FFmpegProcessExecutor.class);
+        org.mockito.Mockito.when(wrongEncoder.execute(org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.anyList(), org.mockito.ArgumentMatchers.anyDouble(),
+                org.mockito.ArgumentMatchers.any())).thenAnswer(invocation -> {
+                    List<String> args = invocation.getArgument(1);
+                    Files.copy(invalid, Path.of(args.get(args.size() - 1)), StandardCopyOption.REPLACE_EXISTING);
+                    return true;
+                });
+        var options = new ConversionOptions(); options.setTargetResolution("source");
+        assertThatThrownBy(() -> new VideoConversionServiceImpl(wrongEncoder, probe).convertVideo(
+                UUID.randomUUID(), source.toFile(), dir.resolve("output.mp4").toFile(), "mp4", options, null))
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("stream verification");
     }
 
     private void runDecode(List<String> args) throws Exception {

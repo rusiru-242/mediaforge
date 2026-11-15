@@ -2,6 +2,7 @@
 
 import { useTrimmedPlayback } from '@/hooks/useTrimmedPlayback';
 import { useNavigationGuard } from '@/hooks/useNavigationGuard';
+import { ClearWorkspaceButton } from '@/components/editor/ClearWorkspaceButton';
 import { TrimHandles } from '@/components/editor/TrimHandles';
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
@@ -32,7 +33,8 @@ import { JobResponse, ConversionProgressResponse } from '@/types/api';
 import { clampCrop, zoomCrop, CropRect } from '@/utils/videoCrop';
 import { useAudioPreview } from '@/hooks/useAudioPreview';
 import { AUDIO_EFFECTS, AudioEffect } from '@/utils/audioEffects';
-import { VIDEO_PRESETS } from '@/utils/presets';
+import { IMAGE_FILTERS } from '@/utils/imageFilters';
+
 
 export default function VideoConverterPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -50,13 +52,14 @@ export default function VideoConverterPage() {
   const [downloaded, setDownloaded] = useState(false);
   const [exportKey, setExportKey] = useState<string | null>(null);
   const outputFormat = exportMode === 'audio' ? audioFormat : targetFormat;
-  const [selectedPreset, setSelectedPreset] = useState<string>('high');
   const [resolution, setResolution] = useState('1080p');
-  const [videoBitrate, setVideoBitrate] = useState('2500k');
+  const [videoBitrate, setVideoBitrate] = useState('8000k');
   const [audioBitrate, setAudioBitrate] = useState('256k');
   const [audioEffects, setAudioEffects] = useState<AudioEffect[]>([]);
   const [audioEffectLevels, setAudioEffectLevels] = useState<Partial<Record<AudioEffect, number>>>({});
   const [stripAudio, setStripAudio] = useState(false);
+  const [videoFilter, setVideoFilter] = useState<string>('original');
+  const colorFilter = IMAGE_FILTERS.find(filter => filter.id === videoFilter) ?? IMAGE_FILTERS[0];
 
   // Active Tool Mode in Workspace
   const [activeTool, setActiveTool] = useState<'select' | 'crop'>('select');
@@ -75,7 +78,7 @@ export default function VideoConverterPage() {
   const [cropHeight, setCropHeight] = useState<number>(0);
 
   // Advanced Quality & Audio
-  const [crf, setCrf] = useState<number>(23);
+  const crf = 20;
   const videoCodec = 'auto';
   const [frameRate, setFrameRate] = useState<number | undefined>(undefined);
   const [volume, setVolume] = useState<number>(1.0);
@@ -95,8 +98,8 @@ export default function VideoConverterPage() {
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const cropDrag = useRef<{clientX: number; clientY: number; rect: CropRect; scaleX: number; scaleY: number; resize?: boolean} | null>(null);
   const settingsKey = JSON.stringify({ selectedFile: selectedFile && [selectedFile.name, selectedFile.size, selectedFile.lastModified],
-    exportMode, outputFormat, selectedPreset, resolution, videoBitrate, audioBitrate, stripAudio, startTime, endTime,
-    cropX, cropY, cropWidth, cropHeight, crf, videoCodec, frameRate, volume, removeSilence, audioEffects, audioEffectLevels });
+    exportMode, outputFormat, resolution, videoBitrate, audioBitrate, stripAudio, startTime, endTime,
+    cropX, cropY, cropWidth, cropHeight, crf, videoCodec, frameRate, volume, removeSilence, audioEffects, audioEffectLevels, videoFilter });
   const isProcessing = stage === 'UPLOADING' || stage === 'PROCESSING';
   const hasUnsavedWork = Boolean(selectedFile && (!downloaded || settingsKey !== exportKey));
   useNavigationGuard(isProcessing || hasUnsavedWork, isProcessing
@@ -185,20 +188,6 @@ export default function VideoConverterPage() {
     const s = Math.floor(sec % 60);
     const ms = Math.floor((sec % 1) * 100);
     return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${String(ms).padStart(2, '0')}`;
-  };
-
-  const handlePresetChange = (presetId: string) => {
-    setSelectedPreset(presetId);
-    const found = VIDEO_PRESETS.find((p) => p.id === presetId);
-    if (found) {
-      setResolution(found.resolution);
-      setVideoBitrate(found.videoBitrate);
-      setAudioBitrate(found.audioBitrate);
-    }
-    if (presetId === 'high') setCrf(20);
-    else if (presetId === 'balanced' || presetId === 'medium') setCrf(23);
-    else if (presetId === 'small' || presetId === 'low') setCrf(28);
-    else if (presetId === 'best') setCrf(18);
   };
 
   const handleAspectRatioPreset = (preset: string) => {
@@ -300,7 +289,11 @@ export default function VideoConverterPage() {
         inputFileId: uploadResp.id || uploadResp.fileId,
         inputFormat,
         outputFormat,
-        qualityPreset: exportMode === 'video' && selectedPreset !== 'custom' ? selectedPreset : undefined,
+        qualityPreset: undefined,
+        brightness: exportMode === 'video' ? colorFilter.brightness : undefined,
+        contrast: exportMode === 'video' ? colorFilter.contrast : undefined,
+        saturation: exportMode === 'video' ? colorFilter.saturation : undefined,
+        warmth: exportMode === 'video' ? colorFilter.warmth : undefined,
         targetResolution: exportMode === 'video' && resolution !== 'source' ? resolution : undefined,
         videoBitrate: exportMode === 'video' && videoBitrate !== 'auto' ? videoBitrate : undefined,
         audioBitrate: outputFormat !== 'wav' && audioBitrate !== 'auto' ? parseInt(audioBitrate.replace('k', ''), 10) : undefined,
@@ -312,7 +305,7 @@ export default function VideoConverterPage() {
         cropWidth: hasCropConfig ? cropWidth : undefined,
         cropHeight: hasCropConfig ? cropHeight : undefined,
         aspectRatio: undefined, // Explicit crop coordinates are the authoritative rectangle.
-        crf: exportMode === 'video' && selectedPreset === 'custom' ? crf : undefined,
+        crf: exportMode === 'video' ? crf : undefined,
         videoCodec: exportMode === 'video' && videoCodec !== 'auto' ? videoCodec : undefined,
         frameRate: exportMode === 'video' && frameRate && frameRate > 0 ? frameRate : undefined,
         volume: volume !== 1.0 ? volume : undefined,
@@ -355,14 +348,28 @@ export default function VideoConverterPage() {
     }
   };
 
+  const removeClip = () => {
+    if (isProcessing) return;
+    videoRef.current?.pause();
+    cleanupPolling();
+    setSelectedFile(null); setCurrentTime(0); setIsPlaying(false); setVideoFilter('original');
+    setVideoDuration(0); setVideoWidth(0); setVideoHeight(0);
+    setStartTime(0); setEndTime(0); setCropX(0); setCropY(0);
+    setCropWidth(0); setCropHeight(0); setCropAspectRatio('original');
+    setCropMenuOpen(false); setActiveTool('select');
+    setAudioEffects([]); setAudioEffectLevels({}); setVolume(1); setStripAudio(false);
+    setStage('IDLE'); setError(null); setCurrentJob(null); setProgress(null);
+    setOutputFileId(null); setDownloaded(false); setExportKey(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      cleanupPolling();
-      setOutputFileId(null); setDownloaded(false); setCropMenuOpen(false);
-      setSelectedFile(e.target.files[0]);
-      setStage('IDLE');
-      setError(null);
+    const file = e.target.files?.[0];
+    if (file && !isProcessing) {
+      removeClip();
+      setSelectedFile(file);
     }
+    e.target.value = '';
   };
 
   return (
@@ -409,6 +416,7 @@ export default function VideoConverterPage() {
               type="file"
               accept="video/*,.mp4,.mkv,.webm,.avi,.mov,.flv,.m4v"
               onChange={handleFileChange}
+              disabled={isProcessing}
               className="hidden"
             />
           </label>
@@ -426,6 +434,7 @@ export default function VideoConverterPage() {
                 <video
                   ref={videoRef}
                   src={previewUrl}
+                  style={{ filter: `brightness(${1 + colorFilter.brightness}) contrast(${colorFilter.contrast}) saturate(${colorFilter.saturation}) sepia(${Math.abs(colorFilter.warmth) * 0.3}) hue-rotate(${colorFilter.warmth < 0 ? 180 : 0}deg)` }}
                   onLoadedMetadata={handleLoadedMetadata}
                   
                   className="w-full h-full object-contain"
@@ -814,6 +823,20 @@ export default function VideoConverterPage() {
               </span>
             </div>
 
+            <ClearWorkspaceButton disabled={!selectedFile || isProcessing} onClear={removeClip} />
+
+            {exportMode === 'video' && <div className="rounded-2xl bg-surface-container-low dark:bg-slate-800 p-4 space-y-3">
+              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Video Filters</h3>
+              <div className="flex flex-wrap gap-2">{IMAGE_FILTERS.map(filter => (
+                <button key={filter.id} type="button" disabled={!selectedFile || isProcessing}
+                  aria-pressed={videoFilter === filter.id} onClick={() => setVideoFilter(filter.id)}
+                  className={`rounded-full px-3 py-2 text-xs font-semibold disabled:opacity-40 ${videoFilter === filter.id ? 'bg-primary-container text-white' : 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100'}`}>
+                  {filter.label}
+                </button>
+              ))}</div>
+            </div>}
+
+
             <div className="grid grid-cols-2 gap-2" aria-label="Export type">
               {(['video', 'audio'] as const).map(mode => <button key={mode} type="button" aria-pressed={exportMode === mode}
                 onClick={() => setExportMode(mode)} className={`rounded-full px-4 py-2 text-sm font-semibold ${exportMode === mode ? 'bg-primary-container text-white' : 'bg-surface-container-low dark:bg-slate-800 text-on-surface dark:text-slate-100'}`}>
@@ -843,13 +866,19 @@ export default function VideoConverterPage() {
 
             {exportMode === 'video' && <div className="flex flex-col gap-space-md">
             <div className="flex flex-col gap-2">
-              <label htmlFor="video-export-quality" className="text-xs font-semibold text-on-surface dark:text-slate-100">Video Quality</label>
-              <select id="video-export-quality" value={selectedPreset} onChange={e => handlePresetChange(e.target.value)}
+              <label htmlFor="video-export-quality" className="text-xs font-semibold text-on-surface dark:text-slate-100">Output Resolution</label>
+              <select id="video-export-quality" disabled={isProcessing} value={resolution} onChange={e => {
+                const value = e.target.value; setResolution(value);
+                const bitrates: Record<string, string> = { '144p': '200k', '240p': '400k', '360p': '800k', '480p': '1500k', '720p': '4000k', '1080p': '8000k', '1440p': '16000k', '2160p': '32000k', source: '8000k' };
+                setVideoBitrate(bitrates[value]);
+              }}
                 className="w-full h-11 px-4 bg-surface-container-low dark:bg-slate-800 rounded-xl text-on-surface dark:text-slate-100 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary-container">
-                <option value="small">Low</option>
-                <option value="balanced">Medium</option>
-                <option value="high">High</option>
+                <option value="source">Original resolution</option>
+                {[144, 240, 360, 480, 720, 1080, 1440, 2160].map(height => (
+                  <option key={height} value={`${height}p`}>{height === 2160 ? '4K (2160p)' : `${height}p`}</option>
+                ))}
               </select>
+              <p className="text-xs text-slate-600 dark:text-slate-300">Maintains the clip aspect ratio. Enlarging a lower-resolution source does not restore detail.</p>
             </div>
 
             {/* Collapsible Bitrate & Audio Parameters */}
@@ -870,9 +899,9 @@ export default function VideoConverterPage() {
                   </div>
                   <input
                     type="range" disabled={!selectedFile}
-                    min="1000"
-                    max="15000"
-                    step="500"
+                    min="100"
+                    max="50000"
+                    step="100"
                     value={parseInt(videoBitrate.replace('k', ''), 10) || 4500}
                     onChange={(e) => setVideoBitrate(`${e.target.value}k`)}
                     className="w-full h-1.5 accent-primary dark:accent-violet-400 bg-surface-container-high dark:bg-slate-700 rounded-full cursor-pointer"

@@ -4,6 +4,8 @@ import '../../core/services/ffmpeg_service.dart';
 import '../../core/services/conversion_service.dart';
 import '../../core/services/settings_service.dart';
 import '../models/media_job.dart';
+import 'dart:io';
+import '../../core/services/bundled_tools.dart';
 
 final sharedPreferencesProvider = Provider<SharedPreferences>((ref) {
   throw UnimplementedError('SharedPreferences not initialized');
@@ -18,8 +20,8 @@ final ffmpegServiceProvider = Provider<FfmpegService>((ref) {
   final settings = ref.watch(settingsServiceProvider);
   final service = FfmpegService();
   service.configure(
-    ffmpegPath: settings.ffmpegPath,
-    ffprobePath: settings.ffprobePath,
+    ffmpegPath: Platform.isWindows ? BundledTools().ffmpeg : settings.ffmpegPath,
+    ffprobePath: Platform.isWindows ? BundledTools().ffprobe : settings.ffprobePath,
   );
   return service;
 });
