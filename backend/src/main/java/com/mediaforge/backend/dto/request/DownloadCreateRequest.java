@@ -54,8 +54,10 @@ public class DownloadCreateRequest {
     @Size(max = 20, message = "targetResolution cannot exceed 20 characters")
     private String targetResolution;
 
+    @jakarta.validation.constraints.Pattern(regexp="(?i)auto|[0-9]+(?:\\.[0-9]+)?[km]", message="Invalid video bitrate")
     private String videoBitrate;
 
+    @Min(8) @Max(320)
     private Integer audioBitrate;
 
     private String qualityPreset;
@@ -97,6 +99,10 @@ public class DownloadCreateRequest {
 
     public DownloadCreateRequest() {
     }
+
+    @jakarta.validation.constraints.AssertTrue(message="End time must be greater than start time")
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public boolean isTrimRangeValid() { return endTime == null || startTime == null || endTime > startTime; }
 
     public DownloadCreateRequest(String url, String selectedFormat, String selectedQuality) {
         this.url = url;

@@ -224,15 +224,6 @@ export default function JobDetailPage({
               </div>
             )}
 
-            {/* Architecture note for pending/queued jobs */}
-            {(job.status === 'PENDING' || job.status === 'QUEUED') && (
-              <div className="mt-8 flex items-start gap-2.5 rounded-xl border border-slate-200 bg-slate-50/80 p-4 text-xs text-slate-600 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-300">
-                <Info className="h-4 w-4 shrink-0 text-violet-500 mt-0.5" />
-                <span>
-                  <strong>Backend Queue Notice:</strong> This job is being processed in-memory using MediaForge&apos;s ephemeral transcoding engine. Temporary output artifacts are stored locally and purged automatically after 24 hours.
-                </span>
-              </div>
-            )}
           </Card>
         </div>
       ) : null}

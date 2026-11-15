@@ -87,6 +87,7 @@ public class MediaProbeServiceImpl implements MediaProbeService {
         List<String> command = List.of(
                 ffprobe,
                 "-v", "quiet",
+                "-protocol_whitelist", "file,pipe",
                 "-print_format", "json",
                 "-show_format",
                 "-show_streams",

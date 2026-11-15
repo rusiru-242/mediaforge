@@ -5,6 +5,22 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.*;
 
 class YtDlpSelectionTest {
+    @Test void tiktokVideoNeverFallsBackToWatermarkedDownloadFormats() {
+        var source = java.net.URI.create("https://www.tiktok.com/@owner/video/123");
+        for (String branch : YtDlpProcessExecutor.buildFormatSelector("mp4", "720p", true, source).split("/")) {
+            assertThat(branch).contains("[format_id!^=download]", "[format_note!*=?watermarked]");
+        }
+        assertThat(YtDlpProcessExecutor.buildFormatSelector("mp3", "192k", true, source)).doesNotContain("watermarked");
+        assertThat(YtDlpProcessExecutor.buildFormatSelector("mp4", "720p", true, java.net.URI.create("https://youtube.com/watch?v=owned")))
+                .doesNotContain("watermarked");
+    }
+    @Test void downloadUsesBoundedNetworkRetriesAndRejectsMissingFragments() {
+        assertThat(YtDlpProcessExecutor.downloadNetworkArguments()).containsSubsequence("--socket-timeout", "30")
+                .containsSubsequence("--retries", "3").containsSubsequence("--fragment-retries", "3")
+                .contains("--abort-on-unavailable-fragments");
+        var executor = new YtDlpProcessExecutor(new ObjectMapper(), new com.mediaforge.backend.converter.service.FFmpegProcessExecutor());
+        assertThat(org.springframework.test.util.ReflectionTestUtils.getField(executor, "downloadTimeoutSeconds")).isEqualTo(3600);
+    }
     @Test void videoSelectorsNeverFallBackToAudioOrIgnoreResolution() {
         for (String format : new String[]{"mp4", "webm"}) {
             String selector = YtDlpProcessExecutor.buildFormatSelector(format, "1080p (Full HD)", true);

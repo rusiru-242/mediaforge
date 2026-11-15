@@ -19,6 +19,8 @@ import java.util.List;
 public class GenericWebSourceAdapter implements MediaSourceAdapter {
 
     private final HttpDownloadClient httpClient;
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    private com.mediaforge.backend.downloader.service.YtDlpProcessExecutor extractor;
 
     public GenericWebSourceAdapter(HttpDownloadClient httpClient) {
         this.httpClient = httpClient;
@@ -40,6 +42,9 @@ public class GenericWebSourceAdapter implements MediaSourceAdapter {
         String contentType = response.getContentType();
         long contentLength = response.getContentLength();
         String contentDisposition = response.getContentDisposition();
+        if (isManifest(response.getFinalUri(), contentType) && extractor != null && extractor.isAvailable()) {
+            return extractor.extractMetadata(response.getFinalUri());
+        }
 
         String filename = httpClient.extractFilename(uri, contentDisposition, contentType);
         String ext = httpClient.extractExtension(filename, contentType);
@@ -70,6 +75,11 @@ public class GenericWebSourceAdapter implements MediaSourceAdapter {
                 contentLength > 0 ? contentLength : null
         );
         metadata.setDirectStreamUri(uri.toString());
+        if ("UNKNOWN".equals(mediaType)) {
+            metadata.setMessage("[UNSUPPORTED_MEDIA] This URL returned a web page or unsupported content, not a downloadable media stream.");
+            metadata.setAvailableFormats(List.of()); metadata.setAvailableQualities(List.of());
+            return metadata;
+        }
 
         List<MediaFormatOption> options = new ArrayList<>();
         options.add(new MediaFormatOption(
@@ -90,6 +100,16 @@ public class GenericWebSourceAdapter implements MediaSourceAdapter {
 
     @Override
     public DownloadedMedia download(DownloadTask task, ProgressCallback progressCallback) throws IOException {
+        var headers = httpClient.probeHeaders(task.getSourceUri());
+        if (isManifest(headers.getFinalUri(), headers.getContentType()) && extractor != null && extractor.isAvailable()) {
+            return extractor.download(task, progressCallback);
+        }
         return httpClient.download(task, progressCallback);
+    }
+
+    private boolean isManifest(URI uri, String contentType) {
+        String path = uri.getPath() == null ? "" : uri.getPath().toLowerCase(java.util.Locale.ROOT);
+        return path.endsWith(".m3u8") || path.endsWith(".mpd") || contentType != null &&
+                (contentType.contains("mpegurl") || contentType.contains("dash+xml"));
     }
 }

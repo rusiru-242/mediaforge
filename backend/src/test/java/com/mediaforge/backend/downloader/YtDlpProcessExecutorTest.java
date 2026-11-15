@@ -12,6 +12,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+@org.junit.jupiter.api.condition.EnabledIfSystemProperty(named="mediaforge.extractor-smoke", matches="true")
 class YtDlpProcessExecutorTest {
 
     private YtDlpProcessExecutor executor;

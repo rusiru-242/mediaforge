@@ -101,7 +101,9 @@ public class FileController {
         return ResponseEntity.ok()
                 .contentType(mediaType)
                 .contentLength(file.getFileSize())
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + safeFilename + "\"")
+                .header(HttpHeaders.CONTENT_DISPOSITION, safeFilename.chars().allMatch(c -> c < 128)
+                        ? org.springframework.http.ContentDisposition.attachment().filename(safeFilename).build().toString()
+                        : org.springframework.http.ContentDisposition.attachment().filename(safeFilename, java.nio.charset.StandardCharsets.UTF_8).build().toString())
                 .body(resource);
     }
 

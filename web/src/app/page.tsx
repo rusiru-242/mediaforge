@@ -21,10 +21,10 @@ export default function HomePage() {
   return (
     <div className="home-page flex flex-col w-full min-h-[calc(100vh-80px)] text-slate-900 dark:text-slate-100">
       {/* Top Ambient Glow & Hero */}
-      <div className="relative w-full max-w-7xl mx-auto px-gutter pt-24 sm:pt-28 pb-14 overflow-hidden">
+      <div className="relative w-full max-w-7xl mx-auto px-gutter pt-28 sm:pt-32 pb-8 sm:pb-10 overflow-hidden">
         <div className="absolute -top-32 left-1/2 -translate-x-1/2 w-[680px] h-[360px] bg-gradient-to-tr from-primary/15 via-secondary/10 to-transparent blur-3xl pointer-events-none -z-10 rounded-full" />
 
-        <div className="flex flex-col items-center text-center max-w-4xl mx-auto space-y-6">
+        <div className="flex flex-col items-center text-center max-w-4xl mx-auto space-y-5 sm:space-y-6">
           {/* Headline */}
           <h1 className="text-4xl sm:text-6xl font-extrabold text-on-surface tracking-tight leading-tight">
             Your Media.{' '}
@@ -39,7 +39,7 @@ export default function HomePage() {
           </p>
 
           {/* Quick Nav CTA Buttons */}
-          <div className="flex flex-wrap items-center justify-center gap-4 pt-2">
+          <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 pt-1 sm:pt-2">
             <Link
               href="/converter/video"
               className="flex items-center gap-2 px-8 h-[52px] rounded-full bg-primary-container text-white font-semibold text-base hover:bg-primary transition-all shadow-md shadow-primary/20 hover:scale-[1.02] active:scale-95"
@@ -59,8 +59,8 @@ export default function HomePage() {
       </div>
 
       {/* Core Studio Suite (Bento 2x2 Grid) */}
-      <section className="max-w-7xl mx-auto px-gutter py-16 w-full" id="tools-suite">
-        <div className="flex flex-col md:flex-row md:items-end justify-between mb-10 gap-4">
+      <section className="max-w-7xl mx-auto px-gutter pt-6 sm:pt-8 pb-10 sm:pb-16 w-full" id="tools-suite">
+        <div className="flex flex-col md:flex-row md:items-end justify-between mb-6 sm:mb-8 gap-3 sm:gap-4">
           <div>
             <div className="flex items-center gap-2 text-primary text-xs font-bold uppercase tracking-wider mb-2">
               <Settings className="w-4 h-4 text-primary" />
@@ -71,11 +71,11 @@ export default function HomePage() {
             </h2>
           </div>
           <p className="text-sm text-on-surface-variant max-w-md">
-            Every tool operates completely database-free with zero queue times, zero watermarks, and 24-hour ephemeral retention.
+            Edit videos, adjust audio, crop images, and download supported media in one place.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8">
           {/* Card 1: Video Editor */}
           <div className="group relative rounded-3xl bg-surface-container-lowest dark:bg-slate-900 border border-outline-variant/30 p-8 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col justify-between overflow-hidden">
             <div aria-hidden="true" className="absolute -right-16 -top-16 w-44 h-44 rounded-full bg-primary/5 dark:bg-violet-400/10 pointer-events-none group-hover:scale-125 transition-transform duration-500" />
@@ -132,7 +132,7 @@ export default function HomePage() {
               </div>
               <Link
                 href="/converter/video"
-                className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary hover:text-primary-container transition-colors"
+                className="after:absolute after:inset-0 after:rounded-3xl focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-violet-400 inline-flex items-center gap-1.5 text-sm font-semibold text-primary hover:text-primary-container transition-colors"
               >
                 <span>Open Video Editor</span>
                 <ArrowRight className="w-4 h-4" />
@@ -190,7 +190,7 @@ export default function HomePage() {
               <span className="font-mono text-xs text-on-surface-variant">24-bit Lossless Studio Export</span>
               <Link
                 href="/converter/audio"
-                className="inline-flex items-center gap-1.5 text-sm font-semibold text-secondary hover:text-secondary-container transition-colors"
+                className="after:absolute after:inset-0 after:rounded-3xl focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-violet-400 inline-flex items-center gap-1.5 text-sm font-semibold text-secondary hover:text-secondary-container transition-colors"
               >
                 <span>Open Audio Editor</span>
                 <ArrowRight className="w-4 h-4" />
@@ -244,7 +244,7 @@ export default function HomePage() {
               <span className="font-mono text-xs text-on-surface-variant">EXIF Scrubbing Included</span>
               <Link
                 href="/converter/image"
-                className="inline-flex items-center gap-1.5 text-sm font-semibold text-tertiary hover:text-tertiary-container transition-colors"
+                className="after:absolute after:inset-0 after:rounded-3xl focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-violet-400 inline-flex items-center gap-1.5 text-sm font-semibold text-tertiary hover:text-tertiary-container transition-colors"
               >
                 <span>Open Image Editor</span>
                 <ArrowRight className="w-4 h-4" />
@@ -303,7 +303,7 @@ export default function HomePage() {
               <span className="font-mono text-xs text-on-surface-variant">Direct Browser Demuxer</span>
               <Link
                 href="/downloader"
-                className="inline-flex items-center gap-1.5 text-sm font-semibold text-secondary hover:text-secondary-container transition-colors"
+                className="after:absolute after:inset-0 after:rounded-3xl focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-violet-400 inline-flex items-center gap-1.5 text-sm font-semibold text-secondary hover:text-secondary-container transition-colors"
               >
                 <span>Launch Downloader</span>
                 <ArrowRight className="w-4 h-4" />

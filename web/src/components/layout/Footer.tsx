@@ -96,7 +96,7 @@ export function Footer() {
         </div>
 
         <div className="pt-6 border-t border-outline-variant/30 flex flex-col sm:flex-row items-center justify-between text-xs text-on-surface-variant dark:text-slate-200">
-          <p>© {new Date().getFullYear()} MediaForge. Powered by WebAssembly, FFmpeg & Spring Boot.</p>
+          <p>© {new Date().getFullYear()} MediaForge.</p>
 
         </div>
       </div>

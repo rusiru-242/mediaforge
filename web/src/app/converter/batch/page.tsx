@@ -248,7 +248,7 @@ export default function BatchConverterPage() {
   };
 
   return (
-    <div className="batch-editor w-full max-w-7xl mx-auto px-gutter py-space-md flex flex-col gap-space-md text-slate-900 dark:text-slate-100">
+    <div className="batch-editor w-full min-w-0 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-28 sm:pt-32 pb-8 flex flex-col gap-5 sm:gap-6 text-slate-900 dark:text-slate-100">
       {/* Hidden file input */}
       <input
         ref={fileInputRef}
@@ -259,7 +259,7 @@ export default function BatchConverterPage() {
       />
 
       {/* Header Context Bar */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-space-md pb-space-xs">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 sm:gap-4">
         <div className="flex flex-col gap-1">
           <div className="flex flex-wrap items-center gap-space-xs text-xs font-semibold text-on-surface-variant">
             <span className="flex items-center gap-1 text-sm font-bold text-primary">
@@ -282,10 +282,6 @@ export default function BatchConverterPage() {
             <span className="font-mono">
               Total Original: <strong className="text-on-surface">{formatFileSize(totalOriginalBytes)}</strong>
             </span>
-          </div>
-          <div className="flex items-center gap-2 pt-0.5 text-xs text-on-surface-variant">
-            <span className="w-2 h-2 rounded-full bg-tertiary-container animate-pulse" />
-            <span>Multi-Threaded Parallel Execution Active</span>
           </div>
         </div>
 
@@ -313,7 +309,7 @@ export default function BatchConverterPage() {
       {/* Main Grid: 8-col Queue / 4-col Inspector */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-space-lg items-start">
         {/* Left Column (8 cols) */}
-        <div className="lg:col-span-8 flex flex-col gap-space-md">
+        <div className="lg:col-span-8 min-w-0 flex flex-col gap-space-md">
           {/* Multi-file Drag & Drop Dropzone */}
           <div
             onClick={() => fileInputRef.current?.click()}
@@ -322,11 +318,11 @@ export default function BatchConverterPage() {
               e.preventDefault();
               if (e.dataTransfer.files) addFilesToQueue(Array.from(e.dataTransfer.files));
             }}
-            className="p-space-md rounded-3xl bg-surface-container-lowest dark:bg-slate-900 border-2 border-dashed border-outline-variant/50 hover:border-primary/50 transition-colors cursor-pointer group shadow-sm"
+            className="p-3 sm:p-space-md rounded-3xl bg-surface-container-lowest dark:bg-slate-900 border-2 border-dashed border-outline-variant/50 hover:border-primary/50 transition-colors cursor-pointer group shadow-sm"
           >
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-space-md p-space-md rounded-2xl bg-surface-container-low/70 dark:bg-slate-800/40">
-              <div className="flex items-center gap-space-md">
-                <div className="w-12 h-12 rounded-2xl bg-primary-fixed dark:bg-slate-800 flex items-center justify-center text-primary group-hover:scale-105 transition-transform shadow-sm">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-3 sm:p-space-md rounded-2xl bg-surface-container-low/70 dark:bg-slate-800/40">
+              <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-space-md text-center sm:text-left min-w-0">
+                <div className="w-12 h-12 shrink-0 rounded-2xl bg-primary-fixed dark:bg-slate-800 flex items-center justify-center text-primary group-hover:scale-105 transition-transform shadow-sm">
                   <UploadCloud className="w-6 h-6" />
                 </div>
                 <div className="flex flex-col">
@@ -336,7 +332,7 @@ export default function BatchConverterPage() {
                   </span>
                 </div>
               </div>
-              <span className="px-4 py-2 rounded-full bg-surface-container-lowest dark:bg-slate-800 text-primary font-semibold text-xs shadow-xs">
+              <span className="shrink-0 px-4 py-2 rounded-full bg-surface-container-lowest dark:bg-slate-800 text-primary font-semibold text-xs shadow-xs">
                 Browse Files
               </span>
             </div>
@@ -344,7 +340,7 @@ export default function BatchConverterPage() {
 
           {/* Controls & Filter Strip */}
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-space-sm p-2 rounded-2xl bg-surface-container-lowest dark:bg-slate-900 border border-outline-variant/30 shadow-sm">
-            <div className="flex items-center gap-1">
+            <div className="flex flex-wrap items-center gap-1">
               <span className="text-xs font-semibold text-on-surface-variant px-2">Filter:</span>
               {(['all', 'video', 'audio', 'image'] as const).map((t) => (
                 <button
@@ -371,7 +367,7 @@ export default function BatchConverterPage() {
 
           {/* Queue List Cards */}
           {queue.length === 0 ? (
-            <div className="p-12 text-center rounded-3xl bg-surface-container-lowest dark:bg-slate-900 border border-outline-variant/30 space-y-3">
+            <div className="p-6 sm:p-12 text-center rounded-3xl bg-surface-container-lowest dark:bg-slate-900 border border-outline-variant/30 space-y-3">
               <Layers className="w-12 h-12 text-outline mx-auto" />
               <h3 className="text-base font-bold text-on-surface">Batch Queue is Empty</h3>
               <p className="text-xs text-on-surface-variant max-w-sm mx-auto">
@@ -498,9 +494,6 @@ export default function BatchConverterPage() {
                 <Sliders className="w-4 h-4 text-primary" />
                 <h2 className="text-base font-bold text-on-surface">Batch Settings</h2>
               </div>
-              <span className="px-2.5 py-0.5 rounded-full bg-primary-fixed text-primary text-xs font-semibold">
-                Parallel Pipeline
-              </span>
             </div>
 
             {/* Pipeline Flags */}

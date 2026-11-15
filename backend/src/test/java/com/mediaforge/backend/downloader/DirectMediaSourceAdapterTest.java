@@ -66,8 +66,8 @@ class DirectMediaSourceAdapterTest {
         assertEquals("video/mp4", metadata.getMimeType());
         assertEquals("mp4", metadata.getContainerFormat());
         assertEquals(15728640L, metadata.getFileSize());
-        assertEquals("1920x1080", metadata.getResolution());
-        assertTrue(metadata.getAvailableQualities().contains("1080p (Full HD)"));
+        assertNull(metadata.getResolution(), "A filename is not proof of source resolution");
+        assertEquals(java.util.List.of("Original (Source Stream)"), metadata.getAvailableQualities());
         assertFalse(metadata.getAvailableFormats().isEmpty());
 
         // Native stream option

@@ -191,7 +191,7 @@ body {
   --download-hover: 126 34 206;
   --download-text: 126 34 206;
   --download-light: 216 180 254;
-  background-color: color-mix(in srgb, rgb(var(--download-accent)) 4%, #f8fafc);
+  background-color: #f8fafc;
 }
 .downloader-page[data-platform="youtube"] {
   --download-accent: 220 38 38;
@@ -212,10 +212,10 @@ body {
   --download-light: 249 168 212;
 }
 .downloader-page[data-platform="tiktok"] {
-  --download-accent: 15 118 125;
-  --download-hover: 17 94 99;
-  --download-text: 15 118 125;
-  --download-light: 94 234 212;
+  --download-accent: 30 18 43;
+  --download-hover: 45 25 62;
+  --download-text: 59 33 80;
+  --download-light: 216 180 254;
 }
 .downloader-page[data-platform="twitter"] {
   --download-accent: 51 65 85;
@@ -224,7 +224,7 @@ body {
   --download-light: 203 213 225;
 }
 .dark .downloader-page {
-  background-color: color-mix(in srgb, rgb(var(--download-accent)) 7%, #0b0e14);
+  background-color: #0b0e14;
 }
 .dark .home-page {
   --on-surface: 241 245 249;
@@ -269,4 +269,9 @@ body {
 }
 .dark .home-page input[type="range"] {
   accent-color: #a78bfa;
+}
+.downloader-page button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+  pointer-events: none;
 }

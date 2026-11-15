@@ -24,7 +24,7 @@ public class MediaSourceAdapterRegistry {
     public MediaSourceAdapter getAdapter(URI uri) {
         for (MediaSourceAdapter adapter : adapters) {
             if (adapter.supports(uri)) {
-                log.debug("Selected adapter '{}' for URI {}", adapter.getSourceName(), uri);
+                log.debug("Selected adapter '{}' for URI {}", adapter.getSourceName(), uri.getHost());
                 return adapter;
             }
         }

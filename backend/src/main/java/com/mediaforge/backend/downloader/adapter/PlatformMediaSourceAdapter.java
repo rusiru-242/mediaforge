@@ -72,7 +72,7 @@ public class PlatformMediaSourceAdapter implements MediaSourceAdapter {
         String host = uri.getHost();
         if (host == null) return false;
         String lowerHost = host.toLowerCase(Locale.ROOT);
-        return SOCIAL_PLATFORMS.stream().anyMatch(lowerHost::contains);
+        return !"direct".equals(com.mediaforge.backend.downloader.model.PlatformUrls.platform(uri));
     }
 
     @Override
@@ -152,7 +152,7 @@ public class PlatformMediaSourceAdapter implements MediaSourceAdapter {
                 log.warn("YouTube oEmbed returned HTTP {}", response.statusCode());
             }
         } catch (Exception ex) {
-            log.warn("Failed to fetch YouTube oEmbed metadata for {}: {}", uri, ex.getMessage());
+            log.warn("Failed to fetch YouTube oEmbed metadata for {}: {}", uri.getHost(), ex.getClass().getSimpleName());
         }
     }
 
@@ -185,7 +185,7 @@ public class PlatformMediaSourceAdapter implements MediaSourceAdapter {
                 }
             }
         } catch (Exception ex) {
-            log.warn("Failed to fetch Vimeo oEmbed metadata for {}: {}", uri, ex.getMessage());
+            log.warn("Failed to fetch Vimeo oEmbed metadata for {}: {}", uri.getHost(), ex.getClass().getSimpleName());
         }
     }
 

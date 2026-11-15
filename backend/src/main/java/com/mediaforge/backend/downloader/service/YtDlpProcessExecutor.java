@@ -47,12 +47,17 @@ public class YtDlpProcessExecutor {
     private final ObjectMapper objectMapper;
     private final FFmpegProcessExecutor ffmpegExecutor;
     private final Map<UUID, Process> activeProcesses = new ConcurrentHashMap<>();
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.mediaforge.backend.validation.UrlSecurityValidator urlValidator = new com.mediaforge.backend.validation.UrlSecurityValidator();
 
     @Value("${app.downloader.ytdlp-path:}")
     private String configuredYtDlpPath;
 
     @Value("${app.downloader.ytdlp-timeout-seconds:60}")
     private int timeoutSeconds = 60;
+
+    @Value("${app.downloader.download-timeout-seconds:3600}")
+    private int downloadTimeoutSeconds = 3600;
 
     private List<String> resolvedExecutableCommand;
 
@@ -112,8 +117,10 @@ public class YtDlpProcessExecutor {
         try {
             ProcessBuilder pb = new ProcessBuilder(cmd);
             Process p = pb.start();
-            boolean finished = p.waitFor(4, TimeUnit.SECONDS);
-            return finished && p.exitValue() == 0;
+            try {
+                boolean finished = p.waitFor(4, TimeUnit.SECONDS);
+                return finished && p.exitValue() == 0;
+            } finally { if (p.isAlive()) p.destroyForcibly(); }
         } catch (Exception e) {
             return false;
         }
@@ -129,18 +136,21 @@ public class YtDlpProcessExecutor {
      * Extracts rich metadata using yt-dlp capability inspection.
      */
     public MediaMetadata extractMetadata(URI uri) {
+        urlValidator.validateUri(uri);
         List<String> cmd = new ArrayList<>(getExecutableCommand());
         cmd.add("--ignore-config");
         cmd.add("-J");
         cmd.add("--no-playlist");
         cmd.add(uri.toString());
 
-        log.info("Inspecting media stream metadata via extractor: {}", uri);
+        log.info("Inspecting media metadata for host {}", uri.getHost());
         StringBuilder stdout = new StringBuilder();
         StringBuilder stderr = new StringBuilder();
 
-        try {
+        try (var network = new ExtractorNetworkProxy(urlValidator)) {
+            cmd.addAll(getExecutableCommand().size(), List.of("--proxy", network.address()));
             ProcessBuilder pb = new ProcessBuilder(cmd);
+            pb.environment().put("NO_PROXY", ""); pb.environment().put("no_proxy", "");
             Process process = pb.start();
 
             Thread outThread = new Thread(() -> readStream(process.getInputStream(), stdout));
@@ -151,7 +161,7 @@ public class YtDlpProcessExecutor {
             boolean finished = process.waitFor(timeoutSeconds, TimeUnit.SECONDS);
             if (!finished) {
                 process.destroyForcibly();
-                log.warn("Extractor inspection timed out after {}s for URL {}", timeoutSeconds, uri);
+                log.warn("Extractor inspection timed out after {}s for URL {}", timeoutSeconds, uri.getHost());
                 MediaMetadata meta = new MediaMetadata();
                 meta.setMessage("Media stream inspection timed out while probing source server.");
                 return meta;
@@ -164,16 +174,16 @@ public class YtDlpProcessExecutor {
                 return parseExtractorJson(stdout.toString(), uri);
             } else {
                 String cleanError = sanitizeExtractorError(stderr.toString());
-                log.warn("Extractor returned exit code {} for {}: {}", process.exitValue(), uri, cleanError);
+                log.warn("Extractor returned exit code {} for host {}: {}", process.exitValue(), uri.getHost(), cleanError);
                 MediaMetadata meta = new MediaMetadata();
                 meta.setMessage(cleanError);
                 return meta;
             }
 
         } catch (Exception e) {
-            log.error("Failed to run media extractor for {}: {}", uri, e.getMessage());
+            log.error("Failed to start media extractor for host {} ({})", uri.getHost(), e.getClass().getSimpleName());
             MediaMetadata meta = new MediaMetadata();
-            meta.setMessage("Extraction failure: " + e.getMessage());
+            meta.setMessage(ExtractorErrors.describe(e.getMessage()));
             return meta;
         }
     }
@@ -190,7 +200,8 @@ public class YtDlpProcessExecutor {
 
             MediaMetadata metadata = new MediaMetadata();
             metadata.setTitle(title);
-            metadata.setSourceName(uploader != null ? "YouTube (" + uploader + ")" : "YouTube");
+            String platform = com.mediaforge.backend.downloader.model.PlatformUrls.platform(uri);
+            metadata.setSourceName(uploader != null ? platform + " (" + uploader + ")" : platform);
             metadata.setMediaType(sourceHasStream(root, "vcodec") ? "VIDEO" : "AUDIO");
             metadata.setMimeType(DownloadOutputVerifier.mimeType(ext));
             metadata.setContainerFormat(ext);
@@ -221,7 +232,9 @@ public class YtDlpProcessExecutor {
             }
 
             if (maxFilesize > 0) {
-                metadata.setFileSize(maxFilesize);
+                // Separate streams cannot be represented by the largest single-stream size.
+                long exactSize = root.path("filesize").asLong(0);
+                if (exactSize > 0) metadata.setFileSize(exactSize);
             }
 
             // DRM check
@@ -317,6 +330,7 @@ public class YtDlpProcessExecutor {
         }
         boolean audioOnly = DownloadOutputVerifier.isAudio(format);
         JsonNode source = inspectSource(task);
+        validateExtractedUrls(source);
         boolean hasVideo = sourceHasStream(source, "vcodec");
         boolean hasAudio = sourceHasStream(source, "acodec");
         if (!audioOnly && !hasVideo) throw new IOException("This source has no downloadable video stream. Choose an audio format instead.");
@@ -325,8 +339,9 @@ public class YtDlpProcessExecutor {
 
         List<String> command = new ArrayList<>(getExecutableCommand());
         command.addAll(List.of("--ignore-config", "--no-playlist", "--newline", "--no-simulate", "--no-warnings"));
-        command.addAll(List.of("--ffmpeg-location", ffmpegExecutor.getFfmpegExecutable()));
-        command.addAll(List.of("-f", buildFormatSelector(format, task.getTargetQuality(), hasAudio)));
+        command.addAll(downloadNetworkArguments());
+        command.addAll(List.of("--ffmpeg-location", ffmpegExecutor.getFfmpegLocation()));
+        command.addAll(List.of("-f", buildFormatSelector(format, task.getTargetQuality(), hasAudio, task.getSourceUri())));
         // A neutral merge container allows fallback codecs. We explicitly normalize after probing.
         if (!audioOnly) command.addAll(List.of("--merge-output-format", "mkv"));
         Path manifest = scratch.resolve("final-path.txt");
@@ -334,7 +349,7 @@ public class YtDlpProcessExecutor {
         command.addAll(List.of("-o", scratch.resolve("source.%(ext)s").toString()));
         if (task.getMaxSizeBytes() > 0) command.addAll(List.of("--max-filesize", Long.toString(task.getMaxSizeBytes())));
         command.add(task.getSourceUri().toString());
-        runProcess(task, command, 600, line -> {
+        runExtractorProcess(task, command, Math.max(60, downloadTimeoutSeconds), line -> {
             Matcher matcher = PROGRESS_PERCENT_PATTERN.matcher(line);
             if (matcher.find() && progressCallback != null) {
                 int percent = Math.min(80, (int) (Double.parseDouble(matcher.group(1)) * 0.8));
@@ -370,21 +385,65 @@ public class YtDlpProcessExecutor {
             throw new IOException("Requested " + requestedHeight + "p video, but output is " + verified.getHeight() + "p.");
         }
         if (task.getMaxSizeBytes() > 0 && Files.size(output) > task.getMaxSizeBytes()) throw new IOException("Output exceeds the download size limit.");
-        DownloadedMedia result = new DownloadedMedia(output, "MediaForge_" + (audioOnly ? "Audio" : "Video") + "." + format,
+        DownloadedMedia result = new DownloadedMedia(output, downloadFilename(source.path("title").asText(""), format, audioOnly, audioOnly ? 0 : verified.getHeight()),
                 output.getFileName().toString(), DownloadOutputVerifier.mimeType(format), Files.size(output), format);
         result.setAudioExpected(!audioOnly && hasAudio);
         result.setSelectionApplied(true);
         return result;
     }
 
+    static List<String> downloadNetworkArguments() {
+        return List.of("--socket-timeout", "30", "--retries", "3", "--fragment-retries", "3",
+                "--extractor-retries", "2", "--concurrent-fragments", "4", "--abort-on-unavailable-fragments");
+    }
+
+    static String downloadFilename(String title, String format, boolean audioOnly) {
+        return downloadFilename(title, format, audioOnly, 0);
+    }
+
+    static String downloadFilename(String title, String format, boolean audioOnly, int height) {
+        String name = title == null ? "" : title.replaceAll("[\\x00-\\x1f\\x7f<>:\"/\\\\|?*]", "_").strip();
+        name = name.replaceAll("[. ]+$", "");
+        if (name.isBlank()) name = "MediaForge_" + (audioOnly ? "Audio" : "Video");
+        // Keep Unicode names within common filesystem byte limits, including extension.
+        while (name.getBytes(StandardCharsets.UTF_8).length > 220) {
+            name = name.substring(0, name.offsetByCodePoints(name.length(), -1));
+        }
+        if (name.matches("(?i)^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\\..*)?$")) name = "_" + name;
+        return name + (!audioOnly && height > 0 ? " (" + height + ")" : "") + "." + format;
+    }
+
     JsonNode inspectSource(DownloadTask task) throws IOException {
+        urlValidator.validateUri(task.getSourceUri());
         List<String> command = new ArrayList<>(getExecutableCommand());
         command.addAll(List.of("--ignore-config", "--no-playlist", "-J", task.getSourceUri().toString()));
         StringBuilder json = new StringBuilder();
-        runProcess(task, command, Math.max(15, timeoutSeconds), line -> json.append(line).append('\n'));
+        runExtractorProcess(task, command, Math.max(15, timeoutSeconds), line -> {
+            if (json.length() + line.length() > 32_000_000) throw new IllegalStateException("Extractor metadata is too large.");
+            json.append(line).append('\n');
+        });
         JsonNode source = objectMapper.readTree(json.toString());
         if (source == null || !source.isObject()) throw new IOException("Extractor did not return usable source metadata.");
         return source;
+    }
+
+    void validateExtractedUrls(JsonNode node) throws IOException {
+        if (node.isArray()) { for (JsonNode item : node) validateExtractedUrls(item); }
+        else if (node.isObject()) {
+            var fields = node.fields();
+            while (fields.hasNext()) {
+                var field = fields.next();
+                if (Set.of("url", "manifest_url", "fragment_base_url").contains(field.getKey()) && field.getValue().isTextual()) {
+                    String value = field.getValue().asText();
+                    try {
+                        URI uri = URI.create(value);
+                        if (uri.isAbsolute()) urlValidator.validateUri(uri);
+                    } catch (RuntimeException ex) { throw new IOException("Extractor returned an unsafe or unsupported stream URL."); }
+                } else if (field.getValue().isContainerNode() && !Set.of("thumbnails", "subtitles", "automatic_captions").contains(field.getKey())) {
+                    validateExtractedUrls(field.getValue());
+                }
+            }
+        }
     }
 
     static boolean sourceHasStream(JsonNode source, String codec) {
@@ -413,6 +472,16 @@ public class YtDlpProcessExecutor {
                 + video + "+bestaudio[acodec!=none]/" + combined + "[acodec!=none]";
     }
 
+    static String buildFormatSelector(String format, String quality, boolean sourceHasAudio, URI source) {
+        String selector = buildFormatSelector(format, quality, sourceHasAudio);
+        String host = source == null || source.getHost() == null ? "" : source.getHost().toLowerCase(Locale.ROOT);
+        if (DownloadOutputVerifier.isAudio(format) || !(host.equals("tiktok.com") || host.endsWith(".tiktok.com"))) return selector;
+        // TikTok's playback streams are unwatermarked; its download variants can carry a watermark.
+        // Apply exclusions to every video fallback so a failed playback selection cannot use them.
+        String clean = "[format_id!^=download][format_note!*=?watermarked]";
+        return selector.replace("[vcodec!=none]", "[vcodec!=none]" + clean);
+    }
+
     static List<String> normalizationArguments(Path input, Path output, String format, MediaProbeResult probe, String quality) {
         List<String> args = new ArrayList<>(List.of("-i", input.toString()));
         if (DownloadOutputVerifier.isAudio(format)) {
@@ -439,9 +508,19 @@ public class YtDlpProcessExecutor {
         return args;
     }
 
-    private void runProcess(DownloadTask task, List<String> command, int seconds, Consumer<String> stdout) throws IOException {
+    private void runExtractorProcess(DownloadTask task, List<String> command, int seconds, Consumer<String> stdout) throws IOException {
+        try (var network = new ExtractorNetworkProxy(urlValidator)) {
+            List<String> guarded = new ArrayList<>(command);
+            guarded.addAll(getExecutableCommand().size(), List.of("--proxy", network.address()));
+            runProcess(task, guarded, seconds, stdout);
+        }
+    }
+
+    void runProcess(DownloadTask task, List<String> command, int seconds, Consumer<String> stdout) throws IOException {
         if (task.isCancelled()) throw new IOException("Download cancelled.");
-        Process process = new ProcessBuilder(command).start();
+        ProcessBuilder builder = new ProcessBuilder(command);
+        builder.environment().put("NO_PROXY", ""); builder.environment().put("no_proxy", "");
+        Process process = builder.start();
         activeProcesses.put(task.getJobId(), process);
         var readers = Executors.newFixedThreadPool(2);
         List<String> errors = new CopyOnWriteArrayList<>();
@@ -461,7 +540,17 @@ public class YtDlpProcessExecutor {
             } catch (IOException ex) { throw new java.io.UncheckedIOException(ex); }
         });
         try {
-            if (!process.waitFor(seconds, TimeUnit.SECONDS)) throw new IOException("Media extractor timed out after " + seconds + " seconds.");
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(seconds);
+            while (!process.waitFor(250, TimeUnit.MILLISECONDS)) {
+                if (task.isCancelled()) throw new IOException("Download cancelled.");
+                if (out.isDone()) out.get();
+                if (err.isDone()) err.get();
+                if (System.nanoTime() >= deadline) break;
+            }
+            if (process.isAlive()) {
+                log.warn("Extractor timed out for job {} after {} seconds. Recent output: {}", task.getJobId(), seconds, sanitizeExtractorError(String.join("\n", errors)));
+                throw new IOException("Media download exceeded the " + seconds + " second time limit. The source may be slow or unavailable; retry or choose a lower resolution.");
+            }
             out.get(5, TimeUnit.SECONDS);
             err.get(5, TimeUnit.SECONDS);
             if (task.isCancelled()) throw new IOException("Download cancelled.");
@@ -472,6 +561,7 @@ public class YtDlpProcessExecutor {
         } catch (ExecutionException | TimeoutException ex) {
             throw new IOException("Failed reading media extractor output.", ex);
         } finally {
+            process.descendants().forEach(ProcessHandle::destroyForcibly);
             process.destroyForcibly();
             activeProcesses.remove(task.getJobId(), process);
             readers.shutdownNow();
@@ -482,6 +572,7 @@ public class YtDlpProcessExecutor {
         ffmpegExecutor.cancelProcess(jobId);
         Process p = activeProcesses.remove(jobId);
         if (p != null && p.isAlive()) {
+            p.descendants().forEach(ProcessHandle::destroyForcibly);
             p.destroyForcibly();
             log.info("Forcefully terminated active media download process for job: {}", jobId);
         }
@@ -493,6 +584,7 @@ public class YtDlpProcessExecutor {
         if (paths.size() != 1) throw new IOException("Extractor returned an ambiguous output file list.");
         Path downloaded = Paths.get(paths.get(0)).toAbsolutePath().normalize();
         if (!downloaded.startsWith(scratch.toAbsolutePath().normalize()) || !Files.isRegularFile(downloaded)
+                || Files.isSymbolicLink(downloaded) || !downloaded.toRealPath().startsWith(scratch.toRealPath())
                 || downloaded.toString().endsWith(".part") || downloaded.toString().endsWith(".ytdl")) {
             throw new IOException("Extractor reported an invalid output path.");
         }
@@ -512,39 +604,10 @@ public class YtDlpProcessExecutor {
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(in))) {
             String line;
             while ((line = reader.readLine()) != null) {
-                sb.append(line).append("\n");
+                if (sb.length() + line.length() <= 32_000_000) sb.append(line).append("\n");
             }
         } catch (IOException ignored) {}
     }
 
-    private String sanitizeExtractorError(String rawError) {
-        if (rawError == null || rawError.isBlank()) {
-            return "Video could not be downloaded directly. Media provider did not supply permitted streams.";
-        }
-
-        String[] lines = rawError.split("\n");
-        List<String> cleanErrors = new ArrayList<>();
-        for (String line : lines) {
-            line = line.trim();
-            if (line.startsWith("ERROR:")) {
-                // Strip "ERROR: [youtube] " prefix
-                String msg = line.replaceFirst("^ERROR:\\s*(\\[[^\\]]+\\]\\s*)?", "");
-                cleanErrors.add(msg);
-            }
-        }
-
-        if (!cleanErrors.isEmpty()) {
-            return String.join("; ", cleanErrors);
-        }
-
-        // Return first non-warning line if no explicit ERROR line
-        for (String line : lines) {
-            line = line.trim();
-            if (!line.isEmpty() && !line.startsWith("WARNING:")) {
-                return line;
-            }
-        }
-
-        return "This video is restricted or unavailable from the provider.";
-    }
+    private String sanitizeExtractorError(String rawError) { return ExtractorErrors.describe(rawError); }
 }

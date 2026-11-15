@@ -163,6 +163,31 @@ public class LocalStorageServiceImpl implements MediaStorageService {
             }
         }
 
+        // In-memory records disappear after restart; expire orphaned artifacts by filesystem age too.
+        var cutoff = java.time.Instant.now().minus(java.time.Duration.ofHours(Math.max(1, retentionHours)));
+        var retained = allFiles.stream().filter(f -> f.getExpiresAt() == null || f.getExpiresAt().isAfter(now))
+                .map(f -> storageRoot.resolve(f.getStorageKey()).normalize()).collect(java.util.stream.Collectors.toSet());
+        try (Stream<Path> paths = Files.walk(storageRoot.resolve("media"))) {
+            for (Path path : paths.filter(Files::isRegularFile).toList()) {
+                if (!retained.contains(path) && Files.getLastModifiedTime(path).toInstant().isBefore(cutoff)) Files.deleteIfExists(path);
+            }
+        } catch (IOException ex) { log.warn("Could not clean expired orphan media files ({})", ex.getClass().getSimpleName()); }
+        try (Stream<Path> paths = Files.list(storageRoot.resolve("scratch"))) {
+            for (Path path : paths.filter(Files::isDirectory).toList()) {
+                try {
+                    UUID id = UUID.fromString(path.getFileName().toString());
+                    boolean expired;
+                    try (Stream<Path> contents = Files.walk(path)) {
+                        expired = contents.allMatch(p -> {
+                            try { return Files.getLastModifiedTime(p).toInstant().isBefore(cutoff); }
+                            catch (IOException ex) { return false; }
+                        });
+                    }
+                    if (expired) cleanupScratch(id);
+                } catch (IllegalArgumentException ignored) {}
+            }
+        } catch (IOException ex) { log.warn("Could not clean expired scratch directories ({})", ex.getClass().getSimpleName()); }
+
         if (purgedCount > 0) {
             log.info("Purged {} expired media files according to {}-hour retention policy", purgedCount, retentionHours);
         }

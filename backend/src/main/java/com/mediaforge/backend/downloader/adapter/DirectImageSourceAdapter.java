@@ -109,7 +109,7 @@ public class DirectImageSourceAdapter implements MediaSourceAdapter {
 
     @Override
     public DownloadedMedia download(DownloadTask task, ProgressCallback progressCallback) throws IOException {
-        log.info("Direct image adapter downloading media for job: {} from {}", task.getJobId(), task.getSourceUri());
+        log.info("Direct image adapter downloading media for job: {} from {}", task.getJobId(), task.getSourceUri().getHost());
         return httpClient.download(task, progressCallback);
     }
 }

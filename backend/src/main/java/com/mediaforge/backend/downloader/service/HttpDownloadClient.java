@@ -38,6 +38,7 @@ public class HttpDownloadClient {
     private static final Pattern FILENAME_PATTERN = Pattern.compile("filename=[\"']?([^\"';]+)[\"']?", Pattern.CASE_INSENSITIVE);
 
     private final UrlSecurityValidator urlSecurityValidator;
+    private final ThreadLocal<ExtractorNetworkProxy> outboundProxy = new ThreadLocal<>();
 
     @Value("${app.downloader.connect-timeout-ms:10000}")
     private int connectTimeoutMs;
@@ -62,6 +63,13 @@ public class HttpDownloadClient {
      * Executes safe HTTP HEAD request to probe media headers and metadata.
      */
     public HttpResponse probeHeaders(URI uri) throws IOException {
+        try (var network = new ExtractorNetworkProxy(urlSecurityValidator, false)) {
+            outboundProxy.set(network);
+            try { return probeHeadersInternal(uri); } finally { outboundProxy.remove(); }
+        }
+    }
+
+    private HttpResponse probeHeadersInternal(URI uri) throws IOException {
         URI currentUri = uri;
         int redirectCount = 0;
 
@@ -89,7 +97,7 @@ public class HttpDownloadClient {
             // Some servers return 405 Method Not Allowed for HEAD requests, fall back to GET
             if (responseCode == 405) {
                 conn.disconnect();
-                return probeWithGet(currentUri);
+                return probeWithGet(currentUri, redirectCount);
             }
 
             String contentType = conn.getContentType();
@@ -103,23 +111,42 @@ public class HttpDownloadClient {
         throw new IOException("Too many redirects: exceeded maximum of " + maxRedirects);
     }
 
-    private HttpResponse probeWithGet(URI uri) throws IOException {
-        urlSecurityValidator.validateUri(uri);
-        HttpURLConnection conn = openConnection(uri, "GET");
-        conn.setRequestProperty("Range", "bytes=0-1");
-        int responseCode = conn.getResponseCode();
-        String contentType = conn.getContentType();
-        long contentLength = conn.getContentLengthLong();
-        String contentDisposition = conn.getHeaderField("Content-Disposition");
-        conn.disconnect();
-
-        return new HttpResponse(uri, responseCode, contentType, contentLength, contentDisposition);
+    private HttpResponse probeWithGet(URI uri, int redirects) throws IOException {
+        URI current = uri;
+        while (redirects <= maxRedirects) {
+            urlSecurityValidator.validateUri(current);
+            HttpURLConnection conn = openConnection(current, "GET");
+            try {
+                conn.setRequestProperty("Range", "bytes=0-1");
+                int code = conn.getResponseCode();
+                if (isRedirect(code)) {
+                    String location = conn.getHeaderField("Location");
+                    if (location == null || location.isBlank()) throw new IOException("Redirect received without Location.");
+                    current = current.resolve(location.trim()); redirects++; continue;
+                }
+                if (code >= 400) throw new IOException("Target media server returned HTTP error: " + code);
+                long length = conn.getContentLengthLong();
+                String range = conn.getHeaderField("Content-Range");
+                if (code == 206 && range != null && range.matches("bytes \\d+-\\d+/\\d+")) {
+                    length = Long.parseLong(range.substring(range.lastIndexOf('/') + 1));
+                } else if (code == 206) length = -1;
+                return new HttpResponse(current, code, conn.getContentType(), length, conn.getHeaderField("Content-Disposition"));
+            } finally { conn.disconnect(); }
+        }
+        throw new IOException("Too many redirects.");
     }
 
     /**
      * Downloads media safely into a local target file while tracking progress and enforcing limits.
      */
     public DownloadedMedia download(DownloadTask task, ProgressCallback progressCallback) throws IOException {
+        try (var network = new ExtractorNetworkProxy(urlSecurityValidator, false)) {
+            outboundProxy.set(network);
+            try { return downloadInternal(task, progressCallback); } finally { outboundProxy.remove(); }
+        }
+    }
+
+    private DownloadedMedia downloadInternal(DownloadTask task, ProgressCallback progressCallback) throws IOException {
         URI currentUri = task.getSourceUri();
         int redirectCount = 0;
         long maxBytes = task.getMaxSizeBytes() > 0 ? task.getMaxSizeBytes() : defaultMaxSizeBytes;
@@ -131,6 +158,8 @@ public class HttpDownloadClient {
 
             urlSecurityValidator.validateUri(currentUri);
             HttpURLConnection conn = openConnection(currentUri, "GET");
+            ExtractorNetworkProxy network = outboundProxy.get();
+            task.setCancelAction(network::close);
             int responseCode = conn.getResponseCode();
 
             if (isRedirect(responseCode)) {
@@ -216,6 +245,8 @@ public class HttpDownloadClient {
                         lastReportPercent = percent;
                     }
                 }
+                if (task.isCancelled()) throw new IOException("Download cancelled by user request");
+                if (contentLength >= 0 && totalBytesRead != contentLength) throw new IOException("Incomplete media download: source closed before the advertised content length was received.");
                 out.flush();
             } catch (Exception ex) {
                 cleanupFile(targetFile);
@@ -247,7 +278,11 @@ public class HttpDownloadClient {
 
     private HttpURLConnection openConnection(URI uri, String method) throws IOException {
         URL url = uri.toURL();
-        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+        var network = outboundProxy.get();
+        if (network == null) throw new IOException("Outbound network guard is not initialized.");
+        URI endpoint = URI.create(network.address());
+        HttpURLConnection conn = (HttpURLConnection) url.openConnection(new java.net.Proxy(java.net.Proxy.Type.HTTP,
+                new java.net.InetSocketAddress(endpoint.getHost(), endpoint.getPort())));
         conn.setRequestMethod(method);
         conn.setConnectTimeout(connectTimeoutMs);
         conn.setReadTimeout(readTimeoutMs);

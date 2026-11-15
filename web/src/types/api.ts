@@ -50,6 +50,7 @@ export interface TimeRangeDto {
 }
 
 export interface SizeEstimationRequest {
+  estimationContext?: 'download';
   inputFileId?: string;
   mediaType?: 'video' | 'audio' | 'image' | string;
   sourceDuration?: number;
