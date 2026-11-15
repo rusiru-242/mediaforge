@@ -1,0 +1,79 @@
+{
+    "standalone":  true,
+    "executable":  "C:\\Users\\REDTECH\\AppData\\Local\\MediaForgeStandaloneQA\\mediaforge_desktop.exe",
+    "checks":  {
+                   "no_backend_listener":  {
+                                               "passed":  true
+                                           },
+                   "packaged_tools":  {
+                                          "passed":  true
+                                      },
+                   "no_global_ffmpeg_or_java_on_path":  {
+                                                            "passed":  true
+                                                        },
+                   "video_unicode_trim_crop_resize_mp4":  {
+                                                              "passed":  true
+                                                          },
+                   "audio_mp3":  {
+                                     "passed":  true
+                                 },
+                   "audio_m4a":  {
+                                     "passed":  true
+                                 },
+                   "audio_wav":  {
+                                     "passed":  true
+                                 },
+                   "image_filter_crop_rotate_resize_webp":  {
+                                                                "passed":  true
+                                                            },
+                   "mixed_batch_zip":  {
+                                           "passed":  true
+                                       },
+                   "process_cancellation":  {
+                                                "passed":  true
+                                            },
+                   "invalid_input_and_missing_tools":  {
+                                                           "passed":  true
+                                                       },
+                   "large_256MiB_streaming_save":  {
+                                                       "passed":  true
+                                                   },
+                   "open_output_folder":  {
+                                              "passed":  true
+                                          },
+                   "open_exported_file":  {
+                                              "passed":  true
+                                          }
+               },
+    "success":  true,
+    "toolVersions":  {
+                         "FFmpeg":  "ffmpeg version 9.0.1-essentials_build-www.gyan.dev Copyright (c) 2000-2026 the FFmpeg developers",
+                         "FFprobe":  "ffprobe version 9.0.1-essentials_build-www.gyan.dev Copyright (c) 2007-2026 the FFmpeg developers",
+                         "Extractor":  "2026.10.26"
+                     },
+    "lastProgressSamples":  [
+                                0.0,
+                                0.0,
+                                100.0
+                            ],
+    "tests":  {
+                  "flutterAnalyze":  "No issues",
+                  "flutterTestsPassed":  78,
+                  "optionalHttpTestsSkipped":  8,
+                  "nativeWindowsIntegrationPassed":  1,
+                  "flutterRun":  "Executed successfully",
+                  "releaseBuild":  "Passed",
+                  "installerInstall":  "Exit 0",
+                  "installerUninstall":  "Exit 0",
+                  "installedGui":  "Responsive MediaForge window without backend",
+                  "cleanVm":  "Not available",
+                  "nativeDialogs":  "Manual verification required",
+                  "liveInstagram":  "Bundled extractor metadata: 9 formats; end-to-end local online download untested"
+              },
+    "installer":  {
+                      "path":  "apps/flutter_app/dist/MediaForge-1.0.0-windows-x64-setup.exe",
+                      "bytes":  137698457,
+                      "sha256":  "3441C1D2B12094C4A27585E498BAD008CA4CCADEBBDC8EB116B89C92945FB34B",
+                      "installedExecutable":  "C:\\Users\\REDTECH\\AppData\\Local\\Programs\\MediaForge\\mediaforge_desktop.exe"
+                  }
+}

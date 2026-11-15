@@ -1,0 +1,61 @@
+﻿{
+    "date":  "2026-11-15T20:46:55.9533401+05:30",
+    "flutter":  "3.47.5",
+    "target":  "Windows 11 x64",
+    "frontendChanged":  false,
+    "backendBaseUrl":  "http://localhost:8081/api/v1",
+    "checks":  {
+                   "pubGet":  "passed",
+                   "analyze":  "No issues found",
+                   "flutterTestsPassed":  55,
+                   "ordinaryRunLiveTestsSkipped":  8,
+                   "realHttpIntegrationPassed":  8,
+                   "nativeWindowsWorkflowPassed":  1,
+                   "nativeOpenSaveDialogAutomation":  "not passed: native filename control unavailable to automation; manual verification required",
+                   "backendTargetedTestsPassed":  24,
+                   "debugRun":  "built and launched",
+                   "releaseBuild":  "passed",
+                   "releaseLaunch":  {
+                                         "responding":  true,
+                                         "title":  "MediaForge",
+                                         "processId":  1692
+                                     }
+               },
+    "authorizedInstagram":  {
+                                "url":  "https://www.instagram.com/reels/Dd_1Oc3JcKx/",
+                                "format":  "mp4",
+                                "videoCodec":  "h264",
+                                "width":  1080,
+                                "height":  1920,
+                                "audio":  true,
+                                "durationSeconds":  28.210998,
+                                "bytes":  8963443
+                            },
+    "executable":  "C:\\Users\\REDTECH\\Documents\\Projects\\mediaforge\\mediaforge\\apps\\flutter_app\\build\\windows\\x64\\runner\\Release\\mediaforge_desktop.exe",
+    "exeSha256":  "15989B65021732B1B9BA0576174A9CEC778205F1335964E6C234611AF56915CA",
+    "appSoSha256":  "BC8F81021B4D94E14E60EE1B3D460DAB7FAD7F5058E27A6EE2FA5335E8E92568",
+    "runtimeFiles":  [
+                         "d3dcompiler_47.dll",
+                         "dartjni.dll",
+                         "desktop_drop_plugin.dll",
+                         "flutter_windows.dll",
+                         "libEGL.dll",
+                         "libGLESv2.dll",
+                         "libmpv-2.dll",
+                         "mediaforge_desktop.exe",
+                         "media_kit_libs_windows_video_plugin.dll",
+                         "media_kit_video_plugin.dll",
+                         "native_assets.json",
+                         "screen_retriever_windows_plugin.dll",
+                         "share_plus_plugin.dll",
+                         "url_launcher_windows_plugin.dll",
+                         "vk_swiftshader.dll",
+                         "vulkan-1.dll",
+                         "window_manager_plugin.dll",
+                         "zlib.dll"
+                     ],
+    "requiresSeparateBackend":  true,
+    "localPreviewRequiresFfprobe":  true,
+    "localWaveformRequiresFfmpeg":  true,
+    "installerCreated":  false
+}

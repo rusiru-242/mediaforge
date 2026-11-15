@@ -27,3 +27,19 @@ it('exports selected filter adjustments and a custom crop from the image tools',
     cropWidth: 640, cropHeight: 800, brightness: .03, contrast: 1.1, saturation: 1.3, warmth: .3,
   })));
 });
+
+it('clears the image, edits and export workspace before a new import', () => {
+  vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} });
+  URL.createObjectURL = vi.fn(() => 'blob:image'); URL.revokeObjectURL = vi.fn();
+  const page = render(<ImageEditor />);
+  const input = page.container.querySelector('input[type=file]')!;
+  expect((screen.getByRole('button', { name: 'Clear workspace' }) as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.change(input, { target: { files: [new File(['image'], 'old.png', { type: 'image/png' })] } });
+  fireEvent.click(screen.getByRole('button', { name: 'Vivid Warm' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Clear workspace' }));
+  expect(screen.queryByAltText('old.png')).toBeNull();
+  expect((screen.getByRole('slider', { name: 'Saturation' }) as HTMLInputElement).value).toBe('1');
+  expect(URL.revokeObjectURL).toHaveBeenCalled();
+  fireEvent.change(input, { target: { files: [new File(['new'], 'new.png', { type: 'image/png' })] } });
+  expect(screen.getByAltText('new.png')).toBeDefined();
+});

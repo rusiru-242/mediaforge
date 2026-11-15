@@ -1,6 +1,7 @@
 'use client';
 
 import { useNavigationGuard } from '@/hooks/useNavigationGuard';
+import { ClearWorkspaceButton } from '@/components/editor/ClearWorkspaceButton';
 
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
@@ -310,12 +311,26 @@ export default function ImageConverterPage() {
     setCustomHeight('');
   };
 
+  const removeClip = () => {
+    if (stage === 'UPLOADING' || stage === 'PROCESSING') return;
+    cleanupPolling(); handleResetAdjustments();
+    setSelectedFile(null); setNaturalWidth(0); setNaturalHeight(0); setZoomLevel(100);
+    setCropX(0); setCropY(0); setCropWidth(0); setCropHeight(0); setActiveTab('light');
+    setQuality('85'); setTargetFormat('webp'); setPreserveAspectRatio(true);
+    setStage('IDLE'); setError(null); setCurrentJob(null); setProgress(null); setOutputFileId(null);
+    completedSettings.current = '';
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (stage === 'UPLOADING' || stage === 'PROCESSING') return;
     if (e.target.files && e.target.files[0]) {
-      setSelectedFile(e.target.files[0]);
+      const file = e.target.files[0]; removeClip();
+      setSelectedFile(file);
       setStage('IDLE');
       setError(null);
     }
+    e.target.value = '';
   };
 
   return (
@@ -363,6 +378,7 @@ export default function ImageConverterPage() {
               type="file"
               accept="image/*,.png,.jpg,.jpeg,.webp,.avif,.bmp,.tiff,.gif"
               onChange={handleFileChange}
+              disabled={stage === 'UPLOADING' || stage === 'PROCESSING'}
               className="hidden"
             />
           </label>
@@ -632,6 +648,8 @@ export default function ImageConverterPage() {
                 Web Ready
               </span>
             </div>
+
+            <ClearWorkspaceButton disabled={!selectedFile || stage === 'UPLOADING' || stage === 'PROCESSING'} onClear={removeClip} />
 
             {/* Target Format Pills */}
             <div className="flex flex-col gap-1.5">

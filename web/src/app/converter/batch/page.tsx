@@ -27,7 +27,6 @@ import {
   detectMediaType,
   getCompatibleOutputFormats,
   getDefaultOutputFormat,
-  VIDEO_PRESETS,
 } from '@/utils/presets';
 
 interface BatchQueueItem {
@@ -81,7 +80,7 @@ export default function BatchConverterPage() {
       file: f,
       targetFormat: getDefaultOutputFormat(f.name),
       imageQuality: 85,
-      videoQuality: 'high',
+      videoQuality: '1080p',
       status: 'PENDING',
     }));
     setQueue((prev) => [...prev, ...newItems]);
@@ -156,16 +155,16 @@ export default function BatchConverterPage() {
         const inputFormat = item.file.name.split('.').pop()?.toLowerCase();
 
         const videoPreset = detectMediaType(item.file.name) === 'video' && !['mp3', 'wav', 'aac', 'flac', 'ogg', 'm4a'].includes(item.targetFormat)
-          ? VIDEO_PRESETS.find(preset => preset.id === item.videoQuality) : undefined;
+          ? item.videoQuality : undefined;
         conversionItems.push({
           inputFileId: uploadResp.id || uploadResp.fileId,
           inputFormat,
           outputFormat: item.targetFormat,
           imageQuality: detectMediaType(item.file.name) === 'image' ? item.imageQuality : undefined,
-          qualityPreset: videoPreset?.id,
-          targetResolution: videoPreset?.resolution,
-          videoBitrate: videoPreset?.videoBitrate,
-          audioBitrate: videoPreset ? parseInt(videoPreset.audioBitrate, 10) : undefined,
+          targetResolution: videoPreset && videoPreset !== 'source' ? videoPreset : undefined,
+          crf: videoPreset ? 20 : undefined,
+          videoBitrate: videoPreset ? ({ '144p': '200k', '240p': '400k', '360p': '800k', '480p': '1500k', '720p': '4000k', '1080p': '8000k', '1440p': '16000k', '2160p': '32000k', source: '8000k' } as Record<string, string>)[videoPreset] : undefined,
+          audioBitrate: videoPreset ? 256 : undefined,
         });
 
         const uploadProgress = Math.round(((i + 1) / queue.length) * 20);
@@ -420,11 +419,14 @@ export default function BatchConverterPage() {
                             </option>
                           ))}
                         </select>
-                        {type === 'video' && !['mp3', 'wav', 'aac', 'flac', 'ogg', 'm4a'].includes(item.targetFormat) && <select aria-label={`Video quality for ${item.file.name}`} value={item.videoQuality}
+                        {type === 'video' && !['mp3', 'wav', 'aac', 'flac', 'ogg', 'm4a'].includes(item.targetFormat) && <select aria-label={`Video resolution for ${item.file.name}`} value={item.videoQuality}
                           disabled={isProcessing || (item.status !== 'PENDING' && item.status !== 'FAILED')}
                           onChange={e => setQueue(prev => prev.map(q => q.id === item.id ? { ...q, videoQuality: e.target.value } : q))}
                           className="px-2 py-1 bg-surface-container-low dark:bg-slate-800 text-on-surface dark:text-slate-100 rounded-lg text-xs font-semibold">
-                          <option value="small">Low (480p)</option><option value="balanced">Medium (720p)</option><option value="high">High (1080p)</option>
+                          <option value="source">Original resolution</option>
+                          {[144, 240, 360, 480, 720, 1080, 1440, 2160].map(height => (
+                            <option key={height} value={`${height}p`}>{height === 2160 ? '4K (2160p)' : `${height}p`}</option>
+                          ))}
                         </select>}
                         {type === 'image' && <select aria-label={`Image quality for ${item.file.name}`} value={item.imageQuality}
                           disabled={isProcessing || (item.status !== 'PENDING' && item.status !== 'FAILED')}
