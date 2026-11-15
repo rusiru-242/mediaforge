@@ -26,6 +26,7 @@ app:
     base-path: ${STORAGE_LOCAL_PATH:./uploads}
     retention-hours: ${STORAGE_RETENTION_HOURS:24}
   downloader:
+    download-timeout-seconds: ${DOWNLOAD_TIMEOUT_SECONDS:3600}
     max-file-size-bytes: ${DOWNLOAD_MAX_FILE_SIZE:524288000}
     connect-timeout-ms: ${DOWNLOAD_CONNECT_TIMEOUT_MS:10000}
     read-timeout-ms: ${DOWNLOAD_READ_TIMEOUT_MS:30000}

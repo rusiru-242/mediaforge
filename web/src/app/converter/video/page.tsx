@@ -462,10 +462,6 @@ export default function VideoConverterPage() {
               {/* Floating Top Badges */}
               {previewUrl && (
                 <div className="absolute top-4 left-4 flex items-center gap-2 z-10 pointer-events-none">
-                  <span className="px-2.5 py-1 rounded-full bg-inverse-surface/80 backdrop-blur-md text-white font-mono text-[11px] flex items-center gap-1.5 shadow-sm">
-                    <span className="w-2 h-2 rounded-full bg-tertiary-fixed animate-ping" />
-                    <span>HW PREVIEW</span>
-                  </span>
                   <span className="px-2.5 py-1 rounded-full bg-surface-container-lowest/80 backdrop-blur-md text-on-surface dark:text-slate-100 font-semibold text-xs shadow-sm">
                     {cropAspectRatio} {activeTool === 'crop' ? 'Crop' : 'Aspect'}
                   </span>

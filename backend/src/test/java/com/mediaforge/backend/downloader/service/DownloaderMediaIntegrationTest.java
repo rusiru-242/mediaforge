@@ -45,6 +45,9 @@ class DownloaderMediaIntegrationTest {
         ReflectionTestUtils.setField(ffmpeg, "timeoutSeconds", 60);
         verifier = new DownloadOutputVerifier(new MediaProbeServiceImpl(mapper));
         extractor = new YtDlpProcessExecutor(mapper, ffmpeg, verifier);
+        // Loopback is permitted only for this owned fixture server; production keeps the real validator.
+        var fixtureValidator = mock(com.mediaforge.backend.validation.UrlSecurityValidator.class);
+        ReflectionTestUtils.setField(extractor, "urlValidator", fixtureValidator);
         assertThat(ffmpeg.isAvailable()).isTrue();
         assertThat(extractor.isAvailable()).isTrue();
         Path media = Files.createDirectories(root.resolve("fixture"));
@@ -84,7 +87,8 @@ class DownloaderMediaIntegrationTest {
         Map<UUID, MediaFile> saved = new ConcurrentHashMap<>();
         when(files.save(any())).thenAnswer(call -> { MediaFile file = call.getArgument(0); saved.put(file.getId(), file); return file; });
         when(files.findById(any())).thenAnswer(call -> Optional.ofNullable(saved.get(call.getArgument(0))));
-        var storage = new LocalStorageServiceImpl(root.resolve(UUID.randomUUID().toString()).toString(), 24, files);
+        Path storagePath = root.resolve(UUID.randomUUID().toString());
+        var storage = new LocalStorageServiceImpl(storagePath.toString(), 24, files);
         UUID id = UUID.randomUUID();
         MediaJob job = new MediaJob(id, null, JobType.DOWNLOAD, SourceType.URL, null, format);
         when(jobs.findById(id)).thenReturn(Optional.of(job));
@@ -99,6 +103,7 @@ class DownloaderMediaIntegrationTest {
             assertThat(worker.isJobActive(id)).as("job timeout").isFalse();
             assertThat(job.getStatus()).withFailMessage("Job failed: %s", job.getErrorMessage()).isEqualTo(JobStatus.COMPLETED);
             assertThat(job.getOutputFormat()).isEqualTo(format);
+            assertThat(Files.exists(storagePath.resolve("scratch").resolve(id.toString()))).isFalse();
             MediaFile file = storage.getMediaFile(job.getOutputFileId());
             var resource = storage.loadAsResource(file.getId());
             var probe = verifier.verify(resource.getFile().toPath(), format, !DownloadOutputVerifier.isAudio(format));
@@ -109,7 +114,7 @@ class DownloaderMediaIntegrationTest {
             var mvc = MockMvcBuilders.standaloneSetup(new FileController(mock(FileService.class), storage, conversions)).build();
             mvc.perform(get("/api/v1/files/{id}/download", file.getId()))
                     .andExpect(status().isOk()).andExpect(content().contentType(DownloadOutputVerifier.mimeType(format)))
-                    .andExpect(header().string("Content-Disposition", "attachment; filename=\"MediaForge_" + (DownloadOutputVerifier.isAudio(format) ? "Audio" : "Video") + "." + format + "\""))
+                    .andExpect(header().string("Content-Disposition", "attachment; filename=\"" + file.getOriginalFilename() + "\""))
                     .andExpect(content().bytes(Files.readAllBytes(resource.getFile().toPath())));
         } finally { worker.shutdown(); }
     }

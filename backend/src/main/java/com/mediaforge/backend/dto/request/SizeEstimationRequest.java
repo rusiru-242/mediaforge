@@ -5,6 +5,9 @@ import java.util.List;
 import java.util.UUID;
 
 public class SizeEstimationRequest {
+    private String estimationContext;
+    public String getEstimationContext() { return estimationContext; }
+    public void setEstimationContext(String value) { estimationContext = value; }
 
     private UUID inputFileId;
     private String mediaType; // "video", "audio", "image"

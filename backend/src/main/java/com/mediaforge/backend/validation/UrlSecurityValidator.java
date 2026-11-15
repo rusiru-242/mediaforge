@@ -65,6 +65,7 @@ public class UrlSecurityValidator {
         }
 
         String host = uri.getHost();
+        if (uri.getUserInfo() != null) throw new UrlSecurityException("Credentials in URLs are not supported.");
         if (host == null || host.trim().isEmpty()) {
             throw new UrlSecurityException("URL must contain a valid hostname");
         }
@@ -94,7 +95,7 @@ public class UrlSecurityValidator {
             throw new UrlSecurityException("Security manager rejected host resolution: " + ex.getMessage());
         }
 
-        return uri;
+        return com.mediaforge.backend.downloader.model.PlatformUrls.normalize(uri);
     }
 
     /**
@@ -183,6 +184,8 @@ public class UrlSecurityValidator {
      * Extracts platform identifier from a valid host (e.g., example.com -> example).
      */
     public String extractPlatform(URI uri) {
+        String platform = com.mediaforge.backend.downloader.model.PlatformUrls.platform(uri);
+        if (!"direct".equals(platform)) return platform;
         String host = uri.getHost();
         if (host == null) {
             return "unknown";

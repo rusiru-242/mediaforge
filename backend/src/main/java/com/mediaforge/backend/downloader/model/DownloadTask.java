@@ -15,6 +15,8 @@ public class DownloadTask {
     private Path outputPath;
     private ConversionOptions editOptions;
     private volatile boolean cancelled = false;
+    private volatile Runnable cancelAction;
+    public void setCancelAction(Runnable action) { cancelAction = action; if (cancelled) action.run(); }
 
     public DownloadTask() {
     }
@@ -97,5 +99,7 @@ public class DownloadTask {
 
     public void cancel() {
         this.cancelled = true;
+        Runnable action = cancelAction;
+        if (action != null) action.run();
     }
 }

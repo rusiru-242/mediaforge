@@ -85,7 +85,9 @@ public class MediaDownloadServiceImpl implements MediaDownloadService {
         this.eventRepository = eventRepository;
         this.ytDlpExecutor = ytDlpExecutor;
         this.mediaConversionService = mediaConversionService;
-        this.executorService = Executors.newFixedThreadPool(Math.max(2, poolSize));
+        int workers = Math.max(1, Math.min(16, poolSize));
+        this.executorService = new java.util.concurrent.ThreadPoolExecutor(workers, workers, 0, TimeUnit.SECONDS,
+                new java.util.concurrent.ArrayBlockingQueue<>(100), new java.util.concurrent.ThreadPoolExecutor.AbortPolicy());
     }
 
     @Override
@@ -105,9 +107,13 @@ public class MediaDownloadServiceImpl implements MediaDownloadService {
             jobRepository.save(job);
         });
 
-        executorService.submit(() -> executeDownload(task));
-        log.info("Submitted download job {} to executor pool for source: {} (hasEditOptions: {})",
-                jobId, sourceUri, editOptions != null);
+        try { executorService.submit(() -> executeDownload(task)); }
+        catch (java.util.concurrent.RejectedExecutionException ex) {
+            activeTasks.remove(jobId);
+            storageService.cleanupScratch(jobId);
+            handleFailure(jobId, new IOException("Download queue is full. Please try again later."));
+        }
+        log.info("Submitted download job {} for host {} (hasEditOptions: {})", jobId, sourceUri.getHost(), editOptions != null);
     }
 
     private void executeDownload(DownloadTask task) {
@@ -253,8 +259,8 @@ public class MediaDownloadServiceImpl implements MediaDownloadService {
                 handleFailure(jobId, ex);
             }
         } finally {
-            activeTasks.remove(jobId);
-            storageService.cleanupScratch(jobId);
+            try { storageService.cleanupScratch(jobId); }
+            finally { activeTasks.remove(jobId); }
         }
     }
 
@@ -262,7 +268,7 @@ public class MediaDownloadServiceImpl implements MediaDownloadService {
         try {
             jobRepository.findById(jobId).ifPresent(job -> {
                 if (job.getStatus() == JobStatus.PROCESSING && job.getProgress() != percent) {
-                    job.setProgress(percent);
+                    job.setProgress(Math.max(job.getProgress(), Math.min(99, percent)));
                     jobRepository.save(job);
                 }
             });
@@ -297,15 +303,16 @@ public class MediaDownloadServiceImpl implements MediaDownloadService {
     }
 
     private void handleFailure(UUID jobId, Exception ex) {
-        log.error("Download job failed: {}", jobId, ex);
+        String safeMessage = ExtractorErrors.redact(ex.getMessage());
+        log.error("Download job {} failed ({}): {}", jobId, ex.getClass().getSimpleName(), safeMessage);
         jobRepository.findById(jobId).ifPresent(job -> {
             job.setStatus(JobStatus.FAILED);
-            job.setErrorMessage(ex.getMessage() != null ? ex.getMessage() : "Unknown download failure");
+            job.setErrorMessage(safeMessage);
             job.setCompletedAt(OffsetDateTime.now());
             jobRepository.save(job);
 
             eventRepository.save(new JobEvent(UUID.randomUUID(), job,
-                    "DOWNLOAD_FAILED", "Media download failed: " + ex.getMessage()));
+                    "DOWNLOAD_FAILED", "Media download failed: " + safeMessage));
         });
     }
 

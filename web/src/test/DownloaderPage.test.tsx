@@ -19,10 +19,87 @@ vi.mock('@/services/apiClient', () => ({
     getJobById: vi.fn(),
     cancelJob: vi.fn(),
     getDownloadUrl: vi.fn((id: string) => `http://localhost:8081/api/v1/files/${id}/download`),
+    getFileMetadata: vi.fn(),
   },
 }));
 
 describe('Online Downloader Page Redesign', () => {
+  it('shows a bitrate estimate and verified actual size, and discards output for a changed URL', async () => {
+    vi.mocked(apiClient.getMediaMetadata).mockResolvedValueOnce({ success: true, url:'https://example.com/owned.mp4', title:'Owned',
+      mediaType:'VIDEO',duration:10,availableFormats:[],availableQualities:['720p'],directDownloadSupported:true } as any);
+    vi.mocked(apiClient.estimateOutputSize).mockResolvedValue({estimatedBytes:244800,minBytes:220320,maxBytes:269280,
+      formattedRange:'215.2 KB – 263.0 KB', estimationMethod:'BITRATE_DURATION'} as any);
+    vi.mocked(apiClient.createDownloadJob).mockResolvedValueOnce({id:'done',status:'COMPLETED',outputFileId:'verified'} as any);
+    vi.mocked(apiClient.getFileMetadata).mockResolvedValueOnce({fileSize:2048} as any);
+    render(<DownloaderPage />);
+    fireEvent.change(screen.getByRole('textbox'),{target:{value:'https://example.com/owned.mp4'}});
+    fireEvent.click(screen.getByRole('button',{name:'Analyze'}));await screen.findByText('Owned');
+    fireEvent.click(screen.getByRole('button',{name:/MP3/i}));
+    await screen.findByText('215.2 KB – 263.0 KB');
+    fireEvent.click(screen.getByRole('button',{name:'Download Audio'}));
+    await screen.findByText('Actual file size: 2.0 KB');
+    fireEvent.change(screen.getByRole('textbox'),{target:{value:'https://example.com/other.mp4'}});
+    expect(screen.queryByRole('link',{name:/Save to Disk/})).toBeNull();expect(screen.queryByText('Owned')).toBeNull();
+  });
+  it('shows failed extraction as an error without invented preview or format choices', async () => {
+    vi.mocked(apiClient.getMediaMetadata).mockResolvedValueOnce({ title: 'TikTok Stream', mediaType: 'VIDEO',
+      directDownloadSupported: false, availableFormats: [], availableQualities: [], message: 'TikTok did not return usable media details.' } as any);
+    render(<DownloaderPage />);
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'https://www.tiktok.com/@owner/video/123' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Analyze' }));
+    await screen.findByText('TikTok did not return usable media details.');
+    expect(screen.queryByText('TikTok Stream')).toBeNull();
+    expect(screen.queryByRole('button', { name: /MP4/ })).toBeNull();
+  });
+  it.each(['PENDING', 'QUEUED', 'PROCESSING'] as const)('locks format and resolution while a download is %s', async status => {
+    vi.mocked(apiClient.getMediaMetadata).mockResolvedValueOnce({ success: true, url: 'https://example.com/clip.mp4',
+      title: 'Busy clip', mediaType: 'VIDEO', availableFormats: [], availableQualities: ['1080p', '720p'], directDownloadSupported: true } as any);
+    vi.mocked(apiClient.createDownloadJob).mockResolvedValueOnce({ id: 'busy', status } as any);
+    render(<DownloaderPage />);
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'https://example.com/clip.mp4' } });
+    fireEvent.click(screen.getByText('Analyze'));
+    await screen.findByText('Busy clip');
+    fireEvent.click(screen.getByRole('button', { name: 'Download Video' }));
+    await screen.findByRole('button', { name: /Cancel/ });
+    expect((screen.getByRole('textbox') as HTMLInputElement).disabled).toBe(true);
+    expect((screen.getByTitle('Paste from clipboard') as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Analyze' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByTitle('Clear input') as HTMLButtonElement).disabled).toBe(true);
+    for (const name of [/MP4/i, /MP3/i, /WEBM/i, /720p/i]) {
+      expect((screen.getByRole('button', { name }) as HTMLButtonElement).disabled).toBe(true);
+    }
+  });
+  it('locks URL editing, clipboard paste and repeated analysis while probing', async () => {
+    vi.mocked(apiClient.getMediaMetadata).mockReturnValueOnce(new Promise(() => {}));
+    render(<DownloaderPage />);
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'https://example.com/clip.mp4' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Analyze' }));
+    expect((screen.getByRole('textbox') as HTMLInputElement).disabled).toBe(true);
+    expect((screen.getByTitle('Paste from clipboard') as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Analyzing...' }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'https://example.com/other.mp4' } });
+    expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe('https://example.com/clip.mp4');
+    expect(apiClient.getMediaMetadata).toHaveBeenCalledTimes(1);
+  });
+  it('replaces a completed save link with a new download action when format or bitrate changes', async () => {
+    vi.mocked(apiClient.getMediaMetadata).mockResolvedValueOnce({ success: true, url: 'https://example.com/clip.mp4',
+      title: 'Clip', mediaType: 'VIDEO', availableFormats: [], availableQualities: ['720p'], directDownloadSupported: true } as any);
+    vi.mocked(apiClient.createDownloadJob).mockResolvedValue({ id: 'done', outputFileId: 'output', status: 'COMPLETED' } as any);
+    render(<DownloaderPage />);
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'https://example.com/clip.mp4' } });
+    fireEvent.click(screen.getByText('Analyze'));
+    await screen.findByText('Clip');
+    fireEvent.click(screen.getByRole('button', { name: 'Download Video' }));
+    await screen.findByRole('link', { name: /Save to Disk/ });
+    fireEvent.click(screen.getByRole('button', { name: /MP3/i }));
+    expect(screen.queryByRole('link', { name: /Save to Disk/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Download Audio' }));
+    const save = await screen.findByRole('link', { name: /Save to Disk/ });
+    save.addEventListener('click', e => e.preventDefault()); fireEvent.click(save);
+    fireEvent.click(screen.getByRole('button', { name: /192 kbps/ }));
+    expect(screen.queryByRole('link', { name: /Save to Disk/ })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Download Audio' })).toBeDefined();
+  });
   it('locks platform tabs to the URL, detects replacement links, and unlocks when cleared', () => {
     render(<DownloaderPage />);
     const input = screen.getByRole('textbox');
@@ -90,9 +167,9 @@ describe('Online Downloader Page Redesign', () => {
     expect(screen.getByText('YouTube')).toBeDefined();
     expect(screen.getByText('Facebook')).toBeDefined();
     expect(screen.getByText('Instagram')).toBeDefined();
-    expect(screen.getByText('TikTok')).toBeDefined();
-    expect(screen.getByText('X / Twitter')).toBeDefined();
-    expect(screen.getByText('Direct Media URL')).toBeDefined();
+    expect(screen.queryByRole('button', { name: 'TikTok' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'X / Twitter' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Direct Media URL' })).toBeNull();
 
     expect(screen.getByPlaceholderText('Paste YouTube video or Shorts link...')).toBeDefined();
     expect(screen.getByText('Analyze')).toBeDefined();
@@ -105,13 +182,8 @@ describe('Online Downloader Page Redesign', () => {
     fireEvent.click(instagramTab);
     expect(screen.getByPlaceholderText('Paste Instagram reel or video post link...')).toBeDefined();
 
-    const tiktokTab = screen.getByText('TikTok');
-    fireEvent.click(tiktokTab);
-    expect(screen.getByPlaceholderText('Paste TikTok video link...')).toBeDefined();
-
-    const directTab = screen.getByText('Direct Media URL');
-    fireEvent.click(directTab);
-    expect(screen.getByPlaceholderText('Paste direct .mp4, .webm, .m3u8, or audio link...')).toBeDefined();
+    fireEvent.click(screen.getByRole('button', { name: 'Facebook' }));
+    expect(screen.getByPlaceholderText('Paste Facebook video or reel link...')).toBeDefined();
   });
 
   it('analyzes media URL and displays preview, format options, and download button', async () => {

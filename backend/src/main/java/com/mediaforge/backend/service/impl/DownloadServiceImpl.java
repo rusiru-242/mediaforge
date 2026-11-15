@@ -87,10 +87,10 @@ public class DownloadServiceImpl implements DownloadService {
         }
 
         if (formats.isEmpty()) {
-            formats = List.of("mp4", "webm", "mkv", "mp3");
+            formats = Collections.emptyList();
         }
         if (qualities.isEmpty()) {
-            qualities = List.of("source");
+            qualities = Collections.emptyList();
         }
 
         return new DownloadValidateResponse(
@@ -143,7 +143,7 @@ public class DownloadServiceImpl implements DownloadService {
                     ))
                     .toList();
 
-            boolean directSupported = formatDtos.stream().anyMatch(MediaFormatOptionDto::isNativeStream);
+            boolean directSupported = !formatDtos.isEmpty();
 
             String responseMsg;
             if (directSupported) {
@@ -157,7 +157,7 @@ public class DownloadServiceImpl implements DownloadService {
             }
 
             return new MediaMetadataResponse(
-                    true,
+                    directSupported,
                     validatedUri.toString(),
                     platform,
                     meta.getTitle(),
@@ -174,7 +174,7 @@ public class DownloadServiceImpl implements DownloadService {
                     responseMsg
             );
         } catch (IOException e) {
-            log.warn("Failed to extract metadata for URL {}: {}", request.getUrl(), e.getMessage());
+            log.warn("Failed to extract metadata for URL {}: {}", validatedUri.getHost(), e.getClass().getSimpleName());
             return new MediaMetadataResponse(
                     false,
                     validatedUri.toString(),

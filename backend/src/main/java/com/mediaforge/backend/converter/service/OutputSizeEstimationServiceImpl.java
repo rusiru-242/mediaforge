@@ -73,6 +73,18 @@ public class OutputSizeEstimationServiceImpl implements OutputSizeEstimationServ
 
         String format = request.getOutputFormat() != null ? request.getOutputFormat().toLowerCase(Locale.ROOT).replace(".", "") : "mp4";
         String mediaType = resolveMediaType(format, request.getMediaType());
+        if ("download".equals(request.getEstimationContext())) {
+            if (request.getSourceDuration() == null || !Double.isFinite(request.getSourceDuration()) || request.getSourceDuration() <= 0) {
+                return unavailable("Source duration is unknown.");
+            }
+            // Downloads may copy streams or use constant-quality encoding. Resolution alone is not a bitrate.
+            if ("video".equals(mediaType) && (request.getVideoBitrate() == null || request.getCrf() != null)) {
+                return unavailable("The output uses source streams or constant-quality encoding; size is known after processing.");
+            }
+            if ("audio".equals(mediaType) && (!"mp3".equals(format) || request.getAudioBitrate() == null)) {
+                return unavailable("Source audio bitrate/sample layout is not known before download.");
+            }
+        }
 
         switch (mediaType) {
             case "video":
@@ -94,6 +106,10 @@ public class OutputSizeEstimationServiceImpl implements OutputSizeEstimationServ
         if (AUDIO_FORMATS.contains(format)) return "audio";
         if (IMAGE_FORMATS.contains(format)) return "image";
         return "video";
+    }
+
+    private SizeEstimationResponse unavailable(String reason) {
+        return new SizeEstimationResponse(0L, 0L, 0L, "Unavailable before processing", "", 0.0, "UNAVAILABLE", reason);
     }
 
     private SizeEstimationResponse estimateVideoSize(SizeEstimationRequest request, String format) {

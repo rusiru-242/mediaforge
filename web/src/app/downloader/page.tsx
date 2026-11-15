@@ -21,6 +21,7 @@ import {
   Film,
   Volume2,
 } from 'lucide-react';
+import { detectDownloadPlatform } from '@/utils/platformUrl';
 import { useNavigationGuard } from '@/hooks/useNavigationGuard';
 import { apiClient } from '@/services/apiClient';
 import { MediaMetadataResponse, JobResponse, SizeEstimationResponse } from '@/types/api';
@@ -111,10 +112,10 @@ const AUDIO_BITRATES = [
 ];
 
 function videoQualities(data: MediaMetadataResponse): string[] {
-  const qualities = (data.availableQualities || []).filter(q => /^\d{2,4}p\b/i.test(q) && !/^(180|90|45|27)p\b/.test(q));
+  const qualities = (data.availableQualities || []).filter(q => /^\d{2,4}p\b/i.test(q) && !/^(180|144|90|45|27)p\b/.test(q));
   if (qualities.length) return qualities;
   const resolution = data.resolution?.match(/^(?:\d+x)?(\d{2,4})(?:p)?$/i);
-  return resolution ? [resolution[1] + 'p'] : ['source'];
+  return resolution && !['180', '144', '90', '45', '27'].includes(resolution[1]) ? [resolution[1] + 'p'] : ['source'];
 }
 
 function formatDuration(seconds?: number): string {
@@ -130,6 +131,8 @@ function formatDuration(seconds?: number): string {
 
 function formatBytes(bytes?: number): string {
   if (!bytes || bytes <= 0) return '';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   const mb = bytes / (1024 * 1024);
   if (mb >= 1000) {
     return `${(mb / 1024).toFixed(2)} GB`;
@@ -137,15 +140,7 @@ function formatBytes(bytes?: number): string {
   return `${mb.toFixed(1)} MB`;
 }
 
-function detectPlatformFromUrl(inputUrl: string, fallbackPlatform = 'direct'): string {
-  if (!inputUrl) return fallbackPlatform;
-  for (const p of PLATFORMS) {
-    if (p.id !== 'direct' && p.regex.test(inputUrl)) {
-      return p.id;
-    }
-  }
-  return 'direct';
-}
+const detectPlatformFromUrl = detectDownloadPlatform;
 
 function DownloaderContent() {
   const searchParams = useSearchParams();
@@ -171,6 +166,24 @@ function DownloaderContent() {
   // Job Submission and Polling
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeJob, setActiveJob] = useState<JobResponse | null>(null);
+  const [actualOutputBytes, setActualOutputBytes] = useState<number | null>(null);
+  useEffect(() => {
+    let current = true;
+    setActualOutputBytes(null);
+    if (activeJob?.status === 'COMPLETED' && activeJob.outputFileId) {
+      void (async () => {
+        try {
+          const file = await apiClient.getFileMetadata(activeJob.outputFileId!);
+          if (current && file.fileSize && file.fileSize > 0) setActualOutputBytes(file.fileSize);
+        } catch { /* Never fabricate the actual output size if inspection is unavailable. */ }
+      })();
+    }
+    return () => { current = false; };
+  }, [activeJob?.status, activeJob?.outputFileId]);
+  const isJobRunning = Boolean(activeJob && ['PENDING', 'QUEUED', 'PROCESSING'].includes(activeJob.status));
+  const inputLocked = isProbing || isSubmitting || isJobRunning;
+  const inputLockedRef = useRef(inputLocked);
+  inputLockedRef.current = inputLocked;
   const [jobError, setJobError] = useState<string | null>(null);
   const [isCancelling, setIsCancelling] = useState(false);
   const [draftReady, setDraftReady] = useState(false);
@@ -216,8 +229,10 @@ function DownloaderContent() {
     selectedAudioBitrate]);
 
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
+  const pollingGeneration = useRef(0);
 
   const stopPolling = useCallback(() => {
+    pollingGeneration.current++;
     if (pollingRef.current) {
       clearInterval(pollingRef.current);
       pollingRef.current = null;
@@ -229,6 +244,10 @@ function DownloaderContent() {
   }, [stopPolling]);
 
   const handleUrlChange = (value: string) => {
+    if (inputLockedRef.current) return;
+    if (value !== url) {
+      stopPolling(); setMetadata(null); setActiveJob(null); setJobError(null); setSizeEstimate(null);
+    }
     setUrl(value);
     setProbeError(null);
     if (value.trim()) {
@@ -240,6 +259,7 @@ function DownloaderContent() {
   };
 
   const handleClear = () => {
+    if (inputLockedRef.current) return;
     stopPolling();
     setUrl('');
     setMetadata(null);
@@ -270,6 +290,7 @@ function DownloaderContent() {
 
   const triggerProbe = useCallback(
     async (targetUrl: string) => {
+      if (inputLockedRef.current) return;
       if (!validateUrl(targetUrl)) return;
 
       setIsProbing(true);
@@ -281,6 +302,9 @@ function DownloaderContent() {
 
       try {
         const data = await apiClient.getMediaMetadata({ url: targetUrl.trim() });
+        if (!data.directDownloadSupported && !(data.availableFormats || []).length) {
+          throw new Error(data.message || 'This platform did not provide downloadable media. Try another public link or import a local file into an editor.');
+        }
         setMetadata(data);
 
         // A source container (often M4A) is not the requested video output.
@@ -300,9 +324,10 @@ function DownloaderContent() {
   );
 
   const handlePaste = async () => {
+    if (inputLockedRef.current) return;
     try {
       const text = await navigator.clipboard.readText();
-      if (text) {
+      if (text && !inputLockedRef.current) {
         handleUrlChange(text);
         triggerProbe(text);
       }
@@ -334,38 +359,43 @@ function DownloaderContent() {
       return;
     }
 
+    let current = true;
+    setSizeEstimate(null);
     const timer = setTimeout(async () => {
       try {
         setIsEstimating(true);
         const isAudioDownload = ['mp3', 'm4a', 'wav'].includes(selectedFormat.toLowerCase());
 
         const est = await apiClient.estimateOutputSize({
+          estimationContext: 'download',
           mediaType: isAudioDownload ? 'audio' : 'video',
           outputFormat: selectedFormat,
           targetResolution: isAudioDownload || selectedQuality === 'source' ? undefined : selectedQuality.match(/^\d+p/i)?.[0],
           audioBitrate: selectedFormat === 'mp3' ? parseInt(selectedAudioBitrate, 10) : undefined,
-          sourceDuration: metadata.duration || 60,
+          sourceDuration: metadata.duration || undefined,
           sourceFileSize: metadata.fileSize,
 
         });
-        setSizeEstimate(est);
+        if (current) setSizeEstimate(est);
       } catch {
-        setSizeEstimate(null);
+        if (current) setSizeEstimate(null);
       } finally {
-        setIsEstimating(false);
+        if (current) setIsEstimating(false);
       }
     }, 250);
 
-    return () => clearTimeout(timer);
+    return () => { current = false; clearTimeout(timer); };
   }, [metadata, selectedFormat, selectedQuality, selectedAudioBitrate]);
 
   // Start polling background download job
   const startJobPolling = useCallback(
     (jobId: string) => {
       stopPolling();
+      const generation = pollingGeneration.current;
       pollingRef.current = setInterval(async () => {
         try {
           const updated = await apiClient.getJobById(jobId);
+          if (generation !== pollingGeneration.current) return;
           setActiveJob(updated);
 
           if (updated.status === 'COMPLETED' || updated.status === 'FAILED' || updated.status === 'CANCELLED') {
@@ -450,9 +480,15 @@ function DownloaderContent() {
   }, [url]);
   const effectivePlatform = detectedPlatform || selectedPlatform;
   const currentPlatform = PLATFORMS.find((p) => p.id === effectivePlatform) || PLATFORMS[0];
-  const isJobRunning = Boolean(activeJob && (activeJob.status === 'QUEUED' || activeJob.status === 'PROCESSING'));
   useNavigationGuard(isProbing || isSubmitting || isJobRunning);
   const isJobCompleted = Boolean(activeJob && activeJob.status === 'COMPLETED');
+  const changeDownloadSelection = (change: () => void, changed: boolean) => {
+    if (!changed || isSubmitting || isJobRunning) return;
+    stopPolling();
+    setActiveJob(null);
+    setJobError(null);
+    change();
+  };
   const isAudioDownload = ['mp3', 'm4a', 'wav'].includes(selectedFormat.toLowerCase());
 
   const videoFormats = metadata?.mediaType.toUpperCase() === 'AUDIO' ? [] : ['mp4', 'webm', 'avi', 'mkv', 'mov', 'flv'];
@@ -465,22 +501,20 @@ function DownloaderContent() {
     if (isEstimating) return 'Calculating...';
     if (!metadata || !metadata.directDownloadSupported) return 'File size unavailable';
     if (sizeEstimate) {
+      if (sizeEstimate.formattedRange && sizeEstimate.estimationMethod !== 'UNAVAILABLE') return sizeEstimate.formattedRange;
       if (sizeEstimate.formattedEstimate) return sizeEstimate.formattedEstimate;
       if (sizeEstimate.formattedEstimatedSize) return sizeEstimate.formattedEstimatedSize;
       if (sizeEstimate.estimatedBytes > 0) return `~${(sizeEstimate.estimatedBytes / (1024 * 1024)).toFixed(1)} MB`;
-    }
-    if (metadata.fileSize && metadata.fileSize > 0) {
-      return `~${(metadata.fileSize / (1024 * 1024)).toFixed(1)} MB`;
     }
     return 'File size unavailable';
   }, [isEstimating, sizeEstimate, metadata]);
 
   return (
-    <div data-platform={currentPlatform.id} className="downloader-page flex flex-col w-full min-h-[calc(100vh-80px)] bg-slate-50 dark:bg-[#0B0E14] text-slate-900 dark:text-slate-100 pt-16 sm:pt-20 pb-8 px-4 sm:px-6 lg:px-8 transition-colors">
+    <div data-platform={currentPlatform.id} className="downloader-page flex flex-col w-full min-h-screen bg-slate-50 dark:bg-[#0B0E14] text-slate-900 dark:text-slate-100 pt-28 sm:pt-32 pb-10 px-4 sm:px-6 lg:px-8 transition-colors">
       <div className="w-full max-w-4xl mx-auto flex flex-col gap-6">
         {/* 1. Header */}
         <div className="text-center space-y-2">
-          <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+          <h1 className="text-[26px] leading-tight sm:text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white">
             Online Media Downloader
           </h1>
           <p className="text-sm sm:text-base text-slate-600 dark:text-slate-300 max-w-2xl mx-auto">
@@ -490,8 +524,8 @@ function DownloaderContent() {
 
         {/* 2. Platform Selector Tabs */}
         <div className="w-full flex items-center justify-center">
-          <div className="flex items-center gap-1.5 p-1.5 bg-white dark:bg-[#111622] rounded-full border border-slate-200 dark:border-slate-800 shadow-xs overflow-x-auto max-w-full">
-            {PLATFORMS.map((platform) => {
+          <div className="grid grid-cols-3 sm:flex w-full sm:w-auto items-center gap-1 sm:gap-1.5 p-1.5 bg-white dark:bg-[#111622] rounded-full border border-slate-200 dark:border-slate-800 shadow-xs max-w-full">
+            {PLATFORMS.filter(platform => ['youtube', 'facebook', 'instagram'].includes(platform.id)).map((platform) => {
               const Icon = platform.icon;
               const isActive = effectivePlatform === platform.id;
               return (
@@ -506,7 +540,7 @@ function DownloaderContent() {
                     setSelectedPlatform(platform.id);
                     setProbeError(null);
                   }}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                  className={`flex items-center justify-center min-w-0 gap-1.5 sm:gap-2 px-2 sm:px-4 py-2.5 sm:py-2 rounded-full text-[11px] sm:text-xs font-semibold whitespace-nowrap transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
                     isActive
                       ? 'bg-[rgb(var(--download-accent))] text-white shadow-xs'
                       : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/80'
@@ -521,34 +555,38 @@ function DownloaderContent() {
         </div>
 
         {/* 3. Main Action Card: URL Input + Analyze */}
-        <div className="w-full bg-white dark:bg-[#111622] rounded-3xl p-6 sm:p-8 border border-slate-200/90 dark:border-slate-800 shadow-sm flex flex-col gap-6">
+        <div className="w-full min-w-0 bg-white dark:bg-[#111622] rounded-3xl p-4 sm:p-8 border border-slate-200/90 dark:border-slate-800 shadow-sm flex flex-col gap-6">
           {/* Centered Large URL Input */}
           <div className="flex flex-col gap-2">
-            <div className="relative flex items-center">
+            <div className="flex flex-col gap-2 sm:relative sm:block">
               <input
                 type="text"
+                disabled={inputLocked}
                 value={url}
                 onChange={(e) => handleUrlChange(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && triggerProbe(url)}
                 placeholder={currentPlatform.placeholder}
-                className="w-full h-14 pl-5 pr-36 sm:pr-48 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-sm font-medium placeholder-slate-400 focus:outline-none focus:border-[rgb(var(--download-accent))] focus:ring-2 focus:ring-[rgb(var(--download-accent)/0.2)] transition-all"
+                className="w-full min-w-0 h-12 sm:h-14 px-4 sm:pl-5 sm:pr-64 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-white text-sm font-medium placeholder-slate-400 focus:outline-none focus:border-[rgb(var(--download-accent))] focus:ring-2 focus:ring-[rgb(var(--download-accent)/0.2)] transition-all"
               />
-              <div className="absolute right-2 flex items-center gap-1.5">
+              <div className="flex w-full items-center justify-end gap-2 sm:absolute sm:right-2 sm:top-2 sm:w-auto sm:gap-1.5">
                 {url && (
                   <button
                     type="button"
                     onClick={handleClear}
+                    disabled={inputLocked}
                     title="Clear input"
-                    className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
+                    className="flex items-center gap-1 px-2 py-2 rounded-xl text-slate-600 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800 text-xs font-semibold transition-colors"
                   >
                     <X className="w-4 h-4" />
+                    <span>Clear</span>
                   </button>
                 )}
                 <button
                   type="button"
                   onClick={handlePaste}
+                  disabled={inputLocked}
                   title="Paste from clipboard"
-                  className="hidden sm:flex items-center gap-1 px-3 py-2 rounded-xl bg-slate-200/80 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold transition-colors"
+                  className="flex items-center gap-1 px-3 py-2 rounded-xl bg-slate-200/80 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold transition-colors"
                 >
                   <Clipboard className="w-3.5 h-3.5" />
                   <span>Paste</span>
@@ -556,7 +594,7 @@ function DownloaderContent() {
                 <button
                   type="button"
                   onClick={() => triggerProbe(url)}
-                  disabled={isProbing || !url.trim()}
+                  disabled={inputLocked || !url.trim()}
                   className="h-10 px-4 sm:px-5 rounded-xl bg-[rgb(var(--download-accent))] hover:bg-[rgb(var(--download-hover))] text-white font-semibold text-xs sm:text-sm flex items-center gap-1.5 shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isProbing && <RefreshCw className="w-4 h-4 animate-spin" />}
@@ -664,7 +702,8 @@ function DownloaderContent() {
                         <button
                           key={fmt}
                           type="button"
-                          onClick={() => setSelectedFormat(fmt)}
+                          disabled={isSubmitting || isJobRunning}
+                          onClick={() => changeDownloadSelection(() => setSelectedFormat(fmt), selectedFormat !== fmt)}
                           className={`py-3 px-3 rounded-xl text-center flex flex-col items-center justify-center gap-1 border transition-all ${
                             isFmtActive
                               ? 'bg-[rgb(var(--download-accent))] text-white border-[rgb(var(--download-accent))] shadow-xs'
@@ -690,7 +729,8 @@ function DownloaderContent() {
                   <div className="grid grid-cols-2 gap-2" aria-label="Audio formats">
                     {audioFormats.map((fmt) => (
                       <button key={fmt} type="button" aria-pressed={selectedFormat === fmt}
-                        onClick={() => setSelectedFormat(fmt)}
+                        disabled={isSubmitting || isJobRunning}
+                        onClick={() => changeDownloadSelection(() => setSelectedFormat(fmt), selectedFormat !== fmt)}
                         className={`flex items-center justify-center gap-2 rounded-xl border px-3 py-3 text-xs font-bold uppercase transition-colors ${selectedFormat === fmt
                           ? 'bg-[rgb(var(--download-accent))] border-[rgb(var(--download-accent))] text-white'
                           : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-700'}`}>
@@ -725,7 +765,8 @@ function DownloaderContent() {
                           <button
                             key={item.value}
                             type="button"
-                            onClick={() => setSelectedAudioBitrate(item.value)}
+                            disabled={isSubmitting || isJobRunning}
+                            onClick={() => changeDownloadSelection(() => setSelectedAudioBitrate(item.value), selectedAudioBitrate !== item.value)}
                             className={`p-2.5 rounded-xl text-left border transition-all ${
                               isBitrateActive
                                 ? 'bg-[rgb(var(--download-accent))] text-white border-[rgb(var(--download-accent))] shadow-xs'
@@ -749,14 +790,12 @@ function DownloaderContent() {
                     <div className="grid grid-cols-3 gap-2">
                       {availableResolutions.map((qual) => {
                         const isQualActive = selectedQuality === qual;
-                        const isNative =
-                          metadata.resolution &&
-                          (qual === metadata.resolution || qual.includes(metadata.resolution.replace('p', '')));
                         return (
                           <button
                             key={qual}
                             type="button"
-                            onClick={() => setSelectedQuality(qual)}
+                            disabled={isSubmitting || isJobRunning}
+                            onClick={() => changeDownloadSelection(() => setSelectedQuality(qual), selectedQuality !== qual)}
                             className={`p-2.5 rounded-xl text-left border transition-all ${
                               isQualActive
                                 ? 'bg-[rgb(var(--download-accent))] text-white border-[rgb(var(--download-accent))] shadow-xs'
@@ -769,7 +808,7 @@ function DownloaderContent() {
                                 isQualActive ? 'text-white/80' : 'text-slate-400 dark:text-slate-300'
                               }`}
                             >
-                              {isNative ? 'Original' : 'Transcoded'}
+                              Source resolution
                             </span>
                           </button>
                         );
@@ -781,6 +820,9 @@ function DownloaderContent() {
 
               {/* 6. Output Size Estimation (Directly under format and resolution) */}
               <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-t border-slate-200 dark:border-slate-800 text-xs">
+                <div className="text-slate-600 dark:text-slate-300" title={sizeEstimate?.disclaimer}>
+                  Estimated output size: <span className="font-semibold">{formattedEstimate}</span>
+                </div>
 
                 <div className="text-slate-500 dark:text-slate-300 text-[11px]">
                   Format: <span className="font-semibold uppercase">{selectedFormat}</span> · Quality:{' '}
@@ -821,13 +863,13 @@ function DownloaderContent() {
                       {activeJob?.status === 'QUEUED' ? 'Queued in buffer...' : 'Downloading and packaging media...'}
                     </span>
                     <span className="font-mono text-[rgb(var(--download-text))] dark:text-[rgb(var(--download-light))]">
-                      {activeJob?.progress ?? activeJob?.progressPercentage ?? 10}%
+                      {activeJob?.progress ?? activeJob?.progressPercentage ?? 0}%
                     </span>
                   </div>
                   <div className="w-full bg-slate-200 dark:bg-slate-800 h-2.5 rounded-full overflow-hidden">
                     <div
                       className="bg-[rgb(var(--download-accent))] h-full rounded-full transition-all duration-300"
-                      style={{ width: `${activeJob ? activeJob.progress ?? activeJob.progressPercentage ?? 15 : 15}%` }}
+                      style={{ width: `${activeJob ? activeJob.progress ?? activeJob.progressPercentage ?? 0 : 0}%` }}
                     />
                   </div>
                   <div className="flex justify-end pt-1">
@@ -846,6 +888,7 @@ function DownloaderContent() {
               {/* Completed Success State */}
               {isJobCompleted && activeJob && (
                 <div className="p-5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/60 space-y-4">
+                  {actualOutputBytes !== null && <p className="text-xs font-semibold text-emerald-800 dark:text-emerald-200">Actual file size: {formatBytes(actualOutputBytes)}</p>}
                   <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300 text-sm font-bold">
                     <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
                     <span>Download Ready!</span>

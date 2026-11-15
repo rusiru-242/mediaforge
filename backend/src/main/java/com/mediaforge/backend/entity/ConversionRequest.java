@@ -10,6 +10,12 @@ import java.util.UUID;
  * In-memory representation of media conversion request parameters and advanced editing options.
  */
 public class ConversionRequest {
+    private Double saturation;
+    private Double warmth;
+    public Double getSaturation() { return saturation; }
+    public void setSaturation(Double value) { saturation = value; }
+    public Double getWarmth() { return warmth; }
+    public void setWarmth(Double value) { warmth = value; }
 
     private UUID id;
     private MediaJob job;

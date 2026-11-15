@@ -40,7 +40,7 @@ public class FFmpegProcessExecutor {
 
         // 1. Configured path directly
         if (checkExecutable(configuredFfmpegPath)) {
-            resolvedFfmpegExecutable = configuredFfmpegPath;
+            resolvedFfmpegExecutable = resolveExecutablePath(configuredFfmpegPath);
             return resolvedFfmpegExecutable;
         }
 
@@ -49,22 +49,50 @@ public class FFmpegProcessExecutor {
         if (userHome != null) {
             Path wingetPath = Paths.get(userHome, "AppData", "Local", "Microsoft", "WinGet", "Links", "ffmpeg.exe");
             if (Files.exists(wingetPath) && Files.isExecutable(wingetPath)) {
-                resolvedFfmpegExecutable = wingetPath.toString();
+                resolvedFfmpegExecutable = resolveExecutablePath(wingetPath.toString());
                 return resolvedFfmpegExecutable;
             }
         }
 
         // 3. Fallback
-        resolvedFfmpegExecutable = "ffmpeg";
+        resolvedFfmpegExecutable = resolveExecutablePath("ffmpeg");
         return resolvedFfmpegExecutable;
+    }
+
+    // yt-dlp requires a filesystem location, rather than a command name on PATH.
+    // Resolve WinGet symlinks so it also discovers the real sibling ffprobe binary.
+    private String resolveExecutablePath(String command) {
+        try {
+            Path direct = Paths.get(command);
+            if (Files.isRegularFile(direct)) return direct.toRealPath().toString();
+            String searchPath = System.getenv("PATH");
+            if (searchPath != null && direct.getParent() == null) {
+                for (String directory : searchPath.split(java.util.regex.Pattern.quote(java.io.File.pathSeparator))) {
+                    for (String name : List.of(command, command + ".exe")) {
+                        Path candidate = Paths.get(directory.replace("\"", ""), name);
+                        if (Files.isRegularFile(candidate)) return candidate.toRealPath().toString();
+                    }
+                }
+            }
+        } catch (java.io.IOException | java.nio.file.InvalidPathException ignored) {
+            // Keep the original command so execution reports the installation error.
+        }
+        return command;
+    }
+
+    public String getFfmpegLocation() {
+        Path executable = Paths.get(getFfmpegExecutable());
+        return executable.isAbsolute() ? executable.getParent().toString() : executable.toString();
     }
 
     private boolean checkExecutable(String cmd) {
         try {
             ProcessBuilder pb = new ProcessBuilder(cmd, "-version");
             Process p = pb.start();
-            boolean finished = p.waitFor(3, TimeUnit.SECONDS);
-            return finished && p.exitValue() == 0;
+            try {
+                boolean finished = p.waitFor(3, TimeUnit.SECONDS);
+                return finished && p.exitValue() == 0;
+            } finally { if (p.isAlive()) p.destroyForcibly(); }
         } catch (Exception e) {
             return false;
         }
@@ -83,6 +111,7 @@ public class FFmpegProcessExecutor {
         List<String> fullCommand = new ArrayList<>();
         fullCommand.add(ffmpeg);
         fullCommand.add("-y"); // Overwrite output if scratch exists
+        fullCommand.addAll(List.of("-protocol_whitelist", "file,pipe"));
         fullCommand.addAll(args);
         fullCommand.add("-progress");
         fullCommand.add("pipe:1");
@@ -153,8 +182,8 @@ public class FFmpegProcessExecutor {
                             etaSec = (long) (remainingSec / Math.max(0.1, rate));
                         }
                     } else {
-                        // Unknown duration: simulate progress based on elapsed time up to 90%
-                        percent = (int) Math.min(90, elapsedSec * 5);
+                        // Without a duration there is no defensible percentage; byte progress remains real.
+                        percent = 0;
                     }
 
                     if ("end".equalsIgnoreCase(progressStatus)) {

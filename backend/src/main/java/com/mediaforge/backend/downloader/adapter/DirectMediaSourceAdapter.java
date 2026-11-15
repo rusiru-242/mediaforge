@@ -55,6 +55,9 @@ public class DirectMediaSourceAdapter implements MediaSourceAdapter {
     public MediaMetadata extractMetadata(URI uri) throws IOException {
         HttpDownloadClient.HttpResponse response = httpClient.probeHeaders(uri);
         String contentType = response.getContentType();
+        if (contentType != null && (contentType.toLowerCase(Locale.ROOT).contains("text/html") || contentType.toLowerCase(Locale.ROOT).contains("application/json"))) {
+            throw new IOException("[UNSUPPORTED_MEDIA] The source returned a web page instead of media bytes.");
+        }
         long contentLength = response.getContentLength();
         String contentDisposition = response.getContentDisposition();
 
@@ -80,27 +83,8 @@ public class DirectMediaSourceAdapter implements MediaSourceAdapter {
         );
         metadata.setDirectStreamUri(uri.toString());
 
-        // Detect resolution if encoded in URL/filename (e.g. 1080p, 720p, 4K)
-        String detectedQuality = "Original (Source Stream)";
-        String lowerName = filename.toLowerCase(Locale.ROOT);
-        if (lowerName.contains("2160p") || lowerName.contains("4k")) {
-            detectedQuality = "2160p (4K)";
-            metadata.setResolution("3840x2160");
-        } else if (lowerName.contains("1440p") || lowerName.contains("2k")) {
-            detectedQuality = "1440p (2K)";
-            metadata.setResolution("2560x1440");
-        } else if (lowerName.contains("1080p")) {
-            detectedQuality = "1080p (Full HD)";
-            metadata.setResolution("1920x1080");
-        } else if (lowerName.contains("720p")) {
-            detectedQuality = "720p (HD)";
-            metadata.setResolution("1280x720");
-        } else if (lowerName.contains("480p")) {
-            detectedQuality = "480p (SD)";
-            metadata.setResolution("854x480");
-        } else if (isAudio) {
-            detectedQuality = "Source Audio Fidelity";
-        }
+        // Filenames are not evidence of stream dimensions. Probe final downloaded bytes before success.
+        String detectedQuality = isAudio ? "Source Audio" : "Original (Source Stream)";
         metadata.setAvailableQualities(List.of(detectedQuality));
 
         List<MediaFormatOption> formatOptions = new ArrayList<>();
@@ -137,7 +121,7 @@ public class DirectMediaSourceAdapter implements MediaSourceAdapter {
 
     @Override
     public DownloadedMedia download(DownloadTask task, ProgressCallback progressCallback) throws IOException {
-        log.info("Direct media adapter downloading stream for job: {} from {}", task.getJobId(), task.getSourceUri());
+        log.info("Direct media adapter downloading stream for job: {} from {}", task.getJobId(), task.getSourceUri().getHost());
         return httpClient.download(task, progressCallback);
     }
 }

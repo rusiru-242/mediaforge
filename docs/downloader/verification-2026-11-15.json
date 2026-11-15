@@ -1,0 +1,364 @@
+{
+  "date": "2026-11-15",
+  "timezone": "Asia/Colombo",
+  "versions": {
+    "yt-dlp": "2026.10.26",
+    "ffmpeg": "9.0.1-essentials_build",
+    "ffprobe": "9.0.1-essentials_build",
+    "next": "15.5.29"
+  },
+  "frontend": {
+    "typescript": "passed",
+    "tests": 111,
+    "test_files": 24,
+    "lint": "passed with existing warnings",
+    "production_build": "passed"
+  },
+  "backend": {
+    "command": "mvnw.cmd -q -Dmediaforge.media-integration=true verify",
+    "totals": {
+      "tests": 193,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 4
+    },
+    "suites": [
+      {
+        "suite": "com.mediaforge.backend.controller.ConversionControllerIntegrationTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.mediaforge.backend.controller.DownloadControllerIntegrationTest",
+        "tests": 6,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.mediaforge.backend.controller.FileControllerDownloadTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.mediaforge.backend.controller.FileUploadControllerIntegrationTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.mediaforge.backend.controller.FormatControllerIntegrationTest",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.mediaforge.backend.controller.HealthControllerIntegrationTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.mediaforge.backend.controller.JobControllerIntegrationTest",
+        "tests": 6,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.mediaforge.backend.converter.ConversionOptionsPresetTest",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.mediaforge.backend.converter.service.AdvancedMediaEditingIntegrationTest",
+        "tests": 15,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.mediaforge.backend.converter.service.AudioConversionServiceTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.mediaforge.backend.converter.service.ConversionStorageServiceTest",
+        "tests": 5,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.mediaforge.backend.converter.service.ImageConversionServiceTest",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.mediaforge.backend.converter.service.ImageEditorMediaIntegrationTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.mediaforge.backend.converter.service.MediaProbeServiceTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.mediaforge.backend.converter.service.SizeEstimationServiceTest",
+        "tests": 5,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.mediaforge.backend.converter.service.VideoConversionServiceTest",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.mediaforge.backend.converter.service.VideoEditorMediaIntegrationTest",
+        "tests": 20,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.mediaforge.backend.converter.service.YtDlpFfmpegLocationIntegrationTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.mediaforge.backend.downloader.DirectImageSourceAdapterTest",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.mediaforge.backend.downloader.DirectMediaSourceAdapterTest",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.mediaforge.backend.downloader.DownloadOutputSelectionTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.mediaforge.backend.downloader.MediaDownloadServiceTest",
+        "tests": 10,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.mediaforge.backend.downloader.MediaStorageServiceTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.mediaforge.backend.downloader.YtDlpProcessExecutorTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 3
+      },
+      {
+        "suite": "com.mediaforge.backend.downloader.service.AuthorizedPlatformIntegrationTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 1
+      },
+      {
+        "suite": "com.mediaforge.backend.downloader.service.DownloadFilenameTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.mediaforge.backend.downloader.service.DownloadOutputVerifierTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.mediaforge.backend.downloader.service.DownloaderAuditTest",
+        "tests": 26,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.mediaforge.backend.downloader.service.DownloaderMediaIntegrationTest",
+        "tests": 12,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.mediaforge.backend.downloader.service.ExtractorTransportTest",
+        "tests": 8,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.mediaforge.backend.downloader.service.YtDlpSelectionTest",
+        "tests": 5,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.mediaforge.backend.enums.JobStatusTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.mediaforge.backend.repository.InMemoryMediaJobRepositoryTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.mediaforge.backend.service.DownloadServiceTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.mediaforge.backend.service.FormatServiceTest",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.mediaforge.backend.service.JobServiceTest",
+        "tests": 8,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      },
+      {
+        "suite": "com.mediaforge.backend.validation.UrlSecurityValidatorTest",
+        "tests": 14,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0
+      }
+    ]
+  },
+  "live_checks": {
+    "instagram": {
+      "authorized_url": "https://www.instagram.com/reels/Dd_1Oc3JcKx/",
+      "command": "mvnw.cmd -q -Dmediaforge.platform-integration=true -Dmediaforge.authorized-url=<user-supplied-url> -Dtest=AuthorizedPlatformIntegrationTest test",
+      "exit_code": 0,
+      "metadata": "passed",
+      "mp4_video_and_audio": "FFprobe verified",
+      "mp3_and_m4a": "converted from the real downloaded MP4 and FFprobe verified",
+      "duration_seconds": 28.210998
+    },
+    "tiktok": {
+      "authorized_url": "https://www.tiktok.com/@_pinsara_quotes_2/video/7685926451295587605",
+      "command": "python -m yt_dlp --ignore-config --skip-download --no-playlist --socket-timeout 15 --retries 1 --extractor-retries 1 --print title <user-supplied-url>",
+      "exit_code": 1,
+      "result": "Unexpected response from webpage request; no successful download claimed"
+    },
+    "youtube": "live untested; deterministic separate-stream DASH pipeline verified",
+    "facebook": "live untested",
+    "x_twitter": "live untested"
+  },
+  "local_verified_formats": [
+    "MP4 360p",
+    "MP4 720p",
+    "MP4 1080p",
+    "WebM",
+    "AVI",
+    "MKV",
+    "MOV",
+    "FLV",
+    "MP3",
+    "M4A",
+    "WAV"
+  ],
+  "running_services_restarted": false,
+  "database_added": false,
+  "flutter_modified": false,
+  "changed_files": [
+    "backend/src/main/java/com/mediaforge/backend/controller/FileController.java",
+    "backend/src/main/java/com/mediaforge/backend/converter/service/FFmpegProcessExecutor.java",
+    "backend/src/main/java/com/mediaforge/backend/converter/service/MediaProbeServiceImpl.java",
+    "backend/src/main/java/com/mediaforge/backend/converter/service/OutputSizeEstimationServiceImpl.java",
+    "backend/src/main/java/com/mediaforge/backend/downloader/adapter/DirectImageSourceAdapter.java",
+    "backend/src/main/java/com/mediaforge/backend/downloader/adapter/DirectMediaSourceAdapter.java",
+    "backend/src/main/java/com/mediaforge/backend/downloader/adapter/GenericWebSourceAdapter.java",
+    "backend/src/main/java/com/mediaforge/backend/downloader/adapter/MediaSourceAdapterRegistry.java",
+    "backend/src/main/java/com/mediaforge/backend/downloader/adapter/PlatformMediaSourceAdapter.java",
+    "backend/src/main/java/com/mediaforge/backend/downloader/model/DownloadTask.java",
+    "backend/src/main/java/com/mediaforge/backend/downloader/model/PlatformUrls.java",
+    "backend/src/main/java/com/mediaforge/backend/downloader/service/ExtractorErrors.java",
+    "backend/src/main/java/com/mediaforge/backend/downloader/service/ExtractorNetworkProxy.java",
+    "backend/src/main/java/com/mediaforge/backend/downloader/service/HttpDownloadClient.java",
+    "backend/src/main/java/com/mediaforge/backend/downloader/service/LocalStorageServiceImpl.java",
+    "backend/src/main/java/com/mediaforge/backend/downloader/service/MediaDownloadServiceImpl.java",
+    "backend/src/main/java/com/mediaforge/backend/downloader/service/YtDlpProcessExecutor.java",
+    "backend/src/main/java/com/mediaforge/backend/dto/request/DownloadCreateRequest.java",
+    "backend/src/main/java/com/mediaforge/backend/dto/request/SizeEstimationRequest.java",
+    "backend/src/main/java/com/mediaforge/backend/entity/ConversionRequest.java",
+    "backend/src/main/java/com/mediaforge/backend/service/impl/DownloadServiceImpl.java",
+    "backend/src/main/java/com/mediaforge/backend/validation/UrlSecurityValidator.java",
+    "backend/src/main/resources/application.yml",
+    "backend/src/test/java/com/mediaforge/backend/converter/service/YtDlpFfmpegLocationIntegrationTest.java",
+    "backend/src/test/java/com/mediaforge/backend/downloader/DirectMediaSourceAdapterTest.java",
+    "backend/src/test/java/com/mediaforge/backend/downloader/YtDlpProcessExecutorTest.java",
+    "backend/src/test/java/com/mediaforge/backend/downloader/service/AuthorizedPlatformIntegrationTest.java",
+    "backend/src/test/java/com/mediaforge/backend/downloader/service/DownloadFilenameTest.java",
+    "backend/src/test/java/com/mediaforge/backend/downloader/service/DownloaderAuditTest.java",
+    "backend/src/test/java/com/mediaforge/backend/downloader/service/DownloaderMediaIntegrationTest.java",
+    "backend/src/test/java/com/mediaforge/backend/downloader/service/ExtractorTransportTest.java",
+    "backend/src/test/java/com/mediaforge/backend/downloader/service/YtDlpSelectionTest.java",
+    "backend/src/test/java/com/mediaforge/backend/service/DownloadServiceTest.java",
+    "docs/downloader/diagnosis-and-repair-2026-11-15.md",
+    "web/src/app/downloader/page.tsx",
+    "web/src/test/DownloaderPage.test.tsx",
+    "web/src/test/PlatformUrl.test.ts",
+    "web/src/types/api.ts",
+    "web/src/utils/platformUrl.ts"
+  ]
+}
