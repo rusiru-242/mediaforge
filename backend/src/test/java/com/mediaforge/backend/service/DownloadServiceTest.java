@@ -75,7 +75,7 @@ class DownloadServiceTest {
         assertTrue(response.isValid());
         assertEquals("example", response.getPlatform());
         assertTrue(response.getAvailableFormats().contains("mp4"));
-        assertTrue(response.getAvailableQualities().contains("1080p"));
+        assertEquals(java.util.List.of("source"), response.getAvailableQualities());
     }
 
     @Test

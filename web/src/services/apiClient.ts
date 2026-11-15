@@ -238,6 +238,7 @@ export const apiClient = {
 
   getFileMetadata: (id: string) => request<FileMetadataResponse>(`/files/${id}/metadata`),
   getFileDownloadUrl: (fileId: string) => `${API_BASE_URL}/files/${fileId}/download`,
+  getDownloadUrl: (fileId: string) => `${API_BASE_URL}/files/${fileId}/download`,
 };
 
 export const api = apiClient;

@@ -10,6 +10,14 @@ public class DownloadedMedia {
     private String mimeType;
     private long fileSize;
     private String containerFormat;
+    private boolean audioExpected;
+    private boolean selectionApplied;
+
+    public boolean isSelectionApplied() { return selectionApplied; }
+    public void setSelectionApplied(boolean selectionApplied) { this.selectionApplied = selectionApplied; }
+
+    public boolean isAudioExpected() { return audioExpected; }
+    public void setAudioExpected(boolean audioExpected) { this.audioExpected = audioExpected; }
 
     public DownloadedMedia() {
     }

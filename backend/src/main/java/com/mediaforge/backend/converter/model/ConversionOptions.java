@@ -32,10 +32,27 @@ public class ConversionOptions {
     private String aspectRatio;
 
     // Audio editing controls
-    private Double volume; // 1.0 = 100%, 0.5 = 50%, 1.5 = 150%
+    private Double volume;
+    @jakarta.validation.constraints.Size(max = 5)
+    private java.util.List<@jakarta.validation.constraints.Pattern(regexp = "reverb|echo|bass|treble|warmth") String> audioEffects = new java.util.ArrayList<>();
+    public java.util.List<String> getAudioEffects() { return audioEffects; }
+    private java.util.Map<String, Integer> audioEffectLevels = new java.util.LinkedHashMap<>();
+    public java.util.Map<String, Integer> getAudioEffectLevels() { return audioEffectLevels; }
+    public void setAudioEffectLevels(java.util.Map<String, Integer> values) { audioEffectLevels = values == null ? new java.util.LinkedHashMap<>() : new java.util.LinkedHashMap<>(values); }
+    public void setAudioEffects(java.util.List<String> values) { audioEffects = values == null ? new java.util.ArrayList<>() : new java.util.ArrayList<>(values); }
+ // 1.0 = 100%, 0.5 = 50%, 1.5 = 150%
     private Boolean removeSilence = false;
     private Double fadeInDuration; // in seconds
-    private Double fadeOutDuration; // in seconds
+    private Double fadeOutDuration;
+    @jakarta.validation.constraints.DecimalMin("0.0")
+    private Double videoFadeInDuration;
+    @jakarta.validation.constraints.DecimalMin("0.0")
+    private Double videoFadeOutDuration;
+    public Double getVideoFadeInDuration() { return videoFadeInDuration; }
+    public void setVideoFadeInDuration(Double value) { videoFadeInDuration = value; }
+    public Double getVideoFadeOutDuration() { return videoFadeOutDuration; }
+    public void setVideoFadeOutDuration(Double value) { videoFadeOutDuration = value; }
+ // in seconds
 
     // Image & visual controls
     private Integer imageWidth;
@@ -46,7 +63,16 @@ public class ConversionOptions {
     private Boolean flipHorizontal = false;
     private Boolean flipVertical = false;
     private Double brightness; // -1.0 to 1.0 (0.0 is default)
-    private Double contrast; // -1.0 to 1.0 (1.0 is default)
+    private Double contrast;
+    @jakarta.validation.constraints.DecimalMin("0.0") @jakarta.validation.constraints.DecimalMax("2.0")
+    private Double saturation;
+    @jakarta.validation.constraints.DecimalMin("-1.0") @jakarta.validation.constraints.DecimalMax("1.0")
+    private Double warmth;
+    public Double getSaturation() { return saturation; }
+    public void setSaturation(Double value) { saturation = value; }
+    public Double getWarmth() { return warmth; }
+    public void setWarmth(Double value) { warmth = value; }
+ // -1.0 to 1.0 (1.0 is default)
     private Boolean stripMetadata = true;
 
     public ConversionOptions() {

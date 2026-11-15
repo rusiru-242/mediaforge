@@ -1,309 +1,318 @@
+'use client';
+
 import React from 'react';
 import Link from 'next/link';
 import {
-  DownloadCloud,
-  Video,
+  Link as LinkIcon,
+  Sliders,
+  Download,
+  Film,
   Music,
   Image as ImageIcon,
-  Layers,
-  ShieldCheck,
+  Shield,
   Zap,
-  Clock,
-  Sparkles,
-  ArrowRight,
   CheckCircle2,
-  Lock,
-  Cpu,
+  ArrowRight,
+  Scissors,
+  Settings,
 } from 'lucide-react';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
 
 export default function HomePage() {
-  const tools = [
-    {
-      title: 'Media Downloader',
-      description: 'Download video and audio streams from supported authorized URLs in full HD resolution.',
-      icon: DownloadCloud,
-      href: '/downloader',
-      badge: 'Popular',
-      color: 'text-violet-500 bg-violet-500/10 dark:bg-violet-500/20',
-    },
-    {
-      title: 'Video Converter',
-      description: 'Transcode MP4, WEBM, MKV, AVI, and MOV with customizable resolution and bitrate.',
-      icon: Video,
-      href: '/converter/video',
-      badge: 'FFmpeg Core',
-      color: 'text-blue-500 bg-blue-500/10 dark:bg-blue-500/20',
-    },
-    {
-      title: 'Audio Converter',
-      description: 'Extract and transcode high-fidelity audio to MP3, WAV, FLAC, AAC, and M4A.',
-      icon: Music,
-      href: '/converter/audio',
-      badge: 'Lossless',
-      color: 'text-emerald-500 bg-emerald-500/10 dark:bg-emerald-500/20',
-    },
-    {
-      title: 'Image Converter',
-      description: 'Convert between PNG, JPEG, WEBP, and GIF with quality optimization and resizing.',
-      icon: ImageIcon,
-      href: '/converter/image',
-      badge: 'Fast',
-      color: 'text-amber-500 bg-amber-500/10 dark:bg-amber-500/20',
-    },
-    {
-      title: 'Batch Processing',
-      description: 'Queue and process multiple media conversions concurrently with progress synchronization.',
-      icon: Layers,
-      href: '/converter/batch',
-      badge: 'Phase 08 Preview',
-      color: 'text-purple-500 bg-purple-500/10 dark:bg-purple-500/20',
-    },
-    {
-      title: 'Supported Formats',
-      description: 'Explore all supported audio, video, container formats, and encoding specifications.',
-      icon: Sparkles,
-      href: '/formats',
-      badge: 'Catalog',
-      color: 'text-cyan-500 bg-cyan-500/10 dark:bg-cyan-500/20',
-    },
-  ];
-
-  const features = [
-    {
-      icon: ShieldCheck,
-      title: 'SSRF & Security Defense',
-      description:
-        'All media downloads pass through strict IP validation and safe URI resolution to block private network attacks.',
-    },
-    {
-      icon: Zap,
-      title: 'Hardware-Accelerated Encoding',
-      description:
-        'Engineered for maximum throughput using multi-threaded FFmpeg transcoding pipelines and asynchronous job queues.',
-    },
-    {
-      icon: Clock,
-      title: '24-Hour Ephemeral Retention',
-      description:
-        'Processed artifacts and downloads are automatically purged after 24 hours to guarantee zero permanent storage leaks.',
-    },
-    {
-      icon: Lock,
-      title: 'Zero Account & Database Free',
-      description:
-        'Start converting instantly with complete privacy. No accounts, no logins, and zero database tracking.',
-    },
-    {
-      icon: Cpu,
-      title: 'Spring Boot REST Engine',
-      description:
-        'Backed by a high-concurrency Spring Boot 3 backend with OpenAPI 3 documentation, Actuator, and in-memory job coordination.',
-    },
-    {
-      icon: Layers,
-      title: 'Cross-Platform Ecosystem',
-      description:
-        'One unified monorepo powering the Next.js web portal, Flutter desktop applications, and mobile apps.',
-    },
-  ];
-
-  const steps = [
-    {
-      num: '01',
-      title: 'Provide Media',
-      description: 'Paste a video URL or drag-and-drop your video, audio, or image files into the workspace.',
-    },
-    {
-      num: '02',
-      title: 'Choose Parameters',
-      description: 'Select target container format, quality presets, codec options, audio bitrates, or resolution.',
-    },
-    {
-      num: '03',
-      title: 'Download & Enjoy',
-      description: 'Monitor real-time conversion progress and download your pristine media file instantly.',
-    },
-  ];
-
   return (
-    <div className="space-y-24 py-8 md:py-16">
-      {/* Hero Section */}
-      <section className="relative px-4 text-center sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-4xl space-y-6">
-          <div className="inline-flex items-center gap-2 rounded-full border border-violet-200 bg-violet-50/80 px-4 py-1.5 text-xs font-semibold text-violet-700 backdrop-blur dark:border-violet-800 dark:bg-violet-950/50 dark:text-violet-300">
-            <Sparkles className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
-            <span>Phase 03 — Next.js 15 & Spring Boot Monorepo Integration</span>
-          </div>
+    <div className="home-page flex flex-col w-full min-h-[calc(100vh-80px)] text-slate-900 dark:text-slate-100">
+      {/* Top Ambient Glow & Hero */}
+      <div className="relative w-full max-w-7xl mx-auto px-gutter pt-24 sm:pt-28 pb-14 overflow-hidden">
+        <div className="absolute -top-32 left-1/2 -translate-x-1/2 w-[680px] h-[360px] bg-gradient-to-tr from-primary/15 via-secondary/10 to-transparent blur-3xl pointer-events-none -z-10 rounded-full" />
 
-          <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white sm:text-6xl sm:leading-tight">
-            Universal Media Downloader &{' '}
-            <span className="bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600 bg-clip-text text-transparent dark:from-violet-400 dark:via-purple-400 dark:to-indigo-300">
-              Cross-Format Transcoder
+        <div className="flex flex-col items-center text-center max-w-4xl mx-auto space-y-6">
+          {/* Headline */}
+          <h1 className="text-4xl sm:text-6xl font-extrabold text-on-surface tracking-tight leading-tight">
+            Your Media.{' '}
+            <span className="bg-gradient-to-r from-primary via-primary-container to-secondary bg-clip-text text-transparent">
+              Your Way.
             </span>
           </h1>
 
-          <p className="mx-auto max-w-2xl text-base text-slate-600 dark:text-slate-300 sm:text-lg">
-            High-performance, secure media processing platform. Download streams from authorized web sources
-            and transcode videos, music, and images with enterprise-grade quality and reliability.
+          <p className="text-base sm:text-lg text-on-surface-variant max-w-2xl mx-auto leading-relaxed">
+            Download authorized stream media, edit tracks and timelines locally with millisecond precision, and convert
+            your media in one place.
           </p>
 
-          <div className="flex flex-wrap items-center justify-center gap-4 pt-4">
-            <Link href="/downloader">
-              <Button size="lg" variant="primary" rightIcon={<ArrowRight className="h-5 w-5" />}>
-                Launch Downloader
-              </Button>
+          {/* Quick Nav CTA Buttons */}
+          <div className="flex flex-wrap items-center justify-center gap-4 pt-2">
+            <Link
+              href="/converter/video"
+              className="flex items-center gap-2 px-8 h-[52px] rounded-full bg-primary-container text-white font-semibold text-base hover:bg-primary transition-all shadow-md shadow-primary/20 hover:scale-[1.02] active:scale-95"
+            >
+              <Scissors className="w-4 h-4" />
+              <span>Start Editing</span>
             </Link>
-            <Link href="/converter/video">
-              <Button size="lg" variant="outline">
-                Explore Video Converter
-              </Button>
+            <Link
+              href="/downloader"
+              className="flex items-center gap-2 px-7 h-[52px] rounded-full bg-surface-container-lowest dark:bg-slate-900 text-secondary border border-outline-variant/30 font-semibold text-base hover:bg-surface-container-low dark:hover:bg-slate-800 transition-all shadow-sm hover:scale-[1.02] active:scale-95"
+            >
+              <Download className="w-4 h-4 text-secondary" />
+              <span>Download Media</span>
             </Link>
           </div>
-
-          <div className="pt-4 flex items-center justify-center gap-6 text-xs text-slate-500 dark:text-slate-400">
-            <span className="flex items-center gap-1.5">
-              <CheckCircle2 className="h-4 w-4 text-emerald-500" /> No Registration Required
-            </span>
-            <span className="flex items-center gap-1.5">
-              <CheckCircle2 className="h-4 w-4 text-emerald-500" /> Ephemeral 24h Storage
-            </span>
-            <span className="flex items-center gap-1.5">
-              <CheckCircle2 className="h-4 w-4 text-emerald-500" /> 100% Free & Open Source
-            </span>
-          </div>
         </div>
-      </section>
+      </div>
 
-      {/* Quick Tools Grid */}
-      <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-12">
-          <h2 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 sm:text-3xl">
-            Choose Your Processing Suite
-          </h2>
-          <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-            Dedicated tools tailored for specific media types with optimized transcode parameters.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {tools.map((tool) => {
-            const Icon = tool.icon;
-            return (
-              <Link key={tool.title} href={tool.href} className="group block focus:outline-none">
-                <Card hover className="h-full transition-all group-hover:-translate-y-1">
-                  <div className="flex items-start justify-between">
-                    <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${tool.color}`}>
-                      <Icon className="h-6 w-6" />
-                    </div>
-                    <Badge variant="secondary">{tool.badge}</Badge>
-                  </div>
-                  <h3 className="mt-4 text-lg font-semibold text-slate-900 group-hover:text-violet-600 dark:text-slate-100 dark:group-hover:text-violet-400">
-                    {tool.title}
-                  </h3>
-                  <p className="mt-2 text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
-                    {tool.description}
-                  </p>
-                  <div className="mt-4 inline-flex items-center text-xs font-semibold text-violet-600 dark:text-violet-400">
-                    Get started <ArrowRight className="ml-1.5 h-3.5 w-3.5 transition-transform group-hover:translate-x-1" />
-                  </div>
-                </Card>
-              </Link>
-            );
-          })}
-        </div>
-      </section>
-
-      {/* How It Works */}
-      <section className="bg-slate-100/60 py-16 dark:bg-slate-900/40">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
-            <h2 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 sm:text-3xl">
-              How MediaForge Works
+      {/* Core Studio Suite (Bento 2x2 Grid) */}
+      <section className="max-w-7xl mx-auto px-gutter py-16 w-full" id="tools-suite">
+        <div className="flex flex-col md:flex-row md:items-end justify-between mb-10 gap-4">
+          <div>
+            <div className="flex items-center gap-2 text-primary text-xs font-bold uppercase tracking-wider mb-2">
+              <Settings className="w-4 h-4 text-primary" />
+              <span>Integrated Studio Suite</span>
+            </div>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-on-surface tracking-tight">
+              Powerful Media Instruments in Your Browser
             </h2>
-            <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-              Three seamless steps from media source to finished conversion.
-            </p>
           </div>
+          <p className="text-sm text-on-surface-variant max-w-md">
+            Every tool operates completely database-free with zero queue times, zero watermarks, and 24-hour ephemeral retention.
+          </p>
+        </div>
 
-          <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
-            {steps.map((step) => (
-              <div
-                key={step.num}
-                className="relative rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900"
-              >
-                <div className="text-3xl font-extrabold text-violet-600/30 dark:text-violet-400/30">
-                  {step.num}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          {/* Card 1: Video Editor */}
+          <div className="group relative rounded-3xl bg-surface-container-lowest dark:bg-slate-900 border border-outline-variant/30 p-8 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col justify-between overflow-hidden">
+            <div aria-hidden="true" className="absolute -right-16 -top-16 w-44 h-44 rounded-full bg-primary/5 dark:bg-violet-400/10 pointer-events-none group-hover:scale-125 transition-transform duration-500" />
+            <div>
+              <div className="flex items-center justify-between mb-6">
+                <div className="w-12 h-12 rounded-2xl bg-primary-fixed/50 dark:bg-slate-800 text-primary flex items-center justify-center shadow-inner">
+                  <Film className="w-6 h-6 text-primary" />
                 </div>
-                <h3 className="mt-2 text-lg font-semibold text-slate-900 dark:text-slate-100">
-                  {step.title}
-                </h3>
-                <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-                  {step.description}
-                </p>
+                <div className="px-3 py-1 rounded-full bg-surface-container-low dark:bg-slate-800 text-primary font-semibold text-xs">
+                  MP4 · WebM · MOV · MKV
+                </div>
               </div>
-            ))}
-          </div>
-        </div>
-      </section>
+              <h3 className="text-xl font-bold text-on-surface mb-2">Video Editor</h3>
+              <p className="text-sm text-on-surface-variant mb-6 leading-relaxed">
+                Trim, split, crop, resize & convert video. Microsecond scrubbing, canvas aspect ratios, and full resolution overrides.
+              </p>
 
-      {/* Features & Architecture Highlights */}
-      <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-12">
-          <h2 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 sm:text-3xl">
-            Architected for Security & Performance
-          </h2>
-          <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-            Engineered with modern cloud principles and stringent security guardrails.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {features.map((feat) => {
-            const Icon = feat.icon;
-            return (
-              <Card key={feat.title} className="p-6">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-100 text-violet-600 dark:bg-violet-950/60 dark:text-violet-400">
-                  <Icon className="h-5 w-5" />
+              {/* Interactive Micro-Preview Element */}
+              <div className="rounded-2xl bg-surface-container-low dark:bg-slate-950/60 p-4 mb-6 border border-outline-variant/20">
+                <div className="flex items-center justify-between mb-3 text-xs text-on-surface-variant">
+                  <span className="flex items-center gap-1.5 font-medium">
+                    <Sliders className="w-3.5 h-3.5 text-primary" />
+                    Aspect Canvas
+                  </span>
                 </div>
-                <h3 className="mt-4 text-base font-semibold text-slate-900 dark:text-slate-100">
-                  {feat.title}
-                </h3>
-                <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-                  {feat.description}
-                </p>
-              </Card>
-            );
-          })}
-        </div>
-      </section>
+                <div className="grid grid-cols-4 gap-2 mb-3">
+                  <span className="py-1.5 rounded-full bg-surface-container-lowest dark:bg-slate-800 text-on-surface text-xs font-semibold text-center shadow-xs">
+                    16:9
+                  </span>
+                  <span className="py-1.5 rounded-full text-on-surface-variant text-xs text-center">9:16</span>
+                  <span className="py-1.5 rounded-full text-on-surface-variant text-xs text-center">1:1</span>
+                  <span className="py-1.5 rounded-full text-on-surface-variant text-xs text-center">4:3</span>
+                </div>
+                {/* Visual Timeline Track */}
+                <div className="relative h-7 bg-surface-container-high dark:bg-slate-800 rounded-lg overflow-hidden flex items-center px-2">
+                  <div className="absolute left-6 right-12 top-1 bottom-1 bg-primary/25 rounded" />
+                  <div className="absolute left-6 top-0 bottom-0 w-1 bg-primary" />
+                  <div className="absolute right-12 top-0 bottom-0 w-1 bg-primary" />
+                  <div className="w-full flex justify-between font-mono text-[11px] text-outline z-10 select-none">
+                    <span>00:00.00</span>
+                    <span className="text-primary font-semibold">00:14.32</span>
+                    <span>01:20.00</span>
+                  </div>
+                </div>
+              </div>
+            </div>
 
-      {/* CTA Section */}
-      <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-violet-600 to-indigo-700 px-6 py-12 text-center text-white shadow-xl sm:px-12 sm:py-16">
-          <h2 className="text-3xl font-extrabold tracking-tight sm:text-4xl">
-            Ready to download and transcode media?
-          </h2>
-          <p className="mx-auto mt-4 max-w-2xl text-violet-100">
-            Try our intuitive web workspace now or integrate directly via our OpenAPI REST documentation.
-          </p>
-          <div className="mt-8 flex flex-wrap justify-center gap-4">
-            <Link href="/downloader">
-              <Button size="lg" className="bg-white text-violet-900 hover:bg-violet-50">
-                Start Media Download
-              </Button>
-            </Link>
-            <Link href="/formats">
-              <Button size="lg" variant="outline" className="border-white/40 text-white hover:bg-white/10">
-                Explore Formats
-              </Button>
-            </Link>
+            <div className="pt-2 flex items-center justify-between">
+              <div className="flex items-center gap-2 font-mono text-xs text-on-surface-variant">
+                <span className="px-2 py-0.5 rounded bg-surface-container dark:bg-slate-800 text-on-surface font-semibold">
+                  4K / 1080p
+                </span>
+                <span>H.264 / AV1</span>
+              </div>
+              <Link
+                href="/converter/video"
+                className="inline-flex items-center gap-1.5 text-sm font-semibold text-primary hover:text-primary-container transition-colors"
+              >
+                <span>Open Video Editor</span>
+                <ArrowRight className="w-4 h-4" />
+              </Link>
+            </div>
+          </div>
+
+          {/* Card 2: Audio Editor */}
+          <div className="group relative rounded-3xl bg-surface-container-lowest dark:bg-slate-900 border border-outline-variant/30 p-8 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col justify-between overflow-hidden">
+            <div aria-hidden="true" className="absolute -right-16 -top-16 w-44 h-44 rounded-full bg-secondary/5 dark:bg-indigo-400/10 pointer-events-none group-hover:scale-125 transition-transform duration-500" />
+            <div>
+              <div className="flex items-center justify-between mb-6">
+                <div className="w-12 h-12 rounded-2xl bg-secondary-fixed/50 dark:bg-slate-800 text-secondary flex items-center justify-center shadow-inner">
+                  <Music className="w-6 h-6 text-secondary" />
+                </div>
+                <div className="px-3 py-1 rounded-full bg-surface-container-low dark:bg-slate-800 text-secondary font-semibold text-xs">
+                  MP3 · WAV · AAC · FLAC
+                </div>
+              </div>
+              <h3 className="text-xl font-bold text-on-surface mb-2">Audio Editor</h3>
+              <p className="text-sm text-on-surface-variant mb-6 leading-relaxed">
+                Visual waveform multi-scrub, splice unwanted segments, smooth fade curves, and dial precision bitrates up to 320 kbps.
+              </p>
+
+              {/* Interactive Waveform Preview */}
+              <div className="rounded-2xl bg-surface-container-low dark:bg-slate-950/60 p-4 mb-6 border border-outline-variant/20">
+                <div className="flex items-center justify-between mb-3 text-xs text-on-surface-variant">
+                  <span className="flex items-center gap-1.5 font-medium">
+                    <Zap className="w-3.5 h-3.5 text-secondary" />
+                    Waveform Analyzer (Stereo)
+                  </span>
+                  <span className="font-mono font-semibold text-on-surface">320 kbps · 48 kHz</span>
+                </div>
+                <div className="h-14 bg-surface-container-lowest dark:bg-slate-900 rounded-xl p-2 flex items-center justify-between gap-1 shadow-inner relative overflow-hidden">
+                  {[16, 32, 40, 20, 36, 48, 28, 44, 24, 40, 16, 32, 48, 20, 28, 12].map((height, i) => (
+                    <div
+                      key={i}
+                      className="w-1.5 rounded-full bg-secondary/70 group-hover:bg-primary transition-colors"
+                      style={{ height: `${height}px` }}
+                    />
+                  ))}
+                  <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-primary shadow-sm flex flex-col items-center">
+                    <div className="w-2 h-2 rounded-full bg-primary -mt-0.5" />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between mt-2 text-xs text-on-surface-variant font-medium">
+                  <span>Fade In: <strong className="text-on-surface">1.2s</strong></span>
+                  <span>Fade Out: <strong className="text-on-surface">2.4s</strong></span>
+                  <span>Trim: <strong className="text-tertiary">Active</strong></span>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-2 flex items-center justify-between">
+              <span className="font-mono text-xs text-on-surface-variant">24-bit Lossless Studio Export</span>
+              <Link
+                href="/converter/audio"
+                className="inline-flex items-center gap-1.5 text-sm font-semibold text-secondary hover:text-secondary-container transition-colors"
+              >
+                <span>Open Audio Editor</span>
+                <ArrowRight className="w-4 h-4" />
+              </Link>
+            </div>
+          </div>
+
+          {/* Card 3: Image Editor */}
+          <div className="group relative rounded-3xl bg-surface-container-lowest dark:bg-slate-900 border border-outline-variant/30 p-8 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col justify-between overflow-hidden">
+            <div aria-hidden="true" className="absolute -right-16 -top-16 w-44 h-44 rounded-full bg-tertiary/5 dark:bg-emerald-400/10 pointer-events-none group-hover:scale-125 transition-transform duration-500" />
+            <div>
+              <div className="flex items-center justify-between mb-6">
+                <div className="w-12 h-12 rounded-2xl bg-tertiary-fixed/50 dark:bg-slate-800 text-tertiary flex items-center justify-center shadow-inner">
+                  <ImageIcon className="w-6 h-6 text-tertiary" />
+                </div>
+                <div className="px-3 py-1 rounded-full bg-surface-container-low dark:bg-slate-800 text-tertiary font-semibold text-xs">
+                  WebP · AVIF · PNG · JPG
+                </div>
+              </div>
+              <h3 className="text-xl font-bold text-on-surface mb-2">Image Editor</h3>
+              <p className="text-sm text-on-surface-variant mb-6 leading-relaxed">
+                Freeform crop overlay, aspect presets, rotation/flip, lossless conversions, and simple photo filters.
+              </p>
+
+              {/* Before/After Preview */}
+              <div className="rounded-2xl bg-surface-container-low dark:bg-slate-950/60 p-4 mb-6 border border-outline-variant/20">
+                <div className="flex items-center justify-between mb-3 text-xs text-on-surface-variant">
+                  <span className="flex items-center gap-1.5 font-medium">
+                    <Sliders className="w-3.5 h-3.5 text-tertiary" />
+                    AVIF / WebP Density
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-3 mb-2">
+                  <div className="bg-surface-container-lowest dark:bg-slate-900 rounded-xl p-3 flex flex-col items-center justify-center text-center">
+                    <span className="text-[10px] uppercase text-outline font-semibold mb-1">Source JPG</span>
+                    <span className="text-xs text-on-surface-variant">3840 x 2160</span>
+                  </div>
+                  <div className="bg-surface-container-lowest dark:bg-slate-900 rounded-xl p-3 flex flex-col items-center justify-center text-center shadow-sm">
+                    <span className="text-[10px] uppercase text-tertiary font-bold mb-1">Target WebP</span>
+                    <span className="text-xs text-tertiary font-medium">Visually Lossless</span>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between text-xs text-on-surface-variant">
+                  <span>Quality Factor: 85%</span>
+                  <span>ICC Profile: sRGB Intact</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-2 flex items-center justify-between">
+              <span className="font-mono text-xs text-on-surface-variant">EXIF Scrubbing Included</span>
+              <Link
+                href="/converter/image"
+                className="inline-flex items-center gap-1.5 text-sm font-semibold text-tertiary hover:text-tertiary-container transition-colors"
+              >
+                <span>Open Image Editor</span>
+                <ArrowRight className="w-4 h-4" />
+              </Link>
+            </div>
+          </div>
+
+          {/* Card 4: Online Downloader */}
+          <div className="group relative rounded-3xl bg-surface-container-lowest dark:bg-slate-900 border border-outline-variant/30 p-8 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col justify-between overflow-hidden">
+            <div className="absolute -right-16 -top-16 w-44 h-44 rounded-full bg-secondary-container/10 group-hover:scale-125 transition-transform duration-500" />
+            <div>
+              <div className="flex items-center justify-between mb-6">
+                <div className="w-12 h-12 rounded-2xl bg-secondary-fixed/50 dark:bg-slate-800 text-secondary-container flex items-center justify-center shadow-inner">
+                  <Download className="w-6 h-6 text-secondary-container" />
+                </div>
+                <div className="px-3 py-1 rounded-full bg-surface-container-low dark:bg-slate-800 text-secondary-container font-semibold text-xs">
+                  1080p / 4K Stream Ready
+                </div>
+              </div>
+              <h3 className="text-xl font-bold text-on-surface mb-2">Online Downloader</h3>
+              <p className="text-sm text-on-surface-variant mb-6 leading-relaxed">
+                Fetch streams from supported public web links, split high-definition video or crystal audio, then hand off directly to trim.
+              </p>
+
+              {/* Stream Demuxing Preview */}
+              <div className="rounded-2xl bg-surface-container-low dark:bg-slate-950/60 p-4 mb-6 border border-outline-variant/20">
+                <div className="flex items-center justify-between mb-3 text-xs text-on-surface-variant">
+                  <span className="flex items-center gap-1.5 font-medium">
+                    <Zap className="w-3.5 h-3.5 text-secondary" />
+                    Stream Demuxing
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full bg-surface-container-highest dark:bg-slate-800 text-on-surface text-xs font-semibold">
+                    Adaptive HLS
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between p-2 rounded-xl bg-surface-container-lowest dark:bg-slate-900">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-tertiary" />
+                      <span className="text-xs font-semibold text-on-surface">Video Stream (4K H.264)</span>
+                    </div>
+                    <span className="font-mono text-xs text-on-surface-variant">3840x2160 · 60fps</span>
+                  </div>
+                  <div className="flex items-center justify-between p-2 rounded-xl bg-surface-container-lowest dark:bg-slate-900">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-tertiary" />
+                      <span className="text-xs font-semibold text-on-surface">Audio Track (Opus 160k)</span>
+                    </div>
+                    <span className="font-mono text-xs text-on-surface-variant">48,000 Hz Stereo</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-2 flex items-center justify-between">
+              <span className="font-mono text-xs text-on-surface-variant">Direct Browser Demuxer</span>
+              <Link
+                href="/downloader"
+                className="inline-flex items-center gap-1.5 text-sm font-semibold text-secondary hover:text-secondary-container transition-colors"
+              >
+                <span>Launch Downloader</span>
+                <ArrowRight className="w-4 h-4" />
+              </Link>
+            </div>
           </div>
         </div>
       </section>
+
     </div>
   );
 }
-

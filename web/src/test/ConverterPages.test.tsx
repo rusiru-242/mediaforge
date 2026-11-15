@@ -9,29 +9,29 @@ import BatchConverterPage from '@/app/converter/batch/page';
 describe('Converter Pages Rendering', () => {
   it('renders VideoConverterPage with transcode parameters', () => {
     render(<VideoConverterPage />);
-    expect(screen.getByText('Convert Video Files')).toBeDefined();
-    expect(screen.getByText('Transcoding Parameters')).toBeDefined();
-    expect(screen.getByText('Start Video Conversion')).toBeDefined();
+    expect(screen.getByText('Export Settings')).toBeDefined();
+    expect(screen.getByText('Container Format')).toBeDefined();
+    expect(screen.getByText('Export Trimmed Video')).toBeDefined();
   });
 
   it('renders AudioConverterPage with acoustic parameters', () => {
     render(<AudioConverterPage />);
-    expect(screen.getByText('Convert Audio Files & Extract Soundtracks')).toBeDefined();
-    expect(screen.getByText('Acoustic Parameters')).toBeDefined();
-    expect(screen.getByText('Start Audio Conversion')).toBeDefined();
+    expect(screen.getByText('Audio Editor')).toBeDefined();
+    expect(screen.getByText('Export Settings')).toBeDefined();
+    expect(screen.getByText('Export Master Audio')).toBeDefined();
   });
 
   it('renders ImageConverterPage with optimization parameters', () => {
     render(<ImageConverterPage />);
-    expect(screen.getByText('Convert & Optimize Images')).toBeDefined();
-    expect(screen.getByText('Image Optimization Parameters')).toBeDefined();
-    expect(screen.getByText('Start Image Conversion')).toBeDefined();
+    expect(screen.getByText('Image Editor')).toBeDefined();
+    expect(screen.getByText('Export Settings')).toBeDefined();
+    expect(screen.getByText('Export Processed Image')).toBeDefined();
   });
 
   it('renders BatchConverterPage with batch queue', () => {
     render(<BatchConverterPage />);
-    expect(screen.getByText('Batch Media Conversion')).toBeDefined();
-    expect(screen.getByText('No files in the batch queue')).toBeDefined();
+    expect(screen.getByText('Batch Converter')).toBeDefined();
+    expect(screen.getByText('Batch Queue is Empty')).toBeDefined();
     expect(screen.getByText('Add Files')).toBeDefined();
   });
 });
