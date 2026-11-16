@@ -44,6 +44,11 @@ class NativeMediaEngine(private val activity: Activity, messenger: BinaryMesseng
         @Volatile var progress: Double? = null
         var error: String? = null
         var transformer: Transformer? = null
+        @Volatile var containerSession: Long? = null
+        @Volatile var packaging = false
+        val intermediate = File(file.parentFile, "$id.intermediate.mp4")
+        val audioIntermediate = File(file.parentFile, "$id.intermediate.wav")
+        val imageIntermediate = File(file.parentFile, "$id.intermediate.png")
         val started = Instant.now().toString()
         var completed: String? = null
     }
@@ -58,9 +63,9 @@ class NativeMediaEngine(private val activity: Activity, messenger: BinaryMesseng
         val a = (call.arguments as? Map<*, *>)?.entries?.associate { it.key.toString() to it.value } ?: emptyMap()
         try {
             when (call.method) {
-                "capabilities" -> result.success(mapOf("video" to if (codecs(MimeTypes.VIDEO_H264)) listOf("mp4") else emptyList<String>(),
-                    "audio" to if (codecs(MimeTypes.AUDIO_AAC)) listOf("m4a", "wav") else listOf("wav"),
-                    "image" to listOf("jpg", "png", "webp"), "cropVideo" to true, "cut" to true,
+                "capabilities" -> result.success(mapOf("video" to if (codecs(MimeTypes.VIDEO_H264)) listOf("mp4", "webm", "mov", "mkv", "avi") else emptyList<String>(),
+                    "audio" to listOf("mp3", "wav", "aac", "flac", "ogg") + if (codecs(MimeTypes.AUDIO_AAC)) listOf("m4a") else emptyList<String>(),
+                    "image" to listOf("jpg", "png", "webp", "avif"), "cropVideo" to true, "cut" to true,
                     "imageRotation" to true, "imageEditing" to true, "videoFilters" to true, "audioEffects" to true, "audioFades" to true, "encoderTuning" to true, "maxHeight" to (MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos
                         .filter { it.isEncoder && it.supportedTypes.contains(MimeTypes.VIDEO_H264) }
                         .mapNotNull { try { it.getCapabilitiesForType(MimeTypes.VIDEO_H264).videoCapabilities?.supportedHeights?.upper } catch (_: Exception) { null } }
@@ -70,12 +75,12 @@ class NativeMediaEngine(private val activity: Activity, messenger: BinaryMesseng
                 "submit" -> submit(a, result)
                 "status" -> {
                     val job = jobs[a["id"]] ?: error("This local job no longer exists.")
-                    if (job.state == "processing") {
+                    if (job.state == "processing" && !job.packaging) {
                         val progress = ProgressHolder()
-                        if (job.transformer?.getProgress(progress) == Transformer.PROGRESS_STATE_AVAILABLE) job.progress = progress.progress / 100.0
+                        if (job.transformer?.getProgress(progress) == Transformer.PROGRESS_STATE_AVAILABLE) job.progress = progress.progress / 100.0 * (if (job.file.extension != "mp4" && job.request["kind"] == "video") .8 else 1.0)
                     }
                     result.success(mapOf("id" to job.id, "state" to job.state, "progress" to job.progress,
-                        "operation" to if (job.state == "processing") "Processing locally" else job.state,
+                        "operation" to if (job.packaging) "Packaging ${job.file.extension.uppercase()} locally" else if (job.state == "processing") "Processing locally" else job.state,
                         "output" to if (job.state == "completed") job.file.path else null, "error" to job.error,
                         "started" to job.started, "completed" to job.completed))
                 }
@@ -97,6 +102,7 @@ class NativeMediaEngine(private val activity: Activity, messenger: BinaryMesseng
         return File(path).canonicalFile.also { require(it.isFile && it.length() in 1..(2L * 1024 * 1024 * 1024)) { "Choose a valid local file under 2 GiB." } }
     }
     private fun probe(file: File): Map<String, Any> {
+        if (file.extension.equals("avif", true)) return MobileContainers.probeAvif(file)
         val bounds = BitmapFactory.Options().also { it.inJustDecodeBounds = true }
         BitmapFactory.decodeFile(file.path, bounds)
         if (bounds.outWidth > 0) {
@@ -105,48 +111,37 @@ class NativeMediaEngine(private val activity: Activity, messenger: BinaryMesseng
                 "height" to if (orientation % 180 == 90) bounds.outWidth else bounds.outHeight,
                 "bytes" to file.length(), "video" to false, "audio" to false, "duration" to 0.0)
         }
-        val extractor = MediaExtractor()
-        try {
-            extractor.setDataSource(file.path)
-            var video = false; var audio = false; var duration = 0.0; var width = 0; var height = 0
-            for (i in 0 until extractor.trackCount) {
-                val f = extractor.getTrackFormat(i); val mime = f.getString(MediaFormat.KEY_MIME) ?: ""
-                if (f.containsKey(MediaFormat.KEY_DURATION)) duration = max(duration, f.getLong(MediaFormat.KEY_DURATION) / 1e6)
-                if (mime.startsWith("video/")) { video = true; width = f.getInteger(MediaFormat.KEY_WIDTH); height = f.getInteger(MediaFormat.KEY_HEIGHT) }
-                if (mime.startsWith("audio/")) audio = true
-            }
-            require(video || audio) { "No supported media tracks were found." }
-            if (video) {
-                val retriever = MediaMetadataRetriever()
-                try { retriever.setDataSource(file.path); val rotation = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)?.toIntOrNull() ?: 0
-                    if (rotation % 180 == 90) { val t = width; width = height; height = t } } finally { retriever.release() }
-            }
-            return mapOf("path" to file.path, "width" to width, "height" to height, "video" to video,
-                "audio" to audio, "duration" to duration, "bytes" to file.length())
-        } finally { extractor.release() }
+        return MobileContainers.probe(file)
     }
     private fun number(a: Map<String, Any?>, name: String, fallback: Double) = (a[name] as? Number)?.toDouble() ?: fallback
     private fun submit(a: Map<String, Any?>, result: MethodChannel.Result) {
         require(jobs.values.none { it.state == "processing" }) { "Another local job is still processing." }
         val input = checkedInput(a["input"] as String)
         val kind = a["kind"] as String; val format = a["format"] as String
-        require(when(kind) { "video" -> format == "mp4"; "audio" -> format in listOf("m4a", "wav"); "image" -> format in listOf("jpg", "png", "webp"); else -> false }) { "Unsupported output format on this device." }
+        require(when(kind) { "video" -> format in listOf("mp4", "webm", "mov", "mkv", "avi"); "audio" -> format in listOf("mp3", "wav", "aac", "flac", "ogg", "m4a"); "image" -> format in listOf("jpg", "png", "webp", "avif"); else -> false }) { "Unsupported output format on this device." }
         val id = UUID.randomUUID().toString(); val job = Job(id, File(root, "$id.$format"), a)
         jobs[id] = job
         result.success(mapOf("id" to id))
         worker.execute {
             try {
                 val metadata = probe(input)
-                if (kind == "image") image(input, job) else if (kind == "audio" && format == "wav") {
+                if (kind == "image") image(input, job) else if (kind == "audio" && format != "m4a") {
                     val ranges = keptRanges(a, metadata["duration"] as Double)
-                    WavExporter.export(input,job.file,ranges,number(a,"volume",1.0),
+                    WavExporter.export(input,if (format == "wav") job.file else job.audioIntermediate,ranges,number(a,"volume",1.0),
                         a["audioEffects"] as? Map<*,*> ?: emptyMap<Any,Any>(),
                         number(a,"fadeIn",0.0),number(a,"fadeOut",0.0),
-                        { job.state == "processing" }, { job.progress = it })
+                        { job.state == "processing" }, { job.progress = it * (if (format == "wav") 1.0 else .8) })
+                    if (format != "wav") {
+                        job.packaging = true
+                        MobileContainers.export(job.audioIntermediate, job.file,
+                            ranges.sumOf { it.second-it.first }, 0, number(a,"audioBitrate",192.0).toInt(),
+                            { job.state == "processing" }, { job.containerSession = it },
+                            { job.progress = .8 + .19 * it }, true)
+                    }
                     val output = probe(job.file)
-                    require(output["audio"] == true && output["video"] == false) { "WAV output verification failed." }
+                    require(output["audio"] == true && output["video"] == false) { "Audio output verification failed." }
                     val expected = ranges.sumOf { it.second-it.first }
-                    require(abs((output["duration"] as Double)-expected) <= max(.1,expected*.01)) { "WAV duration verification failed." }
+                    require(abs((output["duration"] as Double)-expected) <= max(if (format in listOf("wav", "flac")) .1 else .3,expected*.03)) { "Audio duration verification failed." }
                     handler.post { finish(job) }
                 } else handler.post {
                     try { if (job.state == "processing") transform(input, job, metadata) }
@@ -216,6 +211,18 @@ class NativeMediaEngine(private val activity: Activity, messenger: BinaryMesseng
                 override fun onCompleted(composition: Composition, exportResult: ExportResult) {
                     worker.execute {
                         try {
+                            if (job.state != "processing") { job.intermediate.delete(); job.audioIntermediate.delete(); job.imageIntermediate.delete(); return@execute }
+                            if (video && job.file.extension != "mp4") {
+                                job.packaging = true
+                                job.progress = .8
+                                MobileContainers.export(job.intermediate, job.file,
+                                    ranges.sumOf { it.second-it.first },
+                                    number(a, "videoBitrate", 8000.0).toInt(),
+                                    number(a, "audioBitrate", 192.0).toInt(),
+                                    { job.state == "processing" },
+                                    { job.containerSession = it },
+                                    { job.progress = .8 + .19 * it })
+                            }
                             val output = probe(job.file)
                             require(job.file.length() > 0 && if(video) output["video"] == true else output["audio"] == true && output["video"] == false) { "The output contains the wrong media tracks." }
                             if (tracks.contains(C.TRACK_TYPE_AUDIO)) require(output["audio"] == true) { "Expected audio is missing." }
@@ -232,7 +239,8 @@ class NativeMediaEngine(private val activity: Activity, messenger: BinaryMesseng
             })
         if (video) builder.setVideoMimeType(MimeTypes.VIDEO_H264)
         job.transformer = builder.build()
-        job.transformer!!.start(Composition.Builder(sequence).build(), job.file.path)
+        job.transformer!!.start(Composition.Builder(sequence).build(),
+            (if (video && job.file.extension != "mp4") job.intermediate else job.file).path)
     }
     private fun image(input: File, job: Job) {
         val bounds = BitmapFactory.Options().also { it.inJustDecodeBounds = true }; BitmapFactory.decodeFile(input.path, bounds)
@@ -268,6 +276,18 @@ class NativeMediaEngine(private val activity: Activity, messenger: BinaryMesseng
             (job.request["height"] as? Number)?.let { val h = it.toInt(); require(h in 2..4096)
                 replace(Bitmap.createScaledBitmap(bitmap,max(1,(bitmap.width.toDouble()*h/bitmap.height).roundToInt()),h,true)) }
             if (job.state != "processing") return
+            if (job.request["format"] == "avif") {
+                job.progress = null
+                job.packaging = true
+                job.imageIntermediate.outputStream().use { require(bitmap.compress(Bitmap.CompressFormat.PNG,100,it)) }
+                MobileContainers.exportAvif(job.imageIntermediate, job.file,
+                    number(job.request,"quality",85.0).toInt(), bitmap.hasAlpha(),
+                    { job.state == "processing" }, { job.containerSession = it })
+                val verified = MobileContainers.probeAvif(job.file)
+                require(verified["width"] == bitmap.width && verified["height"] == bitmap.height) { "AVIF dimensions do not match the requested image." }
+                handler.post { finish(job) }
+                return
+            }
             val format = when(job.request["format"]) { "jpg" -> Bitmap.CompressFormat.JPEG; "png" -> Bitmap.CompressFormat.PNG; else -> if(Build.VERSION.SDK_INT >= 30) Bitmap.CompressFormat.WEBP_LOSSY else @Suppress("DEPRECATION") Bitmap.CompressFormat.WEBP }
             job.file.outputStream().use { require(bitmap.compress(format,number(job.request,"quality",85.0).toInt().coerceIn(1,100),it)) }
             val verified = probe(job.file); require((verified["width"] as Int) > 0 && job.file.length() > 0)
@@ -276,16 +296,19 @@ class NativeMediaEngine(private val activity: Activity, messenger: BinaryMesseng
     }
     private fun finish(job: Job) {
         if (job.state != "processing") { job.file.delete(); return }
+        job.intermediate.delete(); job.audioIntermediate.delete(); job.imageIntermediate.delete(); job.packaging = false
         job.state = "completed"; job.completed = Instant.now().toString(); job.progress = 1.0; job.transformer = null
     }
     private fun fail(job: Job, message: String) {
         if (job.state != "processing") return
-        job.state = "failed"; job.error = message; job.completed = Instant.now().toString(); job.file.delete(); job.transformer = null
+        job.state = "failed"; job.error = message; job.completed = Instant.now().toString(); job.file.delete(); job.intermediate.delete(); job.audioIntermediate.delete(); job.imageIntermediate.delete(); job.packaging = false; job.transformer = null
     }
     private fun cancel(job: Job, reason: String?) {
         if (job.state != "processing") return
         job.state = "cancelled"; job.error = reason; job.completed = Instant.now().toString()
-        job.transformer?.cancel(); job.transformer = null; job.file.delete()
+        job.transformer?.cancel(); job.transformer = null
+        job.containerSession?.let { com.arthenica.ffmpegkit.FFmpegKit.cancel(it) }
+        job.file.delete(); job.intermediate.delete(); job.audioIntermediate.delete(); job.imageIntermediate.delete()
     }
     fun cancelAll(reason: String? = null) { jobs.values.forEach { cancel(it, reason) } }
     private fun cleanup() { root.listFiles()?.filter { it.isFile && System.currentTimeMillis()-it.lastModified() > 86400000 }?.forEach { it.delete() } }
@@ -293,7 +316,7 @@ class NativeMediaEngine(private val activity: Activity, messenger: BinaryMesseng
     private fun save(path: String, result: MethodChannel.Result) {
         require(pendingSave == null) { "A save dialog is already open." }
         val file = output(path); pendingSave = file to result
-        activity.startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).apply { type = mime(file); addCategory(Intent.CATEGORY_OPENABLE); putExtra(Intent.EXTRA_TITLE,"MediaForge_${file.name}") }, 7451)
+        activity.startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).apply { type = mime(file); addCategory(Intent.CATEGORY_OPENABLE); putExtra(Intent.EXTRA_TITLE, if (file.nameWithoutExtension.matches(Regex("[0-9a-fA-F-]{36}"))) "MediaForge_${file.name}" else file.name) }, 7451)
     }
     fun activityResult(requestCode: Int, resultCode: Int, intent: Intent?): Boolean {
         if (requestCode != 7451) return false
@@ -305,12 +328,12 @@ class NativeMediaEngine(private val activity: Activity, messenger: BinaryMesseng
             catch(e: Exception) { try { activity.contentResolver.delete(uri,null,null) } catch(_: Exception) {}; throw e } }
         return true
     }
-    private fun mime(file: File) = when(file.extension) { "mp4" -> "video/mp4"; "m4a" -> "audio/mp4"; "wav" -> "audio/wav"; "zip" -> "application/zip"; "png" -> "image/png"; "webp" -> "image/webp"; else -> "image/jpeg" }
+    private fun mime(file: File) = when(file.extension) { "mp4" -> "video/mp4"; "webm" -> "video/webm"; "mkv" -> "video/x-matroska"; "mov" -> "video/quicktime"; "avi" -> "video/x-msvideo"; "flv" -> "video/x-flv"; "mp3" -> "audio/mpeg"; "aac" -> "audio/aac"; "flac" -> "audio/flac"; "ogg" -> "audio/ogg"; "m4a" -> "audio/mp4"; "wav" -> "audio/wav"; "zip" -> "application/zip"; "avif" -> "image/avif"; "png" -> "image/png"; "webp" -> "image/webp"; else -> "image/jpeg" }
     private fun gallery(path: String, result: MethodChannel.Result) {
         require(Build.VERSION.SDK_INT >= 29) { "Use Save to Files on Android 9 or earlier." }
         val file = output(path)
         background(result) {
-            val collection = when(file.extension) { "mp4" -> MediaStore.Video.Media.EXTERNAL_CONTENT_URI; "m4a", "wav" -> MediaStore.Audio.Media.EXTERNAL_CONTENT_URI; else -> MediaStore.Images.Media.EXTERNAL_CONTENT_URI }
+            val collection = when(file.extension) { "mp4" -> MediaStore.Video.Media.EXTERNAL_CONTENT_URI; "mp3", "m4a", "wav", "aac", "flac", "ogg" -> MediaStore.Audio.Media.EXTERNAL_CONTENT_URI; else -> MediaStore.Images.Media.EXTERNAL_CONTENT_URI }
             val values = ContentValues().apply { put(MediaStore.MediaColumns.DISPLAY_NAME,"MediaForge_${file.name}"); put(MediaStore.MediaColumns.MIME_TYPE,mime(file)); put(MediaStore.MediaColumns.IS_PENDING,1) }
             val uri = activity.contentResolver.insert(collection,values) ?: error("Could not create a gallery item.")
             try {

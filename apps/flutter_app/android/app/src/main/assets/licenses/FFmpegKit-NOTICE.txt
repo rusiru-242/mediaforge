@@ -1,0 +1,7 @@
+MediaForge Android includes FFmpegKit Full 8.1.9 (non-GPL build).
+Artifact: dev.ffmpegkit-maintained:ffmpeg-kit-full:8.1.9
+License: LGPL-3.0; see accompanying license texts.
+Copyright remains with FFmpeg, FFmpegKit, and bundled codec-library authors.
+Upstream sources and build scripts: https://github.com/ffmpegkit-maintained/ffmpeg
+Artifact and metadata: https://repo.maven.apache.org/maven2/dev/ffmpegkit-maintained/ffmpeg-kit-full/8.1.9/
+MediaForge modifications are limited to the application integration.

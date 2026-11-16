@@ -42,10 +42,15 @@ public class RateLimitingFilter extends OncePerRequestFilter {
             return;
         }
 
+        // Progress polling must not consume the budget for starting downloads.
+        boolean polling = "GET".equals(request.getMethod()) && uri.matches(
+                "/api/v1/jobs/[0-9a-fA-F-]{36}(?:/progress(?:/sse)?)?");
+        int limit = polling ? Math.max(requestsPerMinute, 600) : requestsPerMinute;
         String clientIp = getClientIp(request);
+        String bucket = clientIp + (polling ? ":progress" : ":operations");
         long currentWindow = System.currentTimeMillis() / 60000;
 
-        WindowCounter counter = requestCounts.compute(clientIp, (key, existing) -> {
+        WindowCounter counter = requestCounts.compute(bucket, (key, existing) -> {
             if (existing == null || existing.window() != currentWindow) {
                 return new WindowCounter(currentWindow, new AtomicInteger(1));
             }
@@ -53,9 +58,10 @@ public class RateLimitingFilter extends OncePerRequestFilter {
             return existing;
         });
 
-        if (counter.counter().get() > requestsPerMinute) {
+        if (counter.counter().get() > limit) {
             log.warn("Rate limit exceeded for IP: {} ({} requests in current minute)", clientIp, counter.counter().get());
             response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
+            response.setHeader("Retry-After", Long.toString(60 - (System.currentTimeMillis() / 1000) % 60));
             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
 
             ApiErrorResponse error = new ApiErrorResponse(

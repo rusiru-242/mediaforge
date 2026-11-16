@@ -6,6 +6,35 @@ import 'package:mediaforge_desktop/core/processing/media_queue.dart';
 import 'package:mediaforge_desktop/features/mobile/mobile_editor.dart';
 
 void main() {
+  testWidgets('Image editor exposes selectable AVIF from native capabilities',
+      (tester) async {
+    final engine = NativeMediaEngine();
+    final queue = MediaQueue(engine);
+    final key = GlobalKey<MobileEditorState>();
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: MobileEditor(
+      key: key,
+      kind: MediaKind.image,
+      engine: engine,
+      queue: queue,
+      caps: const EngineCapabilities({
+        MediaKind.image: ['jpg', 'png', 'webp', 'avif']
+      }),
+    ))));
+    await tester.scrollUntilVisible(find.text('AVIF'), 150);
+    await tester.tap(find.widgetWithText(ChoiceChip, 'AVIF'));
+    await tester.pump();
+    expect(key.currentState!.format, 'avif');
+    expect(
+        tester
+            .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'AVIF'))
+            .selected,
+        true);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+    queue.dispose();
+  });
   test('Image settings validate media type and finite adjustments', () {
     const r = MediaRequest(
         input: 'x',
@@ -60,11 +89,7 @@ void main() {
               .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'WEBP'))
               .selected,
           true);
-      expect(
-          tester
-              .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'AVIF'))
-              .onSelected,
-          isNull);
+      expect(find.widgetWithText(ChoiceChip, 'AVIF'), findsNothing);
       await tester.scrollUntilVisible(find.text('Resolution Scaling'), 150);
       for (final slider in tester.widgetList<Slider>(find.byType(Slider))) {
         expect(slider.onChanged, isNull);
