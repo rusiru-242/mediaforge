@@ -1,0 +1,98 @@
+{
+  "platform": "android",
+  "checks": {
+    "native_capabilities": {
+      "passed": true
+    },
+    "unicode_video_probe": {
+      "passed": true
+    },
+    "trim_crop_resize_mp4_with_audio": {
+      "passed": true
+    },
+    "cut_interval_removes_real_duration": {
+      "passed": true
+    },
+    "wav_trim_cuts_fades_effects": {
+      "passed": true
+    },
+    "m4a_fades_export": {
+      "passed": true
+    },
+    "audio_m4a_has_no_video": {
+      "passed": true
+    },
+    "image_filters_flips_scale_and_formats": {
+      "passed": true
+    },
+    "image_crop_rotation_resize_png": {
+      "passed": true
+    },
+    "png_transparency_is_preserved": {
+      "passed": true
+    },
+    "mixed_sequential_batch": {
+      "passed": true
+    },
+    "actual_native_cancellation": {
+      "passed": true
+    },
+    "invalid_media_and_unsupported_format": {
+      "passed": true
+    },
+    "video_filter_and_audio_effect_export": {
+      "passed": true
+    },
+    "scoped_gallery_save": {
+      "passed": true
+    },
+    "completed_outputs_zip_packaging": {
+      "passed": true
+    },
+    "cleanup_does_not_delete_input": {
+      "passed": true
+    }
+  },
+  "success": true,
+  "formats": {
+    "video": [
+      "mp4"
+    ],
+    "audio": [
+      "m4a",
+      "wav"
+    ],
+    "image": [
+      "jpg",
+      "png",
+      "webp"
+    ]
+  },
+  "progressSamples": [
+    null,
+    0.99,
+    1.0
+  ],
+  "wavFadeOutput": "/data/user/0/com.mediaforge.app/cache/mediaforge-jobs/adcc93aa-7556-4b6e-8e86-df28065ee56e.wav",
+  "wavGalleryUri": "content://media/external/audio/media/44",
+  "m4aFadeOutput": "/data/user/0/com.mediaforge.app/cache/mediaforge-jobs/12f60b47-e670-4931-b573-65dc641c9ac6.m4a",
+  "m4aGalleryUri": "content://media/external/audio/media/45",
+  "zipOutput": "/data/user/0/com.mediaforge.app/cache/mediaforge-jobs/MediaForge_batch_0064fe76-7832-4e5f-8693-6c46229b2711.zip",
+  "flutterAnalyzePassed": true,
+  "flutterRegressionTestsPassed": 22,
+  "zipUnitChecks": [
+    "CRC and exact contents",
+    "Unicode and duplicate entry names",
+    "Missing outputs rejected",
+    "Cancelled archive partial removed"
+  ],
+  "releaseApk": {
+    "path": "apps\\flutter_app\\build\\app\\outputs\\flutter-apk\\app-release.apk",
+    "bytes": 59224824,
+    "sha256": "9ecade9f53054b6d3f7404df2cf08016600658c1e14f8f9a1357453a925fbf80",
+    "result": "Flutter reports Built app-release.apk (56.5MB); ZIP integrity and native outputDirectory capability verified",
+    "note": "PowerShell wrapper reports exit 1 after redirected native stderr warnings; Flutter build log reports success.",
+    "emulatorInstall": "adb install -r: Success"
+  },
+  "unicodeExactFilenameTestPassed": true
+}

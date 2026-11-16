@@ -1,0 +1,95 @@
+{
+  "platform": "android",
+  "checks": {
+    "native_capabilities": {
+      "passed": true
+    },
+    "unicode_video_probe": {
+      "passed": true
+    },
+    "trim_crop_resize_mp4_with_audio": {
+      "passed": true
+    },
+    "cut_interval_removes_real_duration": {
+      "passed": true
+    },
+    "wav_trim_cuts_fades_effects": {
+      "passed": true
+    },
+    "m4a_fades_export": {
+      "passed": true
+    },
+    "audio_m4a_has_no_video": {
+      "passed": true
+    },
+    "image_filters_flips_scale_and_formats": {
+      "passed": true
+    },
+    "image_crop_rotation_resize_png": {
+      "passed": true
+    },
+    "png_transparency_is_preserved": {
+      "passed": true
+    },
+    "mixed_sequential_batch": {
+      "passed": true
+    },
+    "actual_native_cancellation": {
+      "passed": true
+    },
+    "invalid_media_and_unsupported_format": {
+      "passed": true
+    },
+    "video_filter_and_audio_effect_export": {
+      "passed": true
+    },
+    "scoped_gallery_save": {
+      "passed": true
+    },
+    "cleanup_does_not_delete_input": {
+      "passed": true
+    }
+  },
+  "success": true,
+  "formats": {
+    "video": [
+      "mp4"
+    ],
+    "audio": [
+      "m4a",
+      "wav"
+    ],
+    "image": [
+      "jpg",
+      "png",
+      "webp"
+    ]
+  },
+  "progressSamples": [
+    null,
+    0.31,
+    1.0
+  ],
+  "wavFadeOutput": "/data/user/0/com.mediaforge.app/cache/mediaforge-jobs/307c001c-4ec0-42da-8fc4-60c452e9200e.wav",
+  "wavGalleryUri": "content://media/external/audio/media/41",
+  "m4aFadeOutput": "/data/user/0/com.mediaforge.app/cache/mediaforge-jobs/72eb9ee3-2680-4427-b0b2-4ddb348a5fd5.m4a",
+  "m4aGalleryUri": "content://media/external/audio/media/42",
+  "flutterRegressionTestsPassed": 13,
+  "flutterAnalyzePassed": true,
+  "pixelChecks": [
+    "All six image presets exported as PNG",
+    "Mono pixel RGB channels equal within 1",
+    "Horizontal flip moves transparent corner and preserves alpha",
+    "Original flipped green pixel retains color",
+    "Cropped/rotated/flipped/scaled JPG, PNG and WebP are 30x20"
+  ],
+  "releaseApk": {
+    "path": "apps\\flutter_app\\build\\app\\outputs\\flutter-apk\\app-release.apk",
+    "bytes": 57438856,
+    "sha256": "3fc4c95939aae502db509b815fdb53da0b9db782795c3aa36fbf61ae6324c923",
+    "result": "Flutter reports Built app-release.apk (54.8MB); APK ZIP integrity passed",
+    "note": "PowerShell reports exit 1 after redirected native stderr warnings; Flutter build log reports success.",
+    "emulatorInstall": "adb install -r: Success",
+    "imageCapabilityInDex": true
+  }
+}

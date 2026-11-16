@@ -15,6 +15,7 @@ import 'crop_surface.dart';
 import 'desktop_task.dart';
 import 'desktop_widgets.dart';
 import 'task_panel.dart';
+import 'video_export_options.dart';
 
 class DesktopEditor extends ConsumerStatefulWidget {
   final String kind;
@@ -32,7 +33,7 @@ class DesktopEditorState extends ConsumerState<DesktopEditor> {
   Timer? effectTimer;
   String? path;
   String format = '',
-      quality = 'High',
+      quality = '1080p',
       error = '',
       tool = 'Select Range',
       ratio = 'Original',
@@ -74,6 +75,7 @@ class DesktopEditorState extends ConsumerState<DesktopEditor> {
   bool get isAudio => widget.kind == 'audio';
   bool get editable => path != null && !importing && !task.busy;
   bool get needsGuard =>
+      path != null ||
       importing ||
       task.busy ||
       dirty ||
@@ -357,12 +359,13 @@ class DesktopEditorState extends ConsumerState<DesktopEditor> {
       });
       if (!isAudio && exportMode == 'Video') {
         result['removeAudio'] = mute;
-        if (quality != 'Original') {
-          result['targetResolution'] =
-              {'Low': '480p', 'Medium': '720p', 'High': '1080p'}[quality];
-          result['videoBitrate'] =
-              {'Low': '600k', 'Medium': '1200k', 'High': '2500k'}[quality];
-        }
+        result.addAll({
+          'brightness': brightness,
+          'contrast': contrast,
+          'saturation': saturation,
+          'warmth': warmth
+        });
+        if (quality != 'Original') result['targetResolution'] = quality;
       }
     } else {
       result.addAll({
@@ -405,6 +408,38 @@ class DesktopEditorState extends ConsumerState<DesktopEditor> {
           payload((upload['fileId'] ?? upload['id']).toString()));
     });
     if (mounted && task.job?.completed == true) setState(() => dirty = false);
+  }
+
+  Widget colorPreview(Widget child) {
+    final s = saturation,
+        c = contrast,
+        b = brightness * 255 + 128 * (1 - contrast),
+        w = warmth * 18;
+    final r = .2126 * (1 - s), g = .7152 * (1 - s), bl = .0722 * (1 - s);
+    return ColorFiltered(
+        colorFilter: ColorFilter.matrix([
+          c * (r + s),
+          c * g,
+          c * bl,
+          0,
+          b + w,
+          c * r,
+          c * (g + s),
+          c * bl,
+          0,
+          b,
+          c * r,
+          c * g,
+          c * (bl + s),
+          0,
+          b - w,
+          0,
+          0,
+          0,
+          1,
+          0
+        ]),
+        child: child);
   }
 
   Widget preview() {
@@ -452,35 +487,7 @@ class DesktopEditorState extends ConsumerState<DesktopEditor> {
           errorBuilder: (_, __, ___) => const Center(
               child: Text(
                   'Native preview unavailable for this format. Export remains available.')));
-      final s = saturation,
-          c = contrast,
-          b = brightness * 255 + 128 * (1 - contrast),
-          w = warmth * 18;
-      final r = .2126 * (1 - s), g = .7152 * (1 - s), bl = .0722 * (1 - s);
-      child = ColorFiltered(
-          colorFilter: ColorFilter.matrix([
-            c * (r + s),
-            c * g,
-            c * bl,
-            0,
-            b + w,
-            c * r,
-            c * (g + s),
-            c * bl,
-            0,
-            b,
-            c * r,
-            c * g,
-            c * (bl + s),
-            0,
-            b - w,
-            0,
-            0,
-            0,
-            1,
-            0
-          ]),
-          child: child);
+      child = colorPreview(child);
       if (tool != 'Crop Canvas') {
         child = Transform.flip(
             flipX: flipH,
@@ -490,7 +497,7 @@ class DesktopEditorState extends ConsumerState<DesktopEditor> {
     } else {
       child = video == null
           ? const SizedBox()
-          : Video(controller: video!, controls: NoVideoControls);
+          : colorPreview(Video(controller: video!, controls: NoVideoControls));
     }
     final aspect = width > 0 && height > 0 ? width / height : 16 / 9;
     return LayoutBuilder(
@@ -653,9 +660,10 @@ class DesktopEditorState extends ConsumerState<DesktopEditor> {
         if (isImage && tool != 'Crop Canvas') imageTools(),
       ]);
 
-  Widget imageTools() =>
+  Widget filterTools() =>
       Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('Photo Filters', style: Theme.of(context).textTheme.titleMedium),
+        Text(isImage ? 'Photo Filters' : 'Video Filters',
+            style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 12),
         Wrap(
             spacing: 8,
@@ -689,6 +697,11 @@ class DesktopEditorState extends ConsumerState<DesktopEditor> {
                             })
                         : null))
                 .toList()),
+      ]);
+
+  Widget imageTools() =>
+      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        filterTools(),
         const SizedBox(height: 18),
         StudioSlider(
             label: 'Brightness',
@@ -867,19 +880,16 @@ class DesktopEditorState extends ConsumerState<DesktopEditor> {
                         editable ? (v) => change(() => format = v) : null),
                 if (!isImage && !isAudio && exportMode == 'Video') ...[
                   StudioSelect(
-                      label: 'Video Quality',
+                      label: 'Output Resolution',
                       value: quality,
-                      values: const ['Low', 'Medium', 'High', 'Original'],
+                      values: videoOutputResolutions,
                       onChanged:
                           editable ? (v) => change(() => quality = v) : null),
                   Text(
-                      {
-                        'Low': '480p • 600 kbps',
-                        'Medium': '720p • 1200 kbps',
-                        'High': '1080p • 2500 kbps',
-                        'Original': 'Source resolution'
-                      }[quality]!,
+                      '2160p = 4K. Aspect ratio is preserved; enlarging a source does not restore detail.',
                       style: Theme.of(context).textTheme.labelSmall),
+                  const SizedBox(height: 16),
+                  filterTools(),
                   const SizedBox(height: 16),
                   SwitchListTile(
                       contentPadding: EdgeInsets.zero,

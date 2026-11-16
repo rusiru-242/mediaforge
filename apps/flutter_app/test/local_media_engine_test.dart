@@ -71,29 +71,130 @@ void main() {
     return done;
   }
 
+  for (final height in [144, 240, 360, 480, 720, 1080, 1440, 2160]) {
+    test('Video exports actual ${height}p dimensions with audio', () async {
+      final done = await convert(video, {
+        'outputFormat': 'mp4',
+        'startTime': .5,
+        'endTime': .7,
+        'targetResolution': '${height}p'
+      });
+      final file = await api.request('/files/${done.outputFileId}/metadata');
+      final data = await engine.probe(file['path'] as String);
+      final streams = data['streams'] as List;
+      expect(streams.firstWhere((s) => s['codec_type'] == 'video')['height'],
+          height);
+      expect(streams.any((s) => s['codec_type'] == 'audio'), true);
+    });
+  }
+  final colorPresets = {
+    'Vivid': [.03, 1.12, 1.45, 0.0],
+    'Vivid Warm': [.03, 1.1, 1.3, .3],
+    'Vivid Cool': [.02, 1.1, 1.3, -.3],
+    'Dramatic': [-.04, 1.4, .8, 0.0],
+    'Mono': [0.0, 1.15, 0.0, 0.0],
+  };
+  for (final preset in colorPresets.entries) {
+    test('${preset.key} changes actual decoded video pixels', () async {
+      final common = {
+        'outputFormat': 'mp4',
+        'targetResolution': '360p',
+        'startTime': .5,
+        'endTime': .8
+      };
+      final clean = await convert(video, common);
+      final edited = await convert(video, {
+        ...common,
+        'brightness': preset.value[0],
+        'contrast': preset.value[1],
+        'saturation': preset.value[2],
+        'warmth': preset.value[3]
+      });
+      final pixels = <List<int>>[];
+      for (final job in [clean, edited]) {
+        final file = await api.request('/files/${job.outputFileId}/metadata');
+        final raw = '${temp.path}/${job.id}.rgb';
+        await engine.run(engine.tools.ffmpeg, [
+          '-y',
+          '-v',
+          'error',
+          '-i',
+          file['path'] as String,
+          '-frames:v',
+          '1',
+          '-vf',
+          'scale=32:32',
+          '-pix_fmt',
+          'rgb24',
+          '-f',
+          'rawvideo',
+          raw
+        ]);
+        pixels.add(await File(raw).readAsBytes());
+      }
+      double difference = 0, sourceChroma = 0, filteredChroma = 0;
+      for (var i = 0; i < pixels[0].length; i++) {
+        difference += (pixels[0][i] - pixels[1][i]).abs();
+        if (i % 3 == 0) {
+          sourceChroma += (pixels[0][i] - pixels[0][i + 1]).abs();
+          filteredChroma += (pixels[1][i] - pixels[1][i + 1]).abs();
+        }
+      }
+      expect(difference / pixels[0].length, greaterThan(.25));
+      if (preset.key == 'Mono') {
+        expect(filteredChroma, lessThan(sourceChroma * .1));
+      }
+    });
+  }
+
   test('Bundled tools verify without any Java or server check', () async {
     expect((await api.request('/health'))['status'], 'UP');
   });
-  for (final format in ['webm','mov','mkv','avi','flv']) {
-    test('Verified $format video output with audio',()async {
-      final done=await convert(video,{'outputFormat':format,'startTime':.5,'endTime':1.5,'targetResolution':'360p'});
-      final file=await api.request('/files/${done.outputFileId}/metadata');final data=await engine.probe(file['path'] as String);
-      expect((data['streams'] as List).any((s)=>s['codec_type']=='video'),true);expect((data['streams'] as List).any((s)=>s['codec_type']=='audio'),true);
+  for (final format in ['webm', 'mov', 'mkv', 'avi', 'flv']) {
+    test('Verified $format video output with audio', () async {
+      final done = await convert(video, {
+        'outputFormat': format,
+        'startTime': .5,
+        'endTime': 1.5,
+        'targetResolution': '360p'
+      });
+      final file = await api.request('/files/${done.outputFileId}/metadata');
+      final data = await engine.probe(file['path'] as String);
+      expect((data['streams'] as List).any((s) => s['codec_type'] == 'video'),
+          true);
+      expect((data['streams'] as List).any((s) => s['codec_type'] == 'audio'),
+          true);
     });
   }
-  test('256 MiB valid MP4 streams to disk, and cancelled copies clean up',()async {
-    final large=await File(video).copy('${temp.path}/large padded.mp4');
-    final length=await large.length(), target=256*1024*1024;
-    final header=ByteData(8)..setUint32(0,target-length,Endian.big)..setUint32(4,0x66726565,Endian.big);
-    final handle=await large.open(mode:FileMode.append);await handle.writeFrom(header.buffer.asUint8List());await handle.truncate(target);await handle.close();
+  test('256 MiB valid MP4 streams to disk, and cancelled copies clean up',
+      () async {
+    final large = await File(video).copy('${temp.path}/large padded.mp4');
+    final length = await large.length(), target = 256 * 1024 * 1024;
+    final header = ByteData(8)
+      ..setUint32(0, target - length, Endian.big)
+      ..setUint32(4, 0x66726565, Endian.big);
+    final handle = await large.open(mode: FileMode.append);
+    await handle.writeFrom(header.buffer.asUint8List());
+    await handle.truncate(target);
+    await handle.close();
     await engine.probe(large.path);
-    final source=await api.upload(large.path);final output='${temp.path}/large saved.mp4';
-    var updates=0;await api.save('/files/${source['id']}/download',output,onProgress:(_)=>updates++);
-    expect(await File(output).length(),target);expect(updates,greaterThan(2));
-    final cancelled=LocalMediaApi(engine:engine);final failed='${temp.path}/cancelled copy.mp4';
-    await expectLater(cancelled.save('/files/${source['id']}/download',failed,onProgress:(_)=>cancelled.close()),throwsA(isA<LocalOperationCancelled>()));
-    expect(await File(failed).exists(),false);expect(temp.listSync().where((f)=>f.path.endsWith('.part')),isEmpty);
-    await File(output).delete();await large.delete();
+    final source = await api.upload(large.path);
+    final output = '${temp.path}/large saved.mp4';
+    var updates = 0;
+    await api.save('/files/${source['id']}/download', output,
+        onProgress: (_) => updates++);
+    expect(await File(output).length(), target);
+    expect(updates, greaterThan(2));
+    final cancelled = LocalMediaApi(engine: engine);
+    final failed = '${temp.path}/cancelled copy.mp4';
+    await expectLater(
+        cancelled.save('/files/${source['id']}/download', failed,
+            onProgress: (_) => cancelled.close()),
+        throwsA(isA<LocalOperationCancelled>()));
+    expect(await File(failed).exists(), false);
+    expect(temp.listSync().where((f) => f.path.endsWith('.part')), isEmpty);
+    await File(output).delete();
+    await large.delete();
   });
   test('Unicode video trim/crop/resize and verified MP4 with audio', () async {
     final done = await convert(video, {

@@ -471,10 +471,6 @@ MediaPlan buildPlan(String input, String output, Json probe, Json o) {
     if (rotation == 270) vf.add('transpose=2');
     if (o['flipHorizontal'] == true) vf.add('hflip');
     if (o['flipVertical'] == true) vf.add('vflip');
-    vf.add(
-        'eq=brightness=${_number(o, 'brightness', 0, -1, 1)}:contrast=${_number(o, 'contrast', 1, 0, 2)}:saturation=${_number(o, 'saturation', 1, 0, 2)}');
-    final warmth = _number(o, 'warmth', 0, -1, 1) * .15;
-    if (warmth != 0) vf.add('colorbalance=rm=$warmth:bm=${-warmth}');
     if (o['imageWidth'] != null || o['imageHeight'] != null) {
       final w =
           _number(o, 'imageWidth', (vs!['width'] as num).toDouble(), 2, 16384)
@@ -501,6 +497,12 @@ MediaPlan buildPlan(String input, String output, Json probe, Json o) {
     } else {
       vf.add('scale=trunc(iw/2)*2:trunc(ih/2)*2');
     }
+  }
+  if (image || video) {
+    vf.add(
+        'eq=brightness=${_number(o, 'brightness', 0, -1, 1)}:contrast=${_number(o, 'contrast', 1, 0, 2)}:saturation=${_number(o, 'saturation', 1, 0, 2)}');
+    final warmth = _number(o, 'warmth', 0, -1, 1) * .15;
+    if (warmth != 0) vf.add('colorbalance=rm=$warmth:bm=${-warmth}');
   }
   if (audio) {
     af.add('volume=${_number(o, 'volume', 1, 0, 5)}');

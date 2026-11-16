@@ -222,6 +222,9 @@ converted/
 temp/
 tmp/
 processing/
+# Native Flutter processing source is not a temporary media directory.
+!apps/flutter_app/lib/core/processing/
+!apps/flutter_app/lib/core/processing/**
 output/
 
 # -----------------------------------------------------------------------------

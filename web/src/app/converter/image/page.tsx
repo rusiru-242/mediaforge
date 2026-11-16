@@ -83,7 +83,8 @@ export default function ImageConverterPage() {
   };
   // Stages & Job Tracking
   const [stage, setStage] = useState<'IDLE' | 'UPLOADING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'CANCELLED'>('IDLE');
-  useNavigationGuard(stage === 'UPLOADING' || stage === 'PROCESSING');
+  useNavigationGuard(Boolean(selectedFile) || stage === 'UPLOADING' || stage === 'PROCESSING',
+    'Your workspace contains media or edits. Leave this page and discard this workspace?');
   const [error, setError] = useState<string | null>(null);
   const [currentJob, setCurrentJob] = useState<JobResponse | null>(null);
   const [progress, setProgress] = useState<ConversionProgressResponse | null>(null);

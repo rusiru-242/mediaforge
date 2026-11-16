@@ -1,0 +1,183 @@
+{
+  "platform": "android",
+  "checks": {
+    "native_capabilities": {
+      "passed": true
+    },
+    "unicode_video_probe": {
+      "passed": true
+    },
+    "trim_crop_resize_mp4_with_audio": {
+      "passed": true
+    },
+    "cut_interval_removes_real_duration": {
+      "passed": true
+    },
+    "audio_m4a_has_no_video": {
+      "passed": true
+    },
+    "image_crop_rotation_resize_png": {
+      "passed": true
+    },
+    "png_transparency_is_preserved": {
+      "passed": true
+    },
+    "mixed_sequential_batch": {
+      "passed": true
+    },
+    "actual_native_cancellation": {
+      "passed": true
+    },
+    "invalid_media_and_unsupported_format": {
+      "passed": true
+    },
+    "video_filter_and_audio_effect_export": {
+      "passed": true
+    },
+    "scoped_gallery_save": {
+      "passed": true
+    },
+    "cleanup_does_not_delete_input": {
+      "passed": true
+    }
+  },
+  "success": true,
+  "formats": {
+    "video": [
+      "mp4"
+    ],
+    "audio": [
+      "m4a"
+    ],
+    "image": [
+      "jpg",
+      "png",
+      "webp"
+    ]
+  },
+  "progressSamples": [
+    null,
+    0.98,
+    1.0
+  ],
+  "integrationTestsPassed": 2,
+  "uiRegressionTestsPassed": 9,
+  "hostVerification": {
+    "passed": true,
+    "checks": [
+      "mono export is grayscale",
+      "comparison exports retain color",
+      "zero-volume export is silent"
+    ],
+    "outputs": [
+      {
+        "file": "385472cd-23d3-4e91-870c-40bf6fb2319b.m4a",
+        "bytes": 425686,
+        "peakAudio": 0.13177704811096191
+      },
+      {
+        "file": "39bc47c9-8efb-4434-aa0c-c2ac837f22ea.mp4",
+        "bytes": 451535,
+        "meanChannelDifference": 265.3671875
+      },
+      {
+        "file": "3f45d34d-820e-4654-8787-dd0be240ff22.mp4",
+        "bytes": 609406,
+        "meanChannelDifference": 256.83203125
+      },
+      {
+        "file": "4a7b2f0b-a694-4459-8c5d-0e86684218c2.mp4",
+        "bytes": 607063,
+        "meanChannelDifference": 267.90625
+      },
+      {
+        "file": "53774542-dff6-4cf5-b669-418c0113aeda.m4a",
+        "bytes": 449649,
+        "peakAudio": 0.0
+      },
+      {
+        "file": "5f959ffa-8178-4ca7-bb2b-4c9752118e6e.mp4",
+        "bytes": 606549,
+        "meanChannelDifference": 268.07421875
+      },
+      {
+        "file": "6dd5e72e-58e5-439a-880d-bafab24e9fe4.mp4",
+        "bytes": 430115,
+        "meanChannelDifference": 263.1640625
+      },
+      {
+        "file": "7c8e952b-1401-4a54-a1d2-c022ebd2009a.mp4",
+        "bytes": 561092,
+        "meanChannelDifference": 0.0
+      },
+      {
+        "file": "8634bcf0-81ca-48fc-b510-7dc665a1d117.m4a",
+        "bytes": 425129,
+        "peakAudio": 0.1324467957019806
+      },
+      {
+        "file": "870cc091-786a-4d43-afd6-b207b3ec4927.mp4",
+        "bytes": 609406,
+        "meanChannelDifference": 256.83203125
+      },
+      {
+        "file": "8784c19c-4e9a-4f27-98a5-bd665eed790e.mp4",
+        "bytes": 437526,
+        "meanChannelDifference": 293.9921875
+      },
+      {
+        "file": "8bef4f7f-bc14-48b1-9abb-f719a6017f03.m4a",
+        "bytes": 425686,
+        "peakAudio": 0.13177704811096191
+      },
+      {
+        "file": "92e5ac5a-2dfc-4831-ba16-88e45f0cdc44.mp4",
+        "bytes": 607622,
+        "meanChannelDifference": 267.5078125
+      },
+      {
+        "file": "9fc1a60c-494a-4718-af36-8aff25c10800.mp4",
+        "bytes": 607622,
+        "meanChannelDifference": 267.5078125
+      },
+      {
+        "file": "a3d3482d-b2a9-4024-ad48-cf702f8337a7.m4a",
+        "bytes": 425129,
+        "peakAudio": 0.1324467957019806
+      },
+      {
+        "file": "aee1aa93-e90b-44be-a4f5-c1508e17f911.mp4",
+        "bytes": 606549,
+        "meanChannelDifference": 268.07421875
+      },
+      {
+        "file": "b2a4b653-02f8-49b8-84d9-09fcc35a30a9.mp4",
+        "bytes": 607063,
+        "meanChannelDifference": 267.90625
+      },
+      {
+        "file": "ccc62b06-50f0-417c-b708-0ea249304310.mp4",
+        "bytes": 451535,
+        "meanChannelDifference": 265.3671875
+      },
+      {
+        "file": "d69e8dff-c01d-41e9-b69b-2ed4856b96da.m4a",
+        "bytes": 449649,
+        "peakAudio": 0.0
+      },
+      {
+        "file": "e043e4ff-f697-4f96-a9b2-106101802ae7.mp4",
+        "bytes": 430115,
+        "meanChannelDifference": 263.1640625
+      },
+      {
+        "file": "f3898f00-2b58-4c81-b110-d0e34d599384.mp4",
+        "bytes": 561092,
+        "meanChannelDifference": 0.0
+      }
+    ]
+  },
+  "releaseBuild": "passed",
+  "apkBytes": 57258632,
+  "apkSha256": "715113c3f6a1168ca0c74b031d6565a0aca9d9cd7fefd1398356ff6f7945ee16"
+}

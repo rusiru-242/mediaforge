@@ -89,20 +89,26 @@ class _DesktopWorkspaceState extends ConsumerState<DesktopWorkspace>
                     child: const Text('Continue'))
               ])) ??
       false;
+  bool navigating = false;
   Future<void> navigate(int index) async {
-    if (index == selected) return;
-    if (guarded(selected) &&
-        !await confirm('Leave this tool?',
-            'Your work stays here when switching tools. Playback will pause; local processing will continue.')) {
-      return;
-    }
-    await video.currentState?.pause();
-    await audio.currentState?.pause();
-    if (mounted) {
-      setState(() {
-        selected = index;
-        visited.add(index);
-      });
+    if (index == selected || navigating) return;
+    navigating = true;
+    try {
+      if (guarded(selected) &&
+          !await confirm('Leave this tool?',
+              'Your work stays here when switching tools. Playback will pause; local processing will continue.')) {
+        return;
+      }
+      await video.currentState?.pause();
+      await audio.currentState?.pause();
+      if (mounted) {
+        setState(() {
+          selected = index;
+          visited.add(index);
+        });
+      }
+    } finally {
+      navigating = false;
     }
   }
 
@@ -522,6 +528,13 @@ class _DesktopWorkspaceState extends ConsumerState<DesktopWorkspace>
                             bottom: BorderSide(
                                 color: theme.colorScheme.outlineVariant))),
                     child: Row(children: [
+                      if (selected != 0) ...[
+                        IconButton(
+                            tooltip: 'Back to Overview',
+                            onPressed: () => navigate(0),
+                            icon: const Icon(Icons.arrow_back_rounded)),
+                        const SizedBox(width: 12),
+                      ],
                       Expanded(
                           child: Text(titles[selected],
                               style: theme.textTheme.titleMedium)),

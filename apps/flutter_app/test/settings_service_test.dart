@@ -19,7 +19,7 @@ void main() {
       expect(service.defaultAudioFormat, equals('mp3'));
       expect(service.defaultImageFormat, equals('jpg'));
       expect(service.defaultQuality, equals('High'));
-      expect(service.themeMode, equals('system'));
+      expect(service.themeMode, equals('light'));
       expect(service.maxConcurrentJobs, equals(3));
       expect(service.ffmpegPath, equals('ffmpeg'));
       expect(service.ffprobePath, equals('ffprobe'));

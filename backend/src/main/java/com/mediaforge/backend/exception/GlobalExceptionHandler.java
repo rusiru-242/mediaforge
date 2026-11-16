@@ -5,17 +5,22 @@ import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.context.request.ServletWebRequest;
+import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 import java.util.HashMap;
 import java.util.Map;
 
 @RestControllerAdvice
-public class GlobalExceptionHandler {
+public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
@@ -97,8 +102,9 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
     }
 
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ApiErrorResponse> handleValidationExceptions(MethodArgumentNotValidException ex, HttpServletRequest request) {
+    @Override
+    protected ResponseEntity<Object> handleMethodArgumentNotValid(MethodArgumentNotValidException ex,
+            HttpHeaders headers, HttpStatusCode status, WebRequest request) {
         Map<String, String> errors = new HashMap<>();
         for (FieldError fieldError : ex.getBindingResult().getFieldErrors()) {
             errors.put(fieldError.getField(), fieldError.getDefaultMessage());
@@ -109,10 +115,45 @@ public class GlobalExceptionHandler {
                 HttpStatus.BAD_REQUEST.getReasonPhrase(),
                 "VALIDATION_FAILED",
                 "Input validation failed for one or more fields",
-                request.getRequestURI(),
+                requestPath(request),
                 errors
         );
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+        return handleExceptionInternal(ex, error, headers, status, request);
+    }
+
+    /** Keep Spring MVC's HTTP semantics and headers, using our existing JSON envelope. */
+    @Override
+    protected ResponseEntity<Object> handleExceptionInternal(Exception ex, Object body,
+            HttpHeaders headers, HttpStatusCode status, WebRequest request) {
+        String path = requestPath(request);
+        if (status.is5xxServerError()) {
+            log.error("Framework server exception at {}", path, ex);
+        } else {
+            log.debug("HTTP {} at {} ({})", status.value(), path, ex.getClass().getSimpleName());
+        }
+        if (!(body instanceof ApiErrorResponse)) {
+            HttpStatus known = HttpStatus.resolve(status.value());
+            String reason = known != null ? known.getReasonPhrase() : "HTTP " + status.value();
+            String code = switch (status.value()) {
+                case 400 -> "INVALID_REQUEST";
+                case 404 -> "RESOURCE_NOT_FOUND";
+                case 405 -> "METHOD_NOT_ALLOWED";
+                case 406 -> "NOT_ACCEPTABLE";
+                case 413 -> "PAYLOAD_TOO_LARGE";
+                case 415 -> "UNSUPPORTED_MEDIA_TYPE";
+                default -> known != null ? known.name() : "HTTP_ERROR";
+            };
+            String message = status.is5xxServerError()
+                    ? "An unexpected server error occurred. Please try again later."
+                    : status.value() == 404 ? "The requested resource was not found." : reason;
+            body = new ApiErrorResponse(status.value(), reason, code, message, path);
+        }
+        return super.handleExceptionInternal(ex, body, headers, status, request);
+    }
+
+    private String requestPath(WebRequest request) {
+        return request instanceof ServletWebRequest servletRequest
+                ? servletRequest.getRequest().getRequestURI() : request.getDescription(false);
     }
 
     @ExceptionHandler(Exception.class)

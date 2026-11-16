@@ -37,6 +37,7 @@ void main() {
                 home: const DesktopWorkspace())));
         await tester.pump(const Duration(milliseconds: 300));
         expect(tester.takeException(), isNull);
+        expect(find.byTooltip('Back to Overview'), findsNothing);
         for (final title in [
           'Downloader',
           'Video Editor',
@@ -55,6 +56,8 @@ void main() {
           await tester.pump(const Duration(milliseconds: 300));
           expect(tester.takeException(), isNull,
               reason: '$title overflowed at $size');
+          expect(find.byTooltip('Back to Overview'),
+              title == 'Overview' ? findsNothing : findsOneWidget);
           if (title.endsWith('Editor')) {
             for (final slider
                 in tester.widgetList<Slider>(find.byType(Slider))) {
@@ -66,6 +69,17 @@ void main() {
             }
           }
         }
+        final settingsNavigation = find.byWidgetPredicate((widget) =>
+            widget is Tooltip &&
+            (widget.message?.startsWith('Settings') ?? false));
+        await tester.ensureVisible(settingsNavigation);
+        await tester.pump(const Duration(milliseconds: 300));
+        await tester.tap(settingsNavigation);
+        await tester.pump(const Duration(milliseconds: 300));
+        await tester.tap(find.byTooltip('Back to Overview'));
+        await tester.pump(const Duration(milliseconds: 300));
+        expect(find.byTooltip('Back to Overview'), findsNothing);
+        expect(find.text('Powerful Media Instruments'), findsOneWidget);
         await tester.pumpWidget(const SizedBox());
         await tester.pump(const Duration(milliseconds: 300));
       });
