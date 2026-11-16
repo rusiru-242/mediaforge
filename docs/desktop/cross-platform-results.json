@@ -1,0 +1,38 @@
+{
+  "date": "2026-11-16",
+  "flutterAnalyze": "passed, no issues",
+  "flutterSuite": {
+    "passed": 111,
+    "skipped": 8
+  },
+  "finalSharedMobileTests": 7,
+  "androidEmulatorIntegration": {
+    "testsPassed": 2,
+    "nativeChecksPassed": 12,
+    "previewTrimExportClear": "passed",
+    "nativeFileDialogs": "automation timed out; unverified"
+  },
+  "windowsReleaseBuild": "passed",
+  "windowsFlutterRun": "launched, responsive; quit through Flutter q",
+  "installerBuild": "passed",
+  "ios": "static plist/icon checks only; not compiled or device-tested",
+  "artifacts": {
+    "apps/flutter_app/build/windows/x64/runner/Release/mediaforge_desktop.exe": {
+      "bytes": 79872,
+      "sha256": "bf13fb34ee2ef0720e11c4eb25a9b529086d4083a7dc72adef1e42b0909053b4"
+    },
+    "apps/flutter_app/dist/MediaForge-1.0.0-windows-x64-setup.exe": {
+      "bytes": 137703941,
+      "sha256": "0bd2788b100193ba79ae247daffc76b89636791db83c49371f0e0a92db451317"
+    },
+    "apps/flutter_app/build/app/outputs/flutter-apk/app-release.apk": {
+      "bytes": 57029188,
+      "sha256": "81017195c0504ad409d576b07f5b6de98748047395a9c0f921de5e32e50a0ab6"
+    }
+  },
+  "androidReleaseBuild": "passed after flutter pub get regenerated stale test plugin registration",
+  "androidSigning": "debug certificate, local evaluation only",
+  "androidReleaseInstall": "adb install -r succeeded; activity started while airplane mode was on",
+  "androidReleaseVisualInspection": "interrupted by emulator System UI ANR; not acceptance-tested",
+  "emulatorAirplaneMode": "restored off"
+}

@@ -1,0 +1,164 @@
+{
+  "platform": "android",
+  "checks": {
+    "native_capabilities": {
+      "passed": true
+    },
+    "unicode_video_probe": {
+      "passed": true
+    },
+    "trim_crop_resize_mp4_with_audio": {
+      "passed": true
+    },
+    "cut_interval_removes_real_duration": {
+      "passed": true
+    },
+    "audio_m4a_has_no_video": {
+      "passed": true
+    },
+    "image_crop_rotation_resize_png": {
+      "passed": true
+    },
+    "png_transparency_is_preserved": {
+      "passed": true
+    },
+    "mixed_sequential_batch": {
+      "passed": true
+    },
+    "actual_native_cancellation": {
+      "passed": true
+    },
+    "invalid_media_and_unsupported_format": {
+      "passed": true
+    },
+    "scoped_gallery_save": {
+      "passed": true
+    },
+    "cleanup_does_not_delete_input": {
+      "passed": true
+    }
+  },
+  "success": true,
+  "formats": {
+    "video": [
+      "mp4"
+    ],
+    "audio": [
+      "m4a"
+    ],
+    "image": [
+      "jpg",
+      "png",
+      "webp"
+    ]
+  },
+  "progressSamples": [
+    null,
+    1.0
+  ],
+  "hostFFprobe": [
+    {
+      "file": "53f863ef-9bf2-4d8e-808f-0f10ee2873af.m4a",
+      "bytes": 425686,
+      "streams": [
+        {
+          "type": "audio",
+          "codec": "aac",
+          "width": null,
+          "height": null
+        }
+      ],
+      "duration": "1.031791"
+    },
+    {
+      "file": "5e2b0ff0-3596-437b-a20e-2d4c94b282e9.png",
+      "bytes": 115,
+      "streams": [
+        {
+          "type": "video",
+          "codec": "png",
+          "width": 16,
+          "height": 16
+        }
+      ],
+      "duration": null
+    },
+    {
+      "file": "7e329864-026e-47d9-988e-1f4224b5aa00.png",
+      "bytes": 6509,
+      "streams": [
+        {
+          "type": "video",
+          "codec": "png",
+          "width": 180,
+          "height": 240
+        }
+      ],
+      "duration": null
+    },
+    {
+      "file": "88dcd60a-bd23-4c78-8501-2d795ada5148.m4a",
+      "bytes": 425129,
+      "streams": [
+        {
+          "type": "audio",
+          "codec": "aac",
+          "width": null,
+          "height": null
+        }
+      ],
+      "duration": "1.008594"
+    },
+    {
+      "file": "a74575f9-c035-4019-848c-82945e77f7b3.jpg",
+      "bytes": 10198,
+      "streams": [
+        {
+          "type": "video",
+          "codec": "mjpeg",
+          "width": 320,
+          "height": 240
+        }
+      ],
+      "duration": "0.040000"
+    },
+    {
+      "file": "d29a3961-954d-4c15-81b0-9712f588bc27.mp4",
+      "bytes": 437575,
+      "streams": [
+        {
+          "type": "audio",
+          "codec": "aac",
+          "width": null,
+          "height": null
+        },
+        {
+          "type": "video",
+          "codec": "h264",
+          "width": 240,
+          "height": 160
+        }
+      ],
+      "duration": "1.031791"
+    },
+    {
+      "file": "f1a0760c-cbf0-48cb-86af-aab1185166ce.mp4",
+      "bytes": 451905,
+      "streams": [
+        {
+          "type": "audio",
+          "codec": "aac",
+          "width": null,
+          "height": null
+        },
+        {
+          "type": "video",
+          "codec": "h264",
+          "width": 320,
+          "height": 240
+        }
+      ],
+      "duration": "1.033333"
+    }
+  ]
+}

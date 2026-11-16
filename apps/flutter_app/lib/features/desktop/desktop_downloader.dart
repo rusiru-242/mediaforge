@@ -39,14 +39,7 @@ class DesktopDownloaderState extends State<DesktopDownloader> {
       analyzing ||
       task.busy ||
       task.job?.completed == true && task.savedPath == null;
-  static const platforms = [
-    'YouTube',
-    'Facebook',
-    'Instagram',
-    'TikTok',
-    'X / Twitter',
-    'Direct Media URL'
-  ];
+  static const platforms = ['YouTube', 'Facebook', 'Instagram'];
   @override
   void initState() {
     super.initState();
@@ -72,7 +65,14 @@ class DesktopDownloaderState extends State<DesktopDownloader> {
     estimate = null;
     error = '';
     task.invalidate();
-    setState(() => platform = detectPlatform(value) ?? platform);
+    final detected = detectPlatform(value);
+    setState(() {
+      if (platforms.contains(detected)) {
+        platform = detected!;
+      } else if (value.trim().isNotEmpty && detected != null) {
+        error = 'Use a YouTube, Facebook or Instagram link.';
+      }
+    });
   }
 
   List<Json> get options => (metadata?['availableFormats'] as List? ?? [])
@@ -90,6 +90,10 @@ class DesktopDownloaderState extends State<DesktopDownloader> {
       ['mp3', 'm4a', 'wav', 'aac', 'flac', 'ogg'].contains(format);
   Future<void> analyze() async {
     if (needsGuard || url.text.trim().isEmpty) return;
+    if (!platforms.contains(detectPlatform(url.text))) {
+      setState(() => error = 'Use a YouTube, Facebook or Instagram link.');
+      return;
+    }
     final token = ++generation;
     setState(() {
       analyzing = true;
@@ -181,6 +185,55 @@ class DesktopDownloaderState extends State<DesktopDownloader> {
 
   @override
   Widget build(BuildContext context) {
+    final base = Theme.of(context);
+    final accent = switch (platform) {
+      'Facebook' => const Color(0xFF1865E6),
+      'Instagram' => const Color(0xFFC13584),
+      _ => const Color(0xFFDC2626),
+    };
+    final scheme = base.colorScheme.copyWith(
+        primary: accent,
+        onPrimary: Colors.white,
+        primaryContainer: accent,
+        onPrimaryContainer: Colors.white);
+    final scoped = base.copyWith(
+      colorScheme: scheme,
+      filledButtonTheme: FilledButtonThemeData(
+          style: base.filledButtonTheme.style?.copyWith(
+              backgroundColor: WidgetStateProperty.resolveWith((states) =>
+                  accent.withValues(
+                      alpha: states.contains(WidgetState.disabled) ? .4 : 1)),
+              foregroundColor: const WidgetStatePropertyAll(Colors.white))),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+          style: base.outlinedButtonTheme.style?.copyWith(
+              foregroundColor: WidgetStateProperty.resolveWith((states) =>
+                  states.contains(WidgetState.disabled)
+                      ? base.disabledColor
+                      : accent))),
+      textButtonTheme: TextButtonThemeData(
+          style: base.textButtonTheme.style?.copyWith(
+              foregroundColor: WidgetStateProperty.resolveWith((states) =>
+                  states.contains(WidgetState.disabled)
+                      ? base.disabledColor
+                      : accent))),
+      chipTheme: base.chipTheme.copyWith(
+          selectedColor: accent,
+          checkmarkColor: Colors.white,
+          labelStyle: WidgetStateTextStyle.resolveWith((states) =>
+              base.chipTheme.labelStyle!.copyWith(
+                  color: states.contains(WidgetState.selected)
+                      ? Colors.white
+                      : base.colorScheme.onSurface))),
+      progressIndicatorTheme:
+          base.progressIndicatorTheme.copyWith(color: accent),
+      inputDecorationTheme: base.inputDecorationTheme.copyWith(
+          focusedBorder: base.inputDecorationTheme.focusedBorder
+              ?.copyWith(borderSide: BorderSide(color: accent, width: 2))),
+    );
+    return Theme(data: scoped, child: Builder(builder: buildContent));
+  }
+
+  Widget buildContent(BuildContext context) {
     final theme = Theme.of(context);
     final detected =
         url.text.trim().isNotEmpty ? detectPlatform(url.text) : null;

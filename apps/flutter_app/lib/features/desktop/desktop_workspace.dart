@@ -522,6 +522,13 @@ class _DesktopWorkspaceState extends ConsumerState<DesktopWorkspace>
                             bottom: BorderSide(
                                 color: theme.colorScheme.outlineVariant))),
                     child: Row(children: [
+                      if (selected != 0) ...[
+                        IconButton(
+                            tooltip: 'Back to Overview',
+                            onPressed: () => navigate(0),
+                            icon: const Icon(Icons.arrow_back_rounded)),
+                        const SizedBox(width: 12),
+                      ],
                       Expanded(
                           child: Text(titles[selected],
                               style: theme.textTheme.titleMedium)),

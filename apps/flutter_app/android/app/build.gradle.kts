@@ -16,17 +16,27 @@ android {
 
     defaultConfig {
         applicationId = "com.mediaforge.app"
-        minSdk = flutter.minSdkVersion
+        minSdk = maxOf(flutter.minSdkVersion, 26)
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
 
+    val releaseStore = providers.environmentVariable("MEDIAFORGE_ANDROID_KEYSTORE").orNull
+    signingConfigs {
+        if (releaseStore != null) {
+            create("production") {
+                storeFile = file(releaseStore)
+                storePassword = providers.environmentVariable("MEDIAFORGE_ANDROID_STORE_PASSWORD").get()
+                keyAlias = providers.environmentVariable("MEDIAFORGE_ANDROID_KEY_ALIAS").get()
+                keyPassword = providers.environmentVariable("MEDIAFORGE_ANDROID_KEY_PASSWORD").get()
+            }
+        }
+    }
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // A debug-signed release is for local evaluation, never store publication.
+            signingConfig = signingConfigs.findByName("production") ?: signingConfigs.getByName("debug")
         }
     }
 }
@@ -39,4 +49,10 @@ kotlin {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    implementation("androidx.media3:media3-transformer:1.9.3")
+    implementation("androidx.media3:media3-effect:1.9.3")
+    implementation("androidx.exifinterface:exifinterface:1.4.2")
 }

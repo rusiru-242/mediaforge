@@ -11,13 +11,15 @@ import '../../core/services/local_media_api.dart';
 import 'desktop_task.dart';
 import 'desktop_widgets.dart';
 import 'task_panel.dart';
+import 'video_export_options.dart';
 
 class BatchItem {
   final String path, kind;
   final DesktopTask task = DesktopTask();
-  String format, quality = 'High';
+  String format, quality;
   BatchItem(this.path, this.kind)
-      : format = kind == 'image'
+      : quality = kind == 'video' ? '1080p' : 'High',
+        format = kind == 'image'
             ? 'webp'
             : kind == 'audio'
                 ? 'mp3'
@@ -35,16 +37,8 @@ class BatchItem {
         if (kind == 'image')
           'imageQuality': {'Low': 50, 'Medium': 75, 'High': 90}[quality],
         if (kind == 'video') ...{
-          'targetResolution': {
-            'Low': '480p',
-            'Medium': '720p',
-            'High': '1080p'
-          }[quality],
-          'videoBitrate': {
-            'Low': '600k',
-            'Medium': '1200k',
-            'High': '2500k'
-          }[quality]
+          if (quality != 'Original') 'targetResolution': quality,
+          'crf': 20,
         },
         if (kind == 'audio')
           'audioBitrate': {'Low': 128, 'Medium': 192, 'High': 320}[quality]
@@ -326,9 +320,13 @@ class DesktopBatchState extends State<DesktopBatch> {
                           const SizedBox(width: 12),
                           Expanded(
                               child: StudioSelect(
-                                  label: 'Quality',
+                                  label: item.kind == 'video'
+                                      ? 'Output Resolution'
+                                      : 'Quality',
                                   value: item.quality,
-                                  values: const ['Low', 'Medium', 'High'],
+                                  values: item.kind == 'video'
+                                      ? videoOutputResolutions
+                                      : const ['Low', 'Medium', 'High'],
                                   onChanged: busy
                                       ? null
                                       : (v) => setState(() {
@@ -385,12 +383,18 @@ class DesktopBatchState extends State<DesktopBatch> {
                       onPressed: zipTask.busy
                           ? null
                           : () async {
-                              final selectedFolder=ProviderScope.containerOf(context).read(settingsServiceProvider).outputFolder;
-                              final defaultFolder=selectedFolder.isEmpty?await PlatformService.getDefaultDownloadDirectory():selectedFolder;
-                              if(!mounted)return;
+                              final selectedFolder =
+                                  ProviderScope.containerOf(context)
+                                      .read(settingsServiceProvider)
+                                      .outputFolder;
+                              final defaultFolder = selectedFolder.isEmpty
+                                  ? await PlatformService
+                                      .getDefaultDownloadDirectory()
+                                  : selectedFolder;
+                              if (!mounted) return;
                               final destination = await FilePicker.platform
                                   .saveFile(
-                                      initialDirectory:defaultFolder,
+                                      initialDirectory: defaultFolder,
                                       dialogTitle: 'Save converted batch',
                                       fileName: 'MediaForge.zip',
                                       type: FileType.custom,

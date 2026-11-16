@@ -53,3 +53,4 @@ app.*.map.json
 # Staged runtime dependencies are reproducible with tool/prepare_windows_tools.py.
 /vendor/windows/
 /dist/
+!ios/Runner/Assets.xcassets/AppIcon.appiconset/*.png

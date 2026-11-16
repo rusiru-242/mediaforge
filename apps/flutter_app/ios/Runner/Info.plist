@@ -29,7 +29,7 @@
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>MediaForge requires access to your photo library to select media files for conversion and processing.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>MediaForge needs permission to save converted videos, audio files, and images to your photo library.</string>
+	<string>MediaForge needs permission to save exported videos and images to your photo library. Audio exports are saved using Files.</string>
 	<key>UIFileSharingEnabled</key>
 	<true/>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
