@@ -9,6 +9,21 @@ function Page({ busy }: { busy: boolean }) {
 
 afterEach(() => vi.restoreAllMocks());
 
+it('allows leaving only after confirmation is accepted', () => {
+  const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+  const page = render(<Page busy />);
+  const link = page.getByText('Editor');
+  let blocked = true;
+  link.addEventListener('click', event => {
+    blocked = event.defaultPrevented;
+    event.preventDefault();
+  });
+  fireEvent.click(link);
+  expect(confirm).toHaveBeenCalledOnce();
+  expect(blocked).toBe(false);
+  page.unmount();
+});
+
 it('blocks navigation when active work exists and leaving is declined', () => {
   const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
   const page = render(<Page busy />);

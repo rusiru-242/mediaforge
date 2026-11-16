@@ -34,7 +34,8 @@ class _MobileDownloaderState extends State<MobileDownloader> {
   String error = '', status = '', output = '', platform = 'YouTube';
   bool busy = false, pasting = false;
   bool get inputLocked => busy || pasting;
-  String? job;
+  String? job, analyzedSource;
+  bool get analyzed => metadata != null && analyzedSource == url.text.trim();
   String? detect(String value) {
     final host = Uri.tryParse(value.trim())?.host.toLowerCase() ?? '';
     bool belongs(String domain) => host == domain || host.endsWith('.$domain');
@@ -62,6 +63,7 @@ class _MobileDownloaderState extends State<MobileDownloader> {
       }
       platform = detect(value) ?? platform;
       metadata = null;
+      analyzedSource = null;
       options = [];
       selection = 0;
       output = '';
@@ -99,12 +101,14 @@ class _MobileDownloaderState extends State<MobileDownloader> {
   }
 
   Future<void> analyze() async {
-    if (inputLocked || url.text.trim().isEmpty) return;
+    if (inputLocked || analyzed || url.text.trim().isEmpty) return;
+    final sourceUrl = url.text.trim();
     FocusManager.instance.primaryFocus?.unfocus();
     setState(() {
       busy = true;
       error = '';
       metadata = null;
+      analyzedSource = null;
       options = [];
       output = '';
     });
@@ -118,7 +122,7 @@ class _MobileDownloaderState extends State<MobileDownloader> {
       validated(url.text);
       api = connect(serviceBase);
       final r = await api!.request('/downloads/metadata',
-          body: {'url': url.text.trim()}, method: 'POST');
+          body: {'url': sourceUrl}, method: 'POST');
       if (r['success'] != true) {
         throw StateError('${r['message'] ?? 'No usable public media.'}');
       }
@@ -130,6 +134,7 @@ class _MobileDownloaderState extends State<MobileDownloader> {
       if (mounted) {
         setState(() {
           metadata = r;
+          analyzedSource = sourceUrl;
           options = f;
           selection = 0;
         });
@@ -293,7 +298,9 @@ class _MobileDownloaderState extends State<MobileDownloader> {
             ]),
         const SizedBox(height: 8),
         FilledButton(
-            onPressed: inputLocked || url.text.trim().isEmpty ? null : analyze,
+            onPressed: inputLocked || analyzed || url.text.trim().isEmpty
+                ? null
+                : analyze,
             child: const Text('Analyze')),
         if (busy) ...[
           const LinearProgressIndicator(),
@@ -304,7 +311,9 @@ class _MobileDownloaderState extends State<MobileDownloader> {
           Text(error,
               style: TextStyle(color: Theme.of(context).colorScheme.error)),
         if (metadata != null) ...[
-          Text('${metadata!['title'] ?? ''}'),
+          const SizedBox(height: 16),
+          MobileMediaPreview(metadata: metadata!, platform: platform),
+          const SizedBox(height: 16),
           DropdownButtonFormField<int>(
               initialValue: selection,
               items: [
@@ -326,6 +335,120 @@ class _MobileDownloaderState extends State<MobileDownloader> {
               child: const Text('Share / Save downloaded media'))
       ]),
     );
+  }
+}
+
+/// The metadata preview is shared by all supported social platforms.
+class MobileMediaPreview extends StatelessWidget {
+  final Json metadata;
+  final String platform;
+  const MobileMediaPreview(
+      {super.key, required this.metadata, required this.platform});
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final primaryThumbnail = metadata['thumbnail'];
+    final candidate =
+        primaryThumbnail is String && primaryThumbnail.trim().isNotEmpty
+            ? primaryThumbnail
+            : metadata['thumbnailUrl'];
+    final uri = candidate is String ? Uri.tryParse(candidate) : null;
+    final thumbnail = uri != null &&
+            uri.scheme == 'https' &&
+            uri.host.isNotEmpty &&
+            uri.userInfo.isEmpty
+        ? uri.toString()
+        : null;
+    final seconds = metadata['duration'];
+    final duration = seconds is num && seconds.isFinite && seconds > 0
+        ? Duration(seconds: seconds.floor())
+        : null;
+    final time = duration == null
+        ? null
+        : duration.inHours > 0
+            ? '${duration.inHours}:${(duration.inMinutes % 60).toString().padLeft(2, '0')}:${(duration.inSeconds % 60).toString().padLeft(2, '0')}'
+            : '${duration.inMinutes}:${(duration.inSeconds % 60).toString().padLeft(2, '0')}';
+    Widget unavailable() => ColoredBox(
+        color: theme.colorScheme.surfaceContainerHighest,
+        child: Center(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.movie_outlined,
+              size: 40, color: theme.colorScheme.onSurfaceVariant),
+          const SizedBox(height: 8),
+          const Text('Thumbnail unavailable'),
+        ])));
+    return Card(
+        margin: EdgeInsets.zero,
+        clipBehavior: Clip.antiAlias,
+        child:
+            Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          AspectRatio(
+              aspectRatio: 16 / 9,
+              child: Stack(fit: StackFit.expand, children: [
+                if (thumbnail == null)
+                  unavailable()
+                else
+                  Image.network(thumbnail,
+                      fit: BoxFit.cover,
+                      semanticLabel: 'Media thumbnail',
+                      loadingBuilder: (context, child, progress) => progress ==
+                              null
+                          ? child
+                          : ColoredBox(
+                              color: theme.colorScheme.surfaceContainerHighest,
+                              child: const Center(
+                                  child: CircularProgressIndicator())),
+                      errorBuilder: (_, __, ___) => unavailable()),
+                if (time != null)
+                  Positioned(
+                      bottom: 8,
+                      right: 8,
+                      child: DecoratedBox(
+                          decoration: BoxDecoration(
+                              color: Colors.black87,
+                              borderRadius: BorderRadius.circular(6)),
+                          child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 4),
+                              child: Text(time,
+                                  style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w600))))),
+              ])),
+          Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                        metadata['title'] is String &&
+                                (metadata['title'] as String).trim().isNotEmpty
+                            ? metadata['title'] as String
+                            : 'Media preview',
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleMedium),
+                    const SizedBox(height: 8),
+                    Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          SocialPlatformIcon(
+                              platform: platform,
+                              color: theme.colorScheme.onSurfaceVariant),
+                          Text(platform),
+                          if (time != null) Text('Duration: $time'),
+                        ]),
+                    const SizedBox(height: 8),
+                    Row(children: [
+                      Icon(Icons.check_circle_outline,
+                          size: 18, color: theme.colorScheme.primary),
+                      const SizedBox(width: 6),
+                      const Flexible(child: Text('Ready for download'))
+                    ]),
+                  ])),
+        ]));
   }
 }
 

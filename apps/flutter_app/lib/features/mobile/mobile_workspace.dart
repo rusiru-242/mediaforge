@@ -69,37 +69,43 @@ class _MobileWorkspaceState extends ConsumerState<MobileWorkspace>
     if (state == AppLifecycleState.paused) unawaited(queue.cancelAll());
   }
 
+  bool navigating = false;
   Future<void> navigate(int i) async {
-    if (i == selected) return;
-    final dirty = (selected >= 1 &&
-            selected <= 3 &&
-            (editors[selected - 1].currentState?.hasWork ?? false)) ||
-        (selected == 4 && (batch.currentState?.hasWork ?? false));
-    if (dirty || queue.busy) {
-      final yes = await showDialog<bool>(
-          context: context,
-          builder: (c) => AlertDialog(
-                  title: const Text('Leave this tool?'),
-                  content: const Text(
-                      'Edits stay in this session. Keep MediaForge in the foreground while exporting; background exports are cancelled.'),
-                  actions: [
-                    TextButton(
-                        onPressed: () => Navigator.pop(c, false),
-                        child: const Text('Stay')),
-                    FilledButton(
-                        onPressed: () => Navigator.pop(c, true),
-                        child: const Text('Continue'))
-                  ]));
-      if (yes != true) return;
-    }
-    for (final editor in editors) {
-      await editor.currentState?.pause();
-    }
-    if (mounted) {
-      setState(() {
-        selected = i;
-        visited.add(i);
-      });
+    if (i == selected || navigating) return;
+    navigating = true;
+    try {
+      final dirty = (selected >= 1 &&
+              selected <= 3 &&
+              (editors[selected - 1].currentState?.hasWork ?? false)) ||
+          (selected == 4 && (batch.currentState?.hasWork ?? false));
+      if (dirty || queue.busy) {
+        final yes = await showDialog<bool>(
+            context: context,
+            builder: (c) => AlertDialog(
+                    title: const Text('Leave this tool?'),
+                    content: const Text(
+                        'Edits stay in this session. Keep MediaForge in the foreground while exporting; background exports are cancelled.'),
+                    actions: [
+                      TextButton(
+                          onPressed: () => Navigator.pop(c, false),
+                          child: const Text('Stay')),
+                      FilledButton(
+                          onPressed: () => Navigator.pop(c, true),
+                          child: const Text('Continue'))
+                    ]));
+        if (yes != true) return;
+      }
+      for (final editor in editors) {
+        await editor.currentState?.pause();
+      }
+      if (mounted) {
+        setState(() {
+          selected = i;
+          visited.add(i);
+        });
+      }
+    } finally {
+      navigating = false;
     }
   }
 

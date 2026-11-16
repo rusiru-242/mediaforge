@@ -101,8 +101,7 @@ export default function VideoConverterPage() {
     exportMode, outputFormat, resolution, videoBitrate, audioBitrate, stripAudio, startTime, endTime,
     cropX, cropY, cropWidth, cropHeight, crf, videoCodec, frameRate, volume, removeSilence, audioEffects, audioEffectLevels, videoFilter });
   const isProcessing = stage === 'UPLOADING' || stage === 'PROCESSING';
-  const hasUnsavedWork = Boolean(selectedFile && (!downloaded || settingsKey !== exportKey));
-  useNavigationGuard(isProcessing || hasUnsavedWork, isProcessing
+  useNavigationGuard(isProcessing || Boolean(selectedFile), isProcessing
     ? 'Your video is uploading or processing. Leave this page?'
     : 'This clip has unsaved work. Leave this page and discard it?');
   useEffect(() => {

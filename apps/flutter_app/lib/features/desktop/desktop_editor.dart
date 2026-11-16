@@ -75,6 +75,7 @@ class DesktopEditorState extends ConsumerState<DesktopEditor> {
   bool get isAudio => widget.kind == 'audio';
   bool get editable => path != null && !importing && !task.busy;
   bool get needsGuard =>
+      path != null ||
       importing ||
       task.busy ||
       dirty ||

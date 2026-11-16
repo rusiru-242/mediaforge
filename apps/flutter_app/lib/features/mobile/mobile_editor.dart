@@ -53,7 +53,7 @@ class MobileEditorState extends State<MobileEditor> {
   QueueEntry? entry;
   int generation = 0;
   bool get locked => loading || entry != null && !entry!.snapshot.terminal;
-  bool get hasWork => locked || path != null && !saved;
+  bool get hasWork => locked || path != null;
   @override
   void initState() {
     super.initState();

@@ -58,7 +58,7 @@ class DesktopBatchState extends State<DesktopBatch> {
   bool busy = false, zip = true, cancelled = false;
   MediaApi? active;
   String? batchId;
-  bool get needsGuard => busy || zipTask.busy;
+  bool get needsGuard => items.isNotEmpty || busy || zipTask.busy;
   Future<void> pause() async {}
   @override
   void initState() {

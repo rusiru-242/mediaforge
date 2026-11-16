@@ -46,7 +46,8 @@ export default function BatchConverterPage() {
   const [packageZip, setPackageZip] = useState(true);
 
   const [isProcessing, setIsProcessing] = useState(false);
-  useNavigationGuard(isProcessing);
+  useNavigationGuard(isProcessing || queue.length > 0,
+    'Your batch workspace contains files or active conversions. Leave this page?');
   const [overallProgress, setOverallProgress] = useState(0);
   const [batchId, setBatchId] = useState<string | null>(null);
   const [batchCompleted, setBatchCompleted] = useState(false);

@@ -115,6 +115,8 @@ void main() {
         'http://10.0.2.2:8081/api/v1/downloads/metadata');
     expect(jsonDecode(requests.single.body), {'url': 'https://youtu.be/owned'});
     expect(find.text('Fixture metadata'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('mp4 - 720p'), 200,
+        scrollable: find.byType(Scrollable).first);
     expect(find.text('mp4 - 720p'), findsOneWidget);
     expect(find.textContaining('not configured'), findsNothing);
     debugDefaultTargetPlatformOverride = null;
