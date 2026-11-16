@@ -29,7 +29,7 @@ class SettingsService {
   String get defaultQuality => _prefs.getString(_keyDefaultQuality) ?? 'High';
   Future<void> setDefaultQuality(String v) => _prefs.setString(_keyDefaultQuality, v);
 
-  String get themeMode => _prefs.getString(_keyThemeMode) ?? 'system';
+  String get themeMode => _prefs.getString(_keyThemeMode) ?? 'light';
   Future<void> setThemeMode(String v) => _prefs.setString(_keyThemeMode, v);
 
   int get maxConcurrentJobs => _prefs.getInt(_keyMaxConcurrentJobs) ?? 3;
