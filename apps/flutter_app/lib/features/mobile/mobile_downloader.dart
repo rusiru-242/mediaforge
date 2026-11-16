@@ -1,36 +1,40 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:uuid/uuid.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/services/backend_api.dart';
+import '../../core/config/mobile_online_config.dart';
 import '../../core/processing/native_media_engine.dart';
 
 class MobileDownloader extends StatefulWidget {
   final NativeMediaEngine engine;
-  const MobileDownloader({super.key, required this.engine});
+  final BackendApi Function(String)? apiFactory;
+  const MobileDownloader({super.key, required this.engine, this.apiFactory});
   @override
   State<MobileDownloader> createState() => _MobileDownloaderState();
 }
 
 class _MobileDownloaderState extends State<MobileDownloader> {
-  final server = TextEditingController(), url = TextEditingController();
+  final url = TextEditingController();
+  String serviceBase = '';
+  BackendApi connect(String base) =>
+      widget.apiFactory?.call(base) ?? BackendApi(baseUrl: base);
+  static const accents = {
+    'YouTube': Color(0xFFDC2626),
+    'Facebook': Color(0xFF1865E6),
+    'Instagram': Color(0xFFC13584),
+  };
   BackendApi? api;
   Json? metadata;
   List<Json> options = [];
   int selection = 0;
   String error = '', status = '', output = '', platform = 'YouTube';
-  bool busy = false;
+  bool busy = false, pasting = false;
+  bool get inputLocked => busy || pasting;
   String? job;
-  @override
-  void initState() {
-    super.initState();
-    SharedPreferences.getInstance().then((p) {
-      if (mounted) server.text = p.getString('mobileOnlineService') ?? '';
-    });
-  }
-
   String? detect(String value) {
     final host = Uri.tryParse(value.trim())?.host.toLowerCase() ?? '';
     bool belongs(String domain) => host == domain || host.endsWith('.$domain');
@@ -48,7 +52,55 @@ class _MobileDownloaderState extends State<MobileDownloader> {
     return u;
   }
 
+  void updateUrl(String value, {bool write = false}) {
+    if (busy) return;
+    setState(() {
+      if (write) {
+        url.value = TextEditingValue(
+            text: value,
+            selection: TextSelection.collapsed(offset: value.length));
+      }
+      platform = detect(value) ?? platform;
+      metadata = null;
+      options = [];
+      selection = 0;
+      output = '';
+      error = '';
+      status = '';
+      job = null;
+    });
+  }
+
+  Future<void> pasteUrl() async {
+    if (inputLocked) return;
+    setState(() => pasting = true);
+    try {
+      final data = await Clipboard.getData(Clipboard.kTextPlain);
+      if (!mounted || busy) return;
+      final value = data?.text?.trim() ?? '';
+      if (value.isEmpty) {
+        setState(() => error = 'Clipboard has no text to paste.');
+      } else {
+        updateUrl(value, write: true);
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() =>
+            error = 'Unable to read clipboard. Paste into the URL field.');
+      }
+    } finally {
+      if (mounted) setState(() => pasting = false);
+    }
+  }
+
+  void clearUrl() {
+    if (inputLocked) return;
+    updateUrl('', write: true);
+  }
+
   Future<void> analyze() async {
+    if (inputLocked || url.text.trim().isEmpty) return;
+    FocusManager.instance.primaryFocus?.unfocus();
     setState(() {
       busy = true;
       error = '';
@@ -60,13 +112,11 @@ class _MobileDownloaderState extends State<MobileDownloader> {
       if (detect(url.text) == null) {
         throw StateError('Choose a YouTube, Facebook or Instagram URL.');
       }
-      final service = validated(server.text);
+      final preferences = await SharedPreferences.getInstance();
+      serviceBase = MobileOnlineConfig.resolve(
+          savedBase: preferences.getString('mobileOnlineService') ?? '');
       validated(url.text);
-      await SharedPreferences.getInstance().then((p) => p.setString(
-          'mobileOnlineService',
-          service.toString().replaceAll(RegExp(r'/$'), '')));
-      api =
-          BackendApi(baseUrl: service.toString().replaceAll(RegExp(r'/$'), ''));
+      api = connect(serviceBase);
       final r = await api!.request('/downloads/metadata',
           body: {'url': url.text.trim()}, method: 'POST');
       if (r['success'] != true) {
@@ -86,8 +136,7 @@ class _MobileDownloaderState extends State<MobileDownloader> {
       }
     } catch (e) {
       if (mounted) {
-        setState(() => error =
-            'Internet and an available extraction service are required. $e');
+        setState(() => error = e.toString());
       }
     } finally {
       api?.close();
@@ -97,6 +146,7 @@ class _MobileDownloaderState extends State<MobileDownloader> {
   }
 
   Future<void> download() async {
+    if (inputLocked || options.isEmpty) return;
     setState(() {
       busy = true;
       error = '';
@@ -104,9 +154,7 @@ class _MobileDownloaderState extends State<MobileDownloader> {
       status = 'Creating download';
     });
     try {
-      api = BackendApi(
-          baseUrl:
-              validated(server.text).toString().replaceAll(RegExp(r'/$'), ''));
+      api = connect(serviceBase);
       final o = options[selection];
       final format = '${o['format']}'.toLowerCase();
       if (!RegExp(r'^[a-z0-9]{2,5}$').hasMatch(format)) {
@@ -115,7 +163,8 @@ class _MobileDownloaderState extends State<MobileDownloader> {
       final j = await api!.createJob('/downloads', {
         'url': validated(url.text).toString(),
         'selectedFormat': format,
-        'selectedQuality': o['quality']
+        'selectedQuality': o['quality'],
+        'mediaType': ['mp3', 'm4a', 'wav'].contains(format) ? 'audio' : 'video'
       });
       job = j.id;
       await for (final state in api!.watch(j.id)) {
@@ -168,63 +217,84 @@ class _MobileDownloaderState extends State<MobileDownloader> {
   @override
   void dispose() {
     api?.close();
-    server.dispose();
     url.dispose();
     super.dispose();
   }
 
   @override
-  Widget build(BuildContext context) =>
-      ListView(padding: const EdgeInsets.all(16), children: [
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final accent = accents[platform]!;
+    return Theme(
+      data: theme.copyWith(
+        colorScheme: theme.colorScheme
+            .copyWith(primary: accent, onPrimary: Colors.white),
+        filledButtonTheme: FilledButtonThemeData(
+            style: FilledButton.styleFrom(
+                backgroundColor: accent,
+                foregroundColor: Colors.white,
+                disabledBackgroundColor: accent.withValues(alpha: 0.45),
+                disabledForegroundColor: Colors.white,
+                minimumSize: const Size(0, 48))),
+      ),
+      child: ListView(padding: const EdgeInsets.all(16), children: [
         Text('Online Media Downloader',
             style: Theme.of(context).textTheme.headlineMedium),
         const SizedBox(height: 12),
         const Text(
-            'Internet required. Mobile extraction uses an optional HTTPS MediaForge-compatible service. Offline editors remain available without it. No private API keys are stored in the app.'),
+            'Download videos and audio from supported platforms. Internet required; local editors work offline.'),
         const SizedBox(height: 16),
         Wrap(
             spacing: 8,
             runSpacing: 8,
             children: ['YouTube', 'Facebook', 'Instagram']
                 .map((name) => ChoiceChip(
+                    avatar: SocialPlatformIcon(
+                        platform: name,
+                        color: platform == name
+                            ? Colors.white
+                            : theme.colorScheme.onSurfaceVariant),
+                    showCheckmark: false,
                     label: Text(name),
                     selected: platform == name,
-                    selectedColor: {
-                      'YouTube': const Color(0xFFDC2626),
-                      'Facebook': const Color(0xFF1865E6),
-                      'Instagram': const Color(0xFFC13584)
-                    }[name],
+                    selectedColor: accents[name],
                     labelStyle: TextStyle(
                         color: platform == name
                             ? Colors.white
                             : Theme.of(context).colorScheme.onSurface),
-                    onSelected: busy ||
+                    onSelected: inputLocked ||
                             detect(url.text) != null && detect(url.text) != name
                         ? null
                         : (_) => setState(() => platform = name)))
                 .toList()),
         const SizedBox(height: 16),
         TextField(
-            controller: server,
-            enabled: !busy,
-            decoration: const InputDecoration(
-                labelText: 'Optional HTTPS API base',
-                hintText: 'https://your-service.example/api/v1')),
-        const SizedBox(height: 12),
-        TextField(
             controller: url,
-            onChanged: (value) => setState(() {
-                  platform = detect(value) ?? platform;
-                  metadata = null;
-                  options = [];
-                  output = '';
-                }),
-            enabled: !busy,
+            onChanged: updateUrl,
+            enabled: !inputLocked,
             decoration: const InputDecoration(
-                labelText: 'Authorized public media URL')),
-        const SizedBox(height: 12),
+                labelText: 'Media URL', prefixIcon: Icon(Icons.link)),
+            keyboardType: TextInputType.url,
+            autocorrect: false),
+        const SizedBox(height: 8),
+        Wrap(
+            alignment: WrapAlignment.end,
+            spacing: 8,
+            runSpacing: 4,
+            children: [
+              TextButton.icon(
+                  onPressed: inputLocked || url.text.isEmpty ? null : clearUrl,
+                  icon: const Icon(Icons.close, size: 18),
+                  label: const Text('Clear')),
+              OutlinedButton.icon(
+                  onPressed: inputLocked ? null : pasteUrl,
+                  icon: const Icon(Icons.content_paste_outlined, size: 18),
+                  label: Text(pasting ? 'Pasting...' : 'Paste')),
+            ]),
+        const SizedBox(height: 8),
         FilledButton(
-            onPressed: busy ? null : analyze, child: const Text('Analyze')),
+            onPressed: inputLocked || url.text.trim().isEmpty ? null : analyze,
+            child: const Text('Analyze')),
         if (busy) ...[
           const LinearProgressIndicator(),
           Text(status),
@@ -244,13 +314,91 @@ class _MobileDownloaderState extends State<MobileDownloader> {
                       child: Text(
                           '${options[i]['format']} - ${options[i]['quality']}'))
               ],
-              onChanged: busy ? null : (v) => setState(() => selection = v!)),
+              onChanged:
+                  inputLocked ? null : (v) => setState(() => selection = v!)),
           FilledButton(
-              onPressed: busy ? null : download, child: const Text('Download'))
+              onPressed: inputLocked ? null : download,
+              child: const Text('Download'))
         ],
         if (output.isNotEmpty)
           OutlinedButton(
               onPressed: () => Share.shareXFiles([XFile(output)]),
               child: const Text('Share / Save downloaded media'))
-      ]);
+      ]),
+    );
+  }
+}
+
+/// Outline platform marks matching the website, without a font dependency.
+class SocialPlatformIcon extends StatelessWidget {
+  final String platform;
+  final Color color;
+  const SocialPlatformIcon(
+      {super.key, required this.platform, required this.color});
+  @override
+  Widget build(BuildContext context) => SizedBox(
+      width: 18,
+      height: 18,
+      child: CustomPaint(painter: _SocialMarkPainter(platform, color)));
+}
+
+class _SocialMarkPainter extends CustomPainter {
+  final String platform;
+  final Color color;
+  const _SocialMarkPainter(this.platform, this.color);
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.scale(size.width / 24, size.height / 24);
+    final stroke = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.8
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+    if (platform == 'YouTube') {
+      canvas.drawRRect(
+          RRect.fromRectAndRadius(
+              const Rect.fromLTWH(2, 5, 20, 14), const Radius.circular(4)),
+          stroke);
+      canvas.drawPath(
+          Path()
+            ..moveTo(10, 9)
+            ..lineTo(16, 12)
+            ..lineTo(10, 15)
+            ..close(),
+          stroke);
+    } else if (platform == 'Instagram') {
+      canvas.drawRRect(
+          RRect.fromRectAndRadius(
+              const Rect.fromLTWH(3, 3, 18, 18), const Radius.circular(5)),
+          stroke);
+      canvas.drawCircle(const Offset(12, 12), 4, stroke);
+      canvas.drawCircle(const Offset(17.5, 6.5), 1, Paint()..color = color);
+    } else {
+      canvas.drawPath(
+          Path()
+            ..moveTo(16, 3)
+            ..lineTo(13, 3)
+            ..quadraticBezierTo(9, 3, 9, 7)
+            ..lineTo(9, 10)
+            ..lineTo(6, 10)
+            ..lineTo(6, 14)
+            ..lineTo(9, 14)
+            ..lineTo(9, 22)
+            ..lineTo(13, 22)
+            ..lineTo(13, 14)
+            ..lineTo(16, 14)
+            ..lineTo(17, 10)
+            ..lineTo(13, 10)
+            ..lineTo(13, 7)
+            ..quadraticBezierTo(13, 6, 14, 6)
+            ..lineTo(16, 6)
+            ..close(),
+          stroke);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _SocialMarkPainter old) =>
+      old.platform != platform || old.color != color;
 }

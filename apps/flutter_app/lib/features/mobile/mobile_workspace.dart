@@ -25,7 +25,10 @@ class _MobileWorkspaceState extends ConsumerState<MobileWorkspace>
   String error = '';
   int selected = 0;
   final visited = <int>{0};
+  final batch = GlobalKey<MobileBatchState>();
   final editors = List.generate(3, (_) => GlobalKey<MobileEditorState>());
+  // Keep page IDs stable while matching the website's navigation order.
+  static const navigationOrder = [0, 5, 1, 2, 3, 4];
   static const titles = [
     'Overview',
     'Video Editor',
@@ -68,9 +71,10 @@ class _MobileWorkspaceState extends ConsumerState<MobileWorkspace>
 
   Future<void> navigate(int i) async {
     if (i == selected) return;
-    final dirty = selected >= 1 &&
-        selected <= 3 &&
-        (editors[selected - 1].currentState?.hasWork ?? false);
+    final dirty = (selected >= 1 &&
+            selected <= 3 &&
+            (editors[selected - 1].currentState?.hasWork ?? false)) ||
+        (selected == 4 && (batch.currentState?.hasWork ?? false));
     if (dirty || queue.busy) {
       final yes = await showDialog<bool>(
           context: context,
@@ -145,7 +149,7 @@ class _MobileWorkspaceState extends ConsumerState<MobileWorkspace>
                 child: Text('MediaForge',
                     style:
                         TextStyle(fontSize: 24, fontWeight: FontWeight.bold))),
-            for (var i = 0; i < titles.length; i++)
+            for (final i in navigationOrder)
               ListTile(
                   leading: Icon(icons[i]),
                   title: Text(titles[i]),
@@ -187,7 +191,10 @@ class _MobileWorkspaceState extends ConsumerState<MobileWorkspace>
                             : const SizedBox(),
                       visited.contains(4)
                           ? MobileBatch(
-                              engine: engine, queue: queue, caps: caps!)
+                              key: batch,
+                              engine: engine,
+                              queue: queue,
+                              caps: caps!)
                           : const SizedBox(),
                       visited.contains(5)
                           ? MobileDownloader(engine: engine)
@@ -201,7 +208,7 @@ class _MobileWorkspaceState extends ConsumerState<MobileWorkspace>
         const Text(
             'Edit and convert local video, audio and images on your device. No account or server required.'),
         const SizedBox(height: 20),
-        for (var i = 1; i < titles.length; i++)
+        for (final i in navigationOrder.skip(1))
           Card(
               child: ListTile(
                   contentPadding: const EdgeInsets.all(16),

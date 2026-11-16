@@ -1,0 +1,307 @@
+{
+  "originalProcess": {
+    "pid": 3260,
+    "executable": "C:\\Program Files\\Java\\jdk-22\\bin\\java.exe",
+    "mainClass": "com.mediaforge.backend.MediaForgeApplication",
+    "workingDirectory": "C:\\Users\\REDTECH\\Documents\\Projects\\mediaforge\\mediaforge\\backend",
+    "started": "2026-11-16T17:52:19+05:30",
+    "launch": "Maven spring-boot:run from VS Code PowerShell terminal"
+  },
+  "runningProcess": {
+    "pid": 36292,
+    "mainClass": "com.mediaforge.backend.MediaForgeApplication",
+    "port": 8081,
+    "instances": 1
+  },
+  "rootCause": {
+    "exception": "org.springframework.web.servlet.resource.NoResourceFoundException",
+    "origin": "ResourceHttpRequestHandler.handleRequest:585 (Spring Web MVC 6.2.3)",
+    "incorrectHandler": "GlobalExceptionHandler.handleGeneralException(Exception, HttpServletRequest)",
+    "rootMapped": false
+  },
+  "tests": {
+    "newRegressionCases": 11,
+    "regressionFailures": 0,
+    "fullSuite": {
+      "total": 178,
+      "passed": 160,
+      "failed": 1,
+      "skipped": 17
+    },
+    "remainingFailure": "ExtractorTransportTest.extractorTimeoutTerminatesProcessAndRemovesActiveEntry: Windows CreateProcess error=5, Access is denied launching fixture Java child process",
+    "isolatedRetriesPassed": [
+      "networkFailureIsClassifiedWithoutLeakingCredentials",
+      "extractorTimeoutTerminatesProcessAndRemovesActiveEntry"
+    ],
+    "skippedClasses": [
+      {
+        "class": "com.mediaforge.backend.converter.service.ImageEditorMediaIntegrationTest",
+        "count": 1
+      },
+      {
+        "class": "com.mediaforge.backend.converter.service.VideoEditorMediaIntegrationTest",
+        "count": 9
+      },
+      {
+        "class": "com.mediaforge.backend.converter.service.YtDlpFfmpegLocationIntegrationTest",
+        "count": 1
+      },
+      {
+        "class": "com.mediaforge.backend.downloader.service.AuthorizedPlatformIntegrationTest",
+        "count": 1
+      },
+      {
+        "class": "com.mediaforge.backend.downloader.service.DownloaderMediaIntegrationTest",
+        "count": 2
+      },
+      {
+        "class": "com.mediaforge.backend.downloader.YtDlpProcessExecutorTest",
+        "count": 3
+      }
+    ]
+  },
+  "http": [
+    {
+      "path": "/",
+      "method": "GET",
+      "status": 404,
+      "body": {
+        "timestamp": "2026-11-16T18:06:52.735805+05:30",
+        "status": 404,
+        "error": "Not Found",
+        "code": "RESOURCE_NOT_FOUND",
+        "message": "The requested resource was not found.",
+        "path": "/",
+        "validationErrors": null
+      },
+      "allow": null
+    },
+    {
+      "path": "/api/v1",
+      "method": "GET",
+      "status": 404,
+      "body": {
+        "timestamp": "2026-11-16T18:06:52.8068725+05:30",
+        "status": 404,
+        "error": "Not Found",
+        "code": "RESOURCE_NOT_FOUND",
+        "message": "The requested resource was not found.",
+        "path": "/api/v1",
+        "validationErrors": null
+      },
+      "allow": null
+    },
+    {
+      "path": "/api/v1/health",
+      "method": "GET",
+      "status": 200,
+      "body": {
+        "status": "UP",
+        "service": "mediaforge-backend",
+        "version": "1.0.0",
+        "timestamp": "2026-11-16T18:06:52.8413236+05:30"
+      },
+      "allow": null
+    },
+    {
+      "path": "/actuator/health",
+      "method": "GET",
+      "status": 200,
+      "body": {
+        "status": "UP"
+      },
+      "allow": null
+    },
+    {
+      "path": "/api/v1/conversions/formats",
+      "method": "GET",
+      "status": 200,
+      "body": {
+        "videoFormats": [
+          "mp4",
+          "webm",
+          "mkv",
+          "mov",
+          "avi"
+        ],
+        "imageFormats": [
+          "jpg",
+          "jpeg",
+          "png",
+          "webp",
+          "avif"
+        ],
+        "videoBitrates": [
+          "auto",
+          "5000k",
+          "2500k",
+          "1000k",
+          "500k"
+        ],
+        "presets": [
+          "ultrafast",
+          "superfast",
+          "veryfast",
+          "faster",
+          "fast",
+          "medium",
+          "slow"
+        ],
+        "audioFormats": [
+          "mp3",
+          "wav",
+          "aac",
+          "flac",
+          "m4a",
+          "ogg"
+        ],
+        "resolutions": [
+          "source",
+          "1080p",
+          "720p",
+          "480p",
+          "360p",
+          "240p"
+        ],
+        "sampleRates": [
+          48000,
+          44100,
+          32000,
+          22050
+        ],
+        "audioBitrates": [
+          "auto",
+          "320k",
+          "256k",
+          "192k",
+          "128k",
+          "64k"
+        ]
+      },
+      "allow": null
+    },
+    {
+      "path": "/intentionally-unknown",
+      "method": "GET",
+      "status": 404,
+      "body": {
+        "timestamp": "2026-11-16T18:06:52.907161+05:30",
+        "status": 404,
+        "error": "Not Found",
+        "code": "RESOURCE_NOT_FOUND",
+        "message": "The requested resource was not found.",
+        "path": "/intentionally-unknown",
+        "validationErrors": null
+      },
+      "allow": null
+    },
+    {
+      "path": "/api/v1/conversions",
+      "method": "POST",
+      "status": 400,
+      "body": {
+        "timestamp": "2026-11-16T18:06:53.0416146+05:30",
+        "status": 400,
+        "error": "Bad Request",
+        "code": "VALIDATION_FAILED",
+        "message": "Input validation failed for one or more fields",
+        "path": "/api/v1/conversions",
+        "validationErrors": {
+          "outputFormat": "outputFormat is required"
+        }
+      },
+      "allow": null
+    },
+    {
+      "path": "/api/v1/conversions",
+      "method": "POST",
+      "status": 400,
+      "body": {
+        "timestamp": "2026-11-16T18:06:53.0513175+05:30",
+        "status": 400,
+        "error": "Bad Request",
+        "code": "INVALID_REQUEST",
+        "message": "Bad Request",
+        "path": "/api/v1/conversions",
+        "validationErrors": null
+      },
+      "allow": null
+    },
+    {
+      "path": "/api/v1/jobs/not-a-uuid",
+      "method": "GET",
+      "status": 400,
+      "body": {
+        "timestamp": "2026-11-16T18:06:53.0613706+05:30",
+        "status": 400,
+        "error": "Bad Request",
+        "code": "INVALID_REQUEST",
+        "message": "Bad Request",
+        "path": "/api/v1/jobs/not-a-uuid",
+        "validationErrors": null
+      },
+      "allow": null
+    },
+    {
+      "path": "/api/v1/health",
+      "method": "POST",
+      "status": 405,
+      "body": {
+        "timestamp": "2026-11-16T18:06:53.0856033+05:30",
+        "status": 405,
+        "error": "Method Not Allowed",
+        "code": "METHOD_NOT_ALLOWED",
+        "message": "Method Not Allowed",
+        "path": "/api/v1/health",
+        "validationErrors": null
+      },
+      "allow": "GET"
+    },
+    {
+      "path": "/api/v1/conversions",
+      "method": "POST",
+      "status": 415,
+      "body": {
+        "timestamp": "2026-11-16T18:06:53.0945409+05:30",
+        "status": 415,
+        "error": "Unsupported Media Type",
+        "code": "UNSUPPORTED_MEDIA_TYPE",
+        "message": "Unsupported Media Type",
+        "path": "/api/v1/conversions",
+        "validationErrors": null
+      },
+      "allow": null
+    }
+  ],
+  "emulator": [
+    {
+      "host": "10.0.2.2:8081",
+      "path": "/",
+      "status": 404,
+      "response": "HTTP/1.1 404 \r\r\nVary: Origin\r\r\nVary: Access-Control-Request-Method\r\r\nVary: Access-Control-Request-Headers\r\r\nX-Content-Type-Options: nosniff\r\r\nX-XSS-Protection: 0\r\r\nCache-Control: no-cache, no-store, max-age=0, must-revalidate\r\r\nPragma: no-cache\r\r\nExpires: 0\r\r\nX-Frame-Options: DENY\r\r\nContent-Security-Policy: default-src 'self'\r\r\nReferrer-Policy: strict-origin-when-cross-origin\r\r\nContent-Type: application/json\r\r\nTransfer-Encoding: chunked\r\r\nDate: Mon, 16 Nov 2026 12:37:31 GMT\r\r\nConnection: close\r\r\n\r\r\nc3\r\r\n{\"timestamp\":\"2026-11-16T18:07:31.9128986+05:30\",\"status\":404,\"error\":\"Not Found\",\"code\":\"RESOURCE_NOT_FOUND\",\"message\":\"The requested resource was not found.\",\"path\":\"/\",\"validationErrors\":null}\r\r\n0\r\r\n\r\r\n"
+    },
+    {
+      "host": "10.0.2.2:8081",
+      "path": "/api/v1/health",
+      "status": 200,
+      "response": "HTTP/1.1 200 \r\r\nVary: Origin\r\r\nVary: Access-Control-Request-Method\r\r\nVary: Access-Control-Request-Headers\r\r\nX-Content-Type-Options: nosniff\r\r\nX-XSS-Protection: 0\r\r\nCache-Control: no-cache, no-store, max-age=0, must-revalidate\r\r\nPragma: no-cache\r\r\nExpires: 0\r\r\nX-Frame-Options: DENY\r\r\nContent-Security-Policy: default-src 'self'\r\r\nReferrer-Policy: strict-origin-when-cross-origin\r\r\nContent-Type: application/json\r\r\nTransfer-Encoding: chunked\r\r\nDate: Mon, 16 Nov 2026 12:37:32 GMT\r\r\nConnection: close\r\r\n\r\r\n70\r\r\n{\"status\":\"UP\",\"service\":\"mediaforge-backend\",\"version\":\"1.0.0\",\"timestamp\":\"2026-11-16T18:07:32.5204118+05:30\"}\r\r\n0\r\r\n\r\r\n"
+    }
+  ],
+  "finalRootResponse": {
+    "status": 404,
+    "body": {
+      "timestamp": "2026-11-16T18:12:17.6836931+05:30",
+      "status": 404,
+      "error": "Not Found",
+      "code": "RESOURCE_NOT_FOUND",
+      "message": "The requested resource was not found.",
+      "path": "/",
+      "validationErrors": null
+    }
+  },
+  "logs": {
+    "before": "backend/target/root-error-before.log",
+    "fullSuite": "backend/target/root-error-full-suite-final.log",
+    "runtime": "backend/target/root-error-runtime.log"
+  }
+}

@@ -19,6 +19,18 @@ class NativeMediaEngine extends MediaProcessingEngine {
   Future<String> submit(MediaRequest r) async {
     r.validate();
     final caps = await capabilities();
+    if ((r.imageScale != 1 ||
+                r.flipHorizontal ||
+                r.flipVertical ||
+                r.imageAdjustments.isNotEmpty) &&
+            !caps.imageEditing ||
+        (r.fadeIn > 0 || r.fadeOut > 0) && !caps.audioFades ||
+        r.videoFilter != 'original' && !caps.videoFilters ||
+        (r.audioEffects.isNotEmpty || r.volume != 1) && !caps.audioEffects ||
+        r.videoBitrate != null && !caps.encoderTuning) {
+      throw UnsupportedError(
+          'This device engine does not support the selected effects or tuning.');
+    }
     if (!(caps.formats[r.kind] ?? []).contains(r.format)) {
       throw UnsupportedError('This device cannot export ${r.format}.');
     }
@@ -42,6 +54,10 @@ class NativeMediaEngine extends MediaProcessingEngine {
   Future<void> dispose() async {
     await channel.invokeMethod<void>('cancelAll');
   }
+
+  Future<String> outputDirectory() async =>
+      (await channel.invokeMethod<String>('outputDirectory')) ??
+      (throw StateError('No local output directory.'));
 
   Future<String?> save(String path, {bool gallery = false}) => channel
       .invokeMethod<String>(gallery ? 'saveGallery' : 'save', {'path': path});

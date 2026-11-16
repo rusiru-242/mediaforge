@@ -8,6 +8,7 @@ import '../../core/processing/media_queue.dart';
 import '../../core/processing/media_file_store.dart';
 import '../desktop/crop_surface.dart';
 import '../desktop/desktop_widgets.dart' show StudioCard;
+import 'video_look.dart';
 
 class MobileEditor extends StatefulWidget {
   final MediaKind kind;
@@ -35,6 +36,19 @@ class MobileEditorState extends State<MobileEditor> {
   int? height;
   int rotation = 0, bitrate = 192;
   double quality = 85;
+  String videoFilter = 'original', cropRatio = 'Original';
+  bool exportAudio = false;
+  int videoBitrate = 8000;
+  double volume = 1, zoom = 1, fadeIn = 0, fadeOut = 0, playbackSpeed = 1;
+  final audioEffects = <String, double>{};
+  bool previewPending = false, processedPreview = false;
+  String imageFilter = 'original';
+  double brightness = 0,
+      contrast = 1,
+      saturation = 1,
+      warmth = 0,
+      imageScale = 1;
+  bool flipHorizontal = false, flipVertical = false;
   final cuts = <MediaCut>[];
   QueueEntry? entry;
   int generation = 0;
@@ -43,21 +57,108 @@ class MobileEditorState extends State<MobileEditor> {
   @override
   void initState() {
     super.initState();
-    format = widget.caps.formats[widget.kind]?.firstOrNull ?? '';
+    format = widget.kind == MediaKind.image &&
+            (widget.caps.formats[widget.kind]?.contains('webp') ?? false)
+        ? 'webp'
+        : widget.caps.formats[widget.kind]?.firstOrNull ?? '';
     widget.queue.addListener(refresh);
   }
 
   void refresh() {
+    if (previewPending && entry?.snapshot.terminal == true) {
+      previewPending = false;
+      if (entry!.snapshot.output != null) {
+        unawaited(openEffectPreview(entry!.snapshot.output!));
+      }
+    }
     if (mounted) setState(() {});
+  }
+
+  Future<void> openEffectPreview(String output) async {
+    final token = generation;
+    final next = VideoPlayerController.file(File(output));
+    try {
+      await next.initialize();
+      if (!mounted || token != generation) {
+        await next.dispose();
+        return;
+      }
+      await player?.dispose();
+      player = next;
+      processedPreview = true;
+      next.addListener(onPlayback);
+      await next.setPlaybackSpeed(playbackSpeed);
+      await next.play();
+      if (mounted) setState(() {});
+    } catch (e) {
+      await next.dispose();
+      if (mounted) setState(() => error = e.toString());
+    }
+  }
+
+  void setRatio(String value) {
+    change(() {
+      cropRatio = value;
+      cropEnabled = value != 'Original';
+      zoom = 1;
+      if (value == 'Custom' || value == 'Original') {
+        crop = const Rect.fromLTWH(0, 0, 1, 1);
+        return;
+      }
+      final parts = value.split(':').map(double.parse).toList();
+      final source = details!.width / details!.height,
+          wanted = parts[0] / parts[1];
+      final w = wanted < source ? wanted / source : 1.0,
+          h = wanted < source ? 1.0 : source / wanted;
+      crop = Rect.fromLTWH((1 - w) / 2, (1 - h) / 2, w, h);
+    });
+  }
+
+  void setZoom(double value) {
+    change(() {
+      final factor = zoom / value;
+      final w = (crop.width * factor).clamp(.02, 1.0),
+          h = (crop.height * factor).clamp(.02, 1.0);
+      crop = Rect.fromLTWH((crop.center.dx - w / 2).clamp(0, 1 - w),
+          (crop.center.dy - h / 2).clamp(0, 1 - h), w, h);
+      zoom = value;
+    });
   }
 
   void change(VoidCallback action) {
     if (locked) return;
     setState(() {
       action();
+      if (processedPreview) {
+        unawaited(player?.pause());
+        processedPreview = false;
+        unawaited(restoreSourcePreview());
+      }
       entry = null;
       saved = false;
     });
+  }
+
+  Future<void> restoreSourcePreview() async {
+    final source = path;
+    if (source == null) return;
+    final token = ++generation;
+    final next = VideoPlayerController.file(File(source));
+    try {
+      await next.initialize();
+      if (!mounted || token != generation) {
+        await next.dispose();
+        return;
+      }
+      await player?.dispose();
+      player = next;
+      next.addListener(onPlayback);
+      await next.seekTo(Duration(milliseconds: (range.start * 1000).round()));
+      if (mounted) setState(() {});
+    } catch (e) {
+      await next.dispose();
+      if (mounted) setState(() => error = e.toString());
+    }
   }
 
   Future<void> pause() async {
@@ -116,6 +217,24 @@ class MobileEditorState extends State<MobileEditor> {
         cuts.clear();
         entry = null;
         saved = false;
+        processedPreview = false;
+        previewPending = false;
+        videoFilter = 'original';
+        audioEffects.clear();
+        volume = 1;
+        fadeIn = 0;
+        fadeOut = 0;
+        playbackSpeed = 1;
+        zoom = 1;
+        cropRatio = 'Original';
+        imageFilter = 'original';
+        brightness = 0;
+        contrast = 1;
+        saturation = 1;
+        warmth = 0;
+        imageScale = 1;
+        flipHorizontal = false;
+        flipVertical = false;
       });
     } catch (e) {
       if (mounted && token == generation) setState(() => error = e.toString());
@@ -128,7 +247,16 @@ class MobileEditorState extends State<MobileEditor> {
     final p = player;
     if (p == null || !p.value.isInitialized) return;
     final t = p.value.position.inMilliseconds / 1000;
-    if (p.value.isPlaying && t >= range.end) p.pause();
+    if (p.value.isPlaying && !processedPreview && t < range.start) {
+      unawaited(p.seekTo(Duration(milliseconds: (range.start * 1000).round())));
+    }
+    if (p.value.isPlaying &&
+        t >=
+            (processedPreview
+                ? p.value.duration.inMilliseconds / 1000
+                : range.end)) {
+      p.pause();
+    }
     if (mounted) setState(() {});
   }
 
@@ -140,8 +268,11 @@ class MobileEditorState extends State<MobileEditor> {
       return;
     }
     final t = p.value.position.inMilliseconds / 1000;
-    if (t < range.start || t >= range.end) {
-      await p.seekTo(Duration(milliseconds: (range.start * 1000).round()));
+    final from = processedPreview ? 0.0 : range.start;
+    final to =
+        processedPreview ? p.value.duration.inMilliseconds / 1000 : range.end;
+    if (t < from || t >= to) {
+      await p.seekTo(Duration(milliseconds: (from * 1000).round()));
     }
     await p.play();
   }
@@ -159,28 +290,60 @@ class MobileEditorState extends State<MobileEditor> {
         range = const RangeValues(0, 0);
         cuts.clear();
         error = '';
+        processedPreview = false;
+        previewPending = false;
       });
     }
   }
 
+  double get effectiveDuration => (range.end -
+          range.start -
+          cuts.fold<double>(0, (sum, c) => sum + c.end - c.start))
+      .clamp(0, double.infinity);
+
   MediaRequest request() => MediaRequest(
       input: path!,
-      kind: widget.kind,
+      kind: exportAudio ? MediaKind.audio : widget.kind,
       format: format,
       start: range.start,
       end: widget.kind == MediaKind.image ? null : range.end,
-      height: height,
-      crop: cropEnabled
+      height: exportAudio ? null : height,
+      crop: cropEnabled && !exportAudio
           ? MediaCrop(crop.left, crop.top, crop.width, crop.height)
           : null,
       rotation: rotation,
+      flipHorizontal: widget.kind == MediaKind.image && flipHorizontal,
+      flipVertical: widget.kind == MediaKind.image && flipVertical,
+      imageScale: widget.kind == MediaKind.image ? imageScale : 1,
+      imageAdjustments:
+          widget.kind == MediaKind.image && widget.caps.imageEditing
+              ? {
+                  'brightness': brightness,
+                  'contrast': contrast,
+                  'saturation': saturation,
+                  'warmth': warmth
+                }
+              : const {},
       quality: quality.round(),
       audioBitrate: bitrate,
       cuts: List.unmodifiable(cuts),
-      mute: mute);
-  void export() {
+      mute: exportAudio ? false : mute,
+      videoFilter: exportAudio ? 'original' : videoFilter,
+      videoBitrate: widget.kind == MediaKind.video &&
+              !exportAudio &&
+              widget.caps.encoderTuning
+          ? videoBitrate
+          : null,
+      volume: widget.caps.audioEffects ? volume : 1,
+      fadeIn: widget.caps.audioFades ? fadeIn.clamp(0, effectiveDuration) : 0,
+      fadeOut: widget.caps.audioFades ? fadeOut.clamp(0, effectiveDuration) : 0,
+      audioEffects: widget.caps.audioEffects && (!mute || exportAudio)
+          ? Map.unmodifiable(audioEffects)
+          : const {});
+  void export({bool preview = false}) {
     unawaited(pause());
     try {
+      previewPending = preview;
       entry = widget.queue.add(request());
       setState(() => error = '');
     } catch (e) {
@@ -227,10 +390,41 @@ class MobileEditorState extends State<MobileEditor> {
     super.dispose();
   }
 
+  Widget imagePreview() => RotatedBox(
+      quarterTurns: rotation ~/ 90,
+      child: Transform.flip(
+          flipX: flipHorizontal,
+          flipY: flipVertical,
+          child: CropSurface(
+              aspect: details!.width / details!.height,
+              crop: crop,
+              onChanged: cropEnabled && !locked
+                  ? (v) => change(() {
+                        crop = v;
+                        cropRatio = 'Custom';
+                      })
+                  : null,
+              child: ColorFiltered(
+                  colorFilter: ColorFilter.matrix(imageAdjustmentMatrix(
+                      brightness: brightness,
+                      contrast: contrast,
+                      saturation: saturation,
+                      warmth: warmth)),
+                  child: Image.file(File(path!), fit: BoxFit.fill)))));
+
+  void resetImageColors() => change(() {
+        imageFilter = 'original';
+        brightness = 0;
+        contrast = 1;
+        saturation = 1;
+        warmth = 0;
+      });
+
   @override
   Widget build(BuildContext context) {
     final image = widget.kind == MediaKind.image;
-    final formats = widget.caps.formats[widget.kind] ?? [];
+    final formats =
+        widget.caps.formats[exportAudio ? MediaKind.audio : widget.kind] ?? [];
     return ListView(padding: const EdgeInsets.all(16), children: [
       Wrap(spacing: 8, runSpacing: 8, children: [
         FilledButton.icon(
@@ -260,33 +454,42 @@ class MobileEditorState extends State<MobileEditor> {
       if (details != null) ...[
         Text(path!.split(Platform.pathSeparator).last,
             maxLines: 2, overflow: TextOverflow.ellipsis),
-        Text(
-            '${details!.width} x ${details!.height} | ${details!.duration.toStringAsFixed(2)}s'),
+        Text(image
+            ? '${details!.width} ? ${details!.height}'
+            : '${details!.width} x ${details!.height} | ${details!.duration.toStringAsFixed(2)}s'),
         const SizedBox(height: 12),
         if (image || widget.kind == MediaKind.video)
           ConstrainedBox(
               constraints: const BoxConstraints(maxHeight: 400),
               child: AspectRatio(
                   aspectRatio: details!.width > 0
-                      ? details!.width / details!.height
+                      ? (image && rotation % 180 != 0
+                          ? details!.height / details!.width
+                          : details!.width / details!.height)
                       : 16 / 9,
-                  child: CropSurface(
-                      aspect: details!.width / details!.height,
-                      crop: crop,
-                      onChanged: cropEnabled && !locked
-                          ? (v) => change(() => crop = v)
-                          : null,
-                      child: image
-                          ? RotatedBox(
-                              quarterTurns: rotation ~/ 90,
-                              child:
-                                  Image.file(File(path!), fit: BoxFit.contain))
-                          : player?.value.isInitialized == true
-                              ? VideoPlayer(player!)
+                  child: image
+                      ? imagePreview()
+                      : CropSurface(
+                          aspect: details!.width / details!.height,
+                          crop: crop,
+                          onChanged: cropEnabled && !locked
+                              ? (v) => change(() => crop = v)
+                              : null,
+                          child: player?.value.isInitialized == true
+                              ? ColorFiltered(
+                                  colorFilter: ColorFilter.matrix(
+                                      videoLookMatrix(processedPreview
+                                          ? 'original'
+                                          : videoFilter)),
+                                  child: VideoPlayer(player!))
                               : const Center(
                                   child: Text(
                                       'Preview unavailable; export may still work.'))))),
         if (!image) ...[
+          if (player?.value.isInitialized == true)
+            VideoProgressIndicator(player!,
+                allowScrubbing: !locked,
+                padding: const EdgeInsets.symmetric(vertical: 12)),
           Row(children: [
             IconButton(
                 onPressed: locked || player == null ? null : togglePlay,
@@ -297,21 +500,39 @@ class MobileEditorState extends State<MobileEditor> {
                 child: Text(
                     '${range.start.toStringAsFixed(2)}s - ${range.end.toStringAsFixed(2)}s'))
           ]),
-          RangeSlider(
-              values: range,
-              min: 0,
-              max: details!.duration > 0 ? details!.duration : 1,
-              onChanged: locked
-                  ? null
-                  : (v) {
-                      if (v.end - v.start >= .1) {
-                        change(() {
-                          range = v;
-                          cuts.clear();
-                        });
-                      }
-                    }),
-          if (widget.caps.cut)
+          if (widget.kind == MediaKind.audio) ...[
+            const Text('Preview speed'),
+            Wrap(spacing: 6, children: [
+              for (final speed in [.75, 1.0, 1.25, 1.5])
+                ChoiceChip(
+                    label: Text('${speed}x'),
+                    selected: playbackSpeed == speed,
+                    onSelected: locked || player == null
+                        ? null
+                        : (_) {
+                            setState(() => playbackSpeed = speed);
+                            unawaited(player!.setPlaybackSpeed(speed));
+                          })
+            ]),
+          ],
+          if (!cropEnabled) ...[
+            const Text('Trim range'),
+            RangeSlider(
+                values: range,
+                min: 0,
+                max: details!.duration > 0 ? details!.duration : 1,
+                onChanged: locked
+                    ? null
+                    : (v) {
+                        if (v.end - v.start >= .1) {
+                          change(() {
+                            range = v;
+                            cuts.clear();
+                          });
+                        }
+                      }),
+          ],
+          if (!cropEnabled && widget.caps.cut)
             Wrap(spacing: 8, children: [
               TextButton.icon(
                   onPressed: locked ? null : addCut,
@@ -329,16 +550,125 @@ class MobileEditorState extends State<MobileEditor> {
           SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('Crop canvas'),
-              subtitle: const Text('Drag corners or move the crop area.'),
+              subtitle: const Text(
+                  'Drag corners or move the crop area. Switch off to trim.'),
               value: cropEnabled,
               onChanged: locked ? null : (v) => change(() => cropEnabled = v)),
+        if (cropEnabled) ...[
+          Wrap(spacing: 6, runSpacing: 6, children: [
+            for (final ratio in [
+              'Original',
+              '16:9',
+              '9:16',
+              '1:1',
+              '4:3',
+              '3:4',
+              '4:5',
+              '3:2',
+              '2:3',
+              '21:9',
+              'Custom'
+            ])
+              ChoiceChip(
+                  label: Text(ratio),
+                  selected: cropRatio == ratio,
+                  onSelected: locked ? null : (_) => setRatio(ratio))
+          ]),
+          Text('Zoom ${(zoom * 100).round()}%'),
+          Slider(
+              value: zoom, min: 1, max: 4, onChanged: locked ? null : setZoom),
+          const Text('Drag the crop area or its corners to set a custom crop.'),
+        ],
         if (image && widget.caps.imageRotation)
-          TextButton.icon(
-              onPressed: locked
-                  ? null
-                  : () => change(() => rotation = (rotation + 90) % 360),
-              icon: const Icon(Icons.rotate_right),
-              label: const Text('Rotate 90 degrees')),
+          Wrap(spacing: 8, children: [
+            TextButton.icon(
+                onPressed: locked
+                    ? null
+                    : () => change(() => rotation = (rotation + 270) % 360),
+                icon: const Icon(Icons.rotate_left),
+                label: const Text('Rotate Left')),
+            TextButton.icon(
+                onPressed: locked
+                    ? null
+                    : () => change(() => rotation = (rotation + 90) % 360),
+                icon: const Icon(Icons.rotate_right),
+                label: const Text('Rotate Right')),
+          ]),
+      ],
+      if (image && widget.caps.imageEditing) ...[
+        const SizedBox(height: 16),
+        StudioCard(
+            child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+              Row(children: [
+                const Expanded(child: Text('Light & Color')),
+                TextButton(
+                    onPressed: path == null || locked ? null : resetImageColors,
+                    child: const Text('Reset sliders'))
+              ]),
+              const Text('Photo Filters'),
+              Wrap(spacing: 6, runSpacing: 6, children: [
+                for (final look in videoLooks.entries)
+                  ChoiceChip(
+                      label: Text(look.value),
+                      selected: imageFilter == look.key,
+                      onSelected: path == null || locked
+                          ? null
+                          : (_) => change(() {
+                                imageFilter = look.key;
+                                final values = imageLookSettings[look.key]!;
+                                brightness = values[0];
+                                contrast = values[1];
+                                saturation = values[2];
+                                warmth = values[3];
+                              }))
+              ]),
+              for (final setting in [
+                (
+                  'Brightness',
+                  brightness,
+                  -1.0,
+                  1.0,
+                  (double v) => brightness = v
+                ),
+                ('Contrast', contrast, 0.0, 2.0, (double v) => contrast = v),
+                (
+                  'Saturation',
+                  saturation,
+                  0.0,
+                  2.0,
+                  (double v) => saturation = v
+                ),
+                ('Warmth', warmth, -1.0, 1.0, (double v) => warmth = v),
+              ]) ...[
+                Text('${setting.$1} ${(setting.$2 * 100).round()}%'),
+                Slider(
+                    value: setting.$2,
+                    min: setting.$3,
+                    max: setting.$4,
+                    onChanged: path == null || locked
+                        ? null
+                        : (v) => change(() {
+                              imageFilter = 'custom';
+                              setting.$5(v);
+                            })),
+              ],
+              Wrap(spacing: 8, runSpacing: 8, children: [
+                FilterChip(
+                    label: const Text('Flip Horizontal'),
+                    selected: flipHorizontal,
+                    onSelected: path == null || locked
+                        ? null
+                        : (v) => change(() => flipHorizontal = v)),
+                FilterChip(
+                    label: const Text('Flip Vertical'),
+                    selected: flipVertical,
+                    onSelected: path == null || locked
+                        ? null
+                        : (v) => change(() => flipVertical = v)),
+              ]),
+            ])),
       ],
       const SizedBox(height: 16),
       StudioCard(
@@ -346,19 +676,70 @@ class MobileEditorState extends State<MobileEditor> {
               Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Text('Export Settings', style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 16),
+        if (widget.kind == MediaKind.video &&
+            (widget.caps.formats[MediaKind.audio]?.isNotEmpty ?? false)) ...[
+          SegmentedButton<bool>(
+              segments: const [
+                ButtonSegment(value: false, label: Text('Export Video')),
+                ButtonSegment(value: true, label: Text('Export Audio'))
+              ],
+              selected: {
+                exportAudio
+              },
+              onSelectionChanged: locked
+                  ? null
+                  : (v) => change(() {
+                        exportAudio = v.single;
+                        format = widget
+                            .caps
+                            .formats[exportAudio
+                                ? MediaKind.audio
+                                : MediaKind.video]!
+                            .first;
+                      })),
+          const SizedBox(height: 16),
+        ],
         if (formats.isEmpty)
           const Text('No compatible encoder detected.')
-        else
-          DropdownButtonFormField<String>(
-              initialValue: format,
-              decoration: const InputDecoration(labelText: 'Container format'),
-              items: formats
-                  .map((f) =>
-                      DropdownMenuItem(value: f, child: Text(f.toUpperCase())))
-                  .toList(),
-              onChanged: locked ? null : (v) => change(() => format = v!)),
+        else ...[
+          Text(
+              image
+                  ? 'Target Format'
+                  : exportAudio || widget.kind == MediaKind.audio
+                      ? 'Audio Container Format'
+                      : 'Container Format',
+              style: Theme.of(context).textTheme.labelLarge),
+          const SizedBox(height: 8),
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            for (final f in {
+              ...(image
+                  ? ['webp', 'avif', 'jpg', 'png']
+                  : exportAudio || widget.kind == MediaKind.audio
+                      ? (widget.kind == MediaKind.audio
+                          ? ['mp3', 'wav', 'aac', 'flac', 'ogg', 'm4a']
+                          : ['mp3', 'm4a', 'wav'])
+                      : ['mp4', 'webm', 'mov', 'mkv', 'avi']),
+              ...formats
+            })
+              Tooltip(
+                  message: formats.contains(f)
+                      ? 'Export ${f.toUpperCase()}'
+                      : '${f.toUpperCase()} export is unavailable on this device',
+                  child: ChoiceChip(
+                      label: Text(f.toUpperCase()),
+                      showCheckmark: false,
+                      selected: format == f,
+                      onSelected: locked || !formats.contains(f)
+                          ? null
+                          : (_) => change(() => format = f))),
+          ]),
+          const SizedBox(height: 8),
+          Text(
+              'Available on this device: ${formats.map((f) => f.toUpperCase()).join(', ')}.',
+              style: Theme.of(context).textTheme.bodySmall),
+        ],
         const SizedBox(height: 16),
-        if (widget.kind != MediaKind.audio)
+        if (widget.kind == MediaKind.video && !exportAudio)
           DropdownButtonFormField<int>(
               initialValue: height ?? 0,
               decoration: InputDecoration(
@@ -373,32 +754,194 @@ class MobileEditorState extends State<MobileEditor> {
               ],
               onChanged: locked
                   ? null
-                  : (v) => change(() => height = v == 0 ? null : v)),
-        if (widget.kind == MediaKind.video)
+                  : (v) => change(() {
+                        height = v == 0 ? null : v;
+                        videoBitrate = const {
+                              144: 200,
+                              240: 400,
+                              360: 800,
+                              480: 1500,
+                              720: 4000,
+                              1080: 8000,
+                              1440: 16000,
+                              2160: 32000
+                            }[v] ??
+                            8000;
+                      })),
+        if (widget.kind == MediaKind.video && !exportAudio)
           SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('Mute audio'),
               value: mute,
               onChanged: locked ? null : (v) => change(() => mute = v)),
+        if (widget.kind == MediaKind.video &&
+            !exportAudio &&
+            widget.caps.videoFilters) ...[
+          const Text('Video Filters'),
+          Wrap(spacing: 6, runSpacing: 6, children: [
+            for (final look in videoLooks.entries)
+              ChoiceChip(
+                  label: Text(look.value),
+                  selected: videoFilter == look.key,
+                  onSelected: path == null || locked
+                      ? null
+                      : (_) => change(() => videoFilter = look.key))
+          ]),
+        ],
+        if (widget.kind == MediaKind.video && widget.caps.encoderTuning)
+          ExpansionTile(
+              title: const Text('Bitrate & Audio Tuning'),
+              tilePadding: EdgeInsets.zero,
+              children: [
+                if (!exportAudio) ...[
+                  Text('Video bitrate: $videoBitrate kbps'),
+                  Slider(
+                      value: videoBitrate.toDouble(),
+                      min: 100,
+                      max: 50000,
+                      divisions: 499,
+                      onChanged: path == null || locked
+                          ? null
+                          : (v) => change(() => videoBitrate = v.round()))
+                ],
+                DropdownButtonFormField<int>(
+                    initialValue: bitrate,
+                    decoration:
+                        const InputDecoration(labelText: 'Audio bitrate'),
+                    items: [128, 192, 256, 320]
+                        .map((b) =>
+                            DropdownMenuItem(value: b, child: Text('$b kbps')))
+                        .toList(),
+                    onChanged: path == null || locked
+                        ? null
+                        : (v) => change(() => bitrate = v!)),
+              ]),
+        if (widget.kind != MediaKind.image &&
+            widget.caps.audioEffects &&
+            (!mute || exportAudio)) ...[
+          const SizedBox(height: 12),
+          Text('Clip volume ${(volume * 100).round()}%'),
+          Slider(
+              value: volume,
+              min: 0,
+              max: 2,
+              onChanged: path == null || locked
+                  ? null
+                  : (v) => change(() => volume = v)),
+          Row(children: [
+            const Expanded(child: Text('Audio Effects')),
+            TextButton(
+                onPressed: path == null || locked
+                    ? null
+                    : () => change(audioEffects.clear),
+                child: const Text('Clear effects'))
+          ]),
+          Wrap(spacing: 6, runSpacing: 6, children: [
+            for (final effect in clipEffects.entries)
+              FilterChip(
+                  label: Text(effect.value),
+                  selected: audioEffects.containsKey(effect.key),
+                  onSelected: path == null || locked
+                      ? null
+                      : (selected) => change(() => selected
+                          ? audioEffects[effect.key] = 50
+                          : audioEffects.remove(effect.key)))
+          ]),
+          for (final effect in audioEffects.entries) ...[
+            Text('${clipEffects[effect.key]} level ${effect.value.round()}%'),
+            Slider(
+                value: effect.value,
+                min: 0,
+                max: 100,
+                onChanged: locked
+                    ? null
+                    : (v) => change(() => audioEffects[effect.key] = v))
+          ],
+          const Text(
+              'Use Preview effects to hear the processed audio. Effects also apply to export.'),
+          OutlinedButton.icon(
+              onPressed:
+                  path == null || locked ? null : () => export(preview: true),
+              icon: const Icon(Icons.play_circle_outline),
+              label: const Text('Preview effects')),
+        ],
+        if (image && widget.caps.imageEditing) ...[
+          const SizedBox(height: 16),
+          const Text('Resolution Scaling'),
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            for (final scale in [1.0, .67, .5])
+              ChoiceChip(
+                  label: Text(scale == 1
+                      ? 'Original 100%'
+                      : '${(scale * 100).round()}%'),
+                  selected: imageScale == scale,
+                  onSelected: path == null || locked
+                      ? null
+                      : (_) => change(() {
+                            imageScale = scale;
+                            height = null;
+                          })),
+          ]),
+        ],
         if (image) ...[
-          Text('Quality ${quality.round()}%'),
+          Text(format == 'png'
+              ? 'Lossless PNG ? transparency preserved'
+              : 'Quality ${quality.round()}%'),
           Slider(
               value: quality,
               min: 10,
               max: 100,
-              onChanged: path == null || locked
+              onChanged: path == null || locked || format == 'png'
                   ? null
                   : (v) => change(() => quality = v))
         ],
-        if (widget.kind == MediaKind.audio && Platform.isAndroid)
-          DropdownButtonFormField<int>(
-              initialValue: bitrate,
-              decoration: const InputDecoration(labelText: 'AAC bitrate'),
-              items: [128, 192, 256, 320]
-                  .map(
-                      (b) => DropdownMenuItem(value: b, child: Text('$b kbps')))
-                  .toList(),
-              onChanged: locked ? null : (v) => change(() => bitrate = v!)),
+        if (widget.kind == MediaKind.audio && format != 'wav') ...[
+          const SizedBox(height: 12),
+          const Text('Target bitrate'),
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            for (final b in [320, 256, 192, 128])
+              ChoiceChip(
+                  label: Text('$b kbps'),
+                  selected: bitrate == b,
+                  onSelected: path == null || locked
+                      ? null
+                      : (_) => change(() => bitrate = b)),
+          ]),
+        ],
+        if (widget.kind == MediaKind.audio && format == 'wav')
+          const Text(
+              'Lossless PCM WAV. Uses the source sample rate and channels.'),
+        if (widget.kind == MediaKind.audio && widget.caps.audioFades) ...[
+          const SizedBox(height: 16),
+          const Text('Fade Transitions'),
+          Text(
+              'Fade In ${fadeIn.clamp(0, effectiveDuration).toStringAsFixed(1)}s'),
+          Slider(
+              value: fadeIn.clamp(0, effectiveDuration),
+              min: 0,
+              max: effectiveDuration > 0 ? effectiveDuration : 1,
+              onChanged: path == null || locked
+                  ? null
+                  : (v) => change(() => fadeIn = v)),
+          Text(
+              'Fade Out ${fadeOut.clamp(0, effectiveDuration).toStringAsFixed(1)}s'),
+          Slider(
+              value: fadeOut.clamp(0, effectiveDuration),
+              min: 0,
+              max: effectiveDuration > 0 ? effectiveDuration : 1,
+              onChanged: path == null || locked
+                  ? null
+                  : (v) => change(() => fadeOut = v)),
+          Semantics(
+              label: 'Audio fade envelope',
+              child: SizedBox(
+                  height: 64,
+                  child: CustomPaint(
+                      painter: _FadeEnvelopePainter(effectiveDuration, fadeIn,
+                          fadeOut, Theme.of(context).colorScheme.primary)))),
+          const Text(
+              'Use Preview effects to listen to fades and effects before saving.'),
+        ],
         const SizedBox(height: 16),
         FilledButton.icon(
             onPressed:
@@ -498,4 +1041,42 @@ class _MobileJobPanelState extends State<MobileJobPanel> {
       if (message.isNotEmpty) Text(message)
     ]));
   }
+}
+
+class _FadeEnvelopePainter extends CustomPainter {
+  final double duration, fadeIn, fadeOut;
+  final Color color;
+  const _FadeEnvelopePainter(
+      this.duration, this.fadeIn, this.fadeOut, this.color);
+  @override
+  void paint(Canvas canvas, Size size) {
+    final path = Path();
+    for (var i = 0; i <= 120; i++) {
+      final time = duration * i / 120;
+      final gainIn = fadeIn > 0 ? (time / fadeIn).clamp(0.0, 1.0) : 1.0;
+      final gainOut =
+          fadeOut > 0 ? ((duration - time) / fadeOut).clamp(0.0, 1.0) : 1.0;
+      final gain = duration > 0 ? (gainIn < gainOut ? gainIn : gainOut) : 0;
+      final x = size.width * i / 120,
+          y = size.height - 8 - gain * (size.height - 16);
+      if (i == 0) {
+        path.moveTo(x, y);
+      } else {
+        path.lineTo(x, y);
+      }
+    }
+    canvas.drawPath(
+        path,
+        Paint()
+          ..color = color
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2);
+  }
+
+  @override
+  bool shouldRepaint(covariant _FadeEnvelopePainter old) =>
+      old.duration != duration ||
+      old.fadeIn != fadeIn ||
+      old.fadeOut != fadeOut ||
+      old.color != color;
 }

@@ -22,6 +22,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.effect.Crop
 import androidx.media3.effect.Presentation
+import androidx.media3.effect.RgbMatrix
 import androidx.media3.transformer.*
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodCall
@@ -40,7 +41,7 @@ class NativeMediaEngine(private val activity: Activity, messenger: BinaryMesseng
     private val root = File(activity.cacheDir, "mediaforge-jobs").apply { mkdirs() }
     private data class Job(val id: String, val file: File, val request: Map<String, Any?>) {
         @Volatile var state = "processing"
-        var progress: Double? = null
+        @Volatile var progress: Double? = null
         var error: String? = null
         var transformer: Transformer? = null
         val started = Instant.now().toString()
@@ -58,12 +59,13 @@ class NativeMediaEngine(private val activity: Activity, messenger: BinaryMesseng
         try {
             when (call.method) {
                 "capabilities" -> result.success(mapOf("video" to if (codecs(MimeTypes.VIDEO_H264)) listOf("mp4") else emptyList<String>(),
-                    "audio" to if (codecs(MimeTypes.AUDIO_AAC)) listOf("m4a") else emptyList<String>(),
+                    "audio" to if (codecs(MimeTypes.AUDIO_AAC)) listOf("m4a", "wav") else listOf("wav"),
                     "image" to listOf("jpg", "png", "webp"), "cropVideo" to true, "cut" to true,
-                    "imageRotation" to true, "maxHeight" to (MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos
+                    "imageRotation" to true, "imageEditing" to true, "videoFilters" to true, "audioEffects" to true, "audioFades" to true, "encoderTuning" to true, "maxHeight" to (MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos
                         .filter { it.isEncoder && it.supportedTypes.contains(MimeTypes.VIDEO_H264) }
                         .mapNotNull { try { it.getCapabilitiesForType(MimeTypes.VIDEO_H264).videoCapabilities?.supportedHeights?.upper } catch (_: Exception) { null } }
                         .maxOrNull()?.coerceAtMost(2160) ?: 0)))
+                "outputDirectory" -> result.success(root.path)
                 "probe" -> background(result) { probe(checkedInput(a["path"] as String)) }
                 "submit" -> submit(a, result)
                 "status" -> {
@@ -128,14 +130,25 @@ class NativeMediaEngine(private val activity: Activity, messenger: BinaryMesseng
         require(jobs.values.none { it.state == "processing" }) { "Another local job is still processing." }
         val input = checkedInput(a["input"] as String)
         val kind = a["kind"] as String; val format = a["format"] as String
-        require(when(kind) { "video" -> format == "mp4"; "audio" -> format == "m4a"; "image" -> format in listOf("jpg", "png", "webp"); else -> false }) { "Unsupported output format on this device." }
+        require(when(kind) { "video" -> format == "mp4"; "audio" -> format in listOf("m4a", "wav"); "image" -> format in listOf("jpg", "png", "webp"); else -> false }) { "Unsupported output format on this device." }
         val id = UUID.randomUUID().toString(); val job = Job(id, File(root, "$id.$format"), a)
         jobs[id] = job
         result.success(mapOf("id" to id))
         worker.execute {
             try {
                 val metadata = probe(input)
-                if (kind == "image") image(input, job) else handler.post {
+                if (kind == "image") image(input, job) else if (kind == "audio" && format == "wav") {
+                    val ranges = keptRanges(a, metadata["duration"] as Double)
+                    WavExporter.export(input,job.file,ranges,number(a,"volume",1.0),
+                        a["audioEffects"] as? Map<*,*> ?: emptyMap<Any,Any>(),
+                        number(a,"fadeIn",0.0),number(a,"fadeOut",0.0),
+                        { job.state == "processing" }, { job.progress = it })
+                    val output = probe(job.file)
+                    require(output["audio"] == true && output["video"] == false) { "WAV output verification failed." }
+                    val expected = ranges.sumOf { it.second-it.first }
+                    require(abs((output["duration"] as Double)-expected) <= max(.1,expected*.01)) { "WAV duration verification failed." }
+                    handler.post { finish(job) }
+                } else handler.post {
                     try { if (job.state == "processing") transform(input, job, metadata) }
                     catch (e: Exception) { fail(job, e.message ?: "The device could not process this media.") }
                 }
@@ -164,6 +177,10 @@ class NativeMediaEngine(private val activity: Activity, messenger: BinaryMesseng
         require(if(video) info["video"] == true else info["audio"] == true) { "The input has no requested media track." }
         val ranges = keptRanges(a, info["duration"] as Double)
         val effects = mutableListOf<Effect>()
+        val filter = a["videoFilter"] as? String ?: "original"
+        if (video && filter != "original") effects.add(object : RgbMatrix {
+            override fun getMatrix(presentationTimeUs: Long, useHdr: Boolean): FloatArray = VideoLook.matrix(filter)
+        })
         (a["crop"] as? Map<*, *>)?.let {
             val x = (it["x"] as Number).toFloat(); val y = (it["y"] as Number).toFloat()
             val w = (it["width"] as Number).toFloat(); val h = (it["height"] as Number).toFloat()
@@ -172,18 +189,28 @@ class NativeMediaEngine(private val activity: Activity, messenger: BinaryMesseng
         }
         val height = (a["height"] as? Number)?.toInt()
         if (height != null) { require(height in 144..2160 && height % 2 == 0); effects.add(Presentation.createForHeight(height)) }
+        val audioLevels = a["audioEffects"] as? Map<*, *> ?: emptyMap<Any,Any>()
+        val gain = number(a,"volume",1.0)
+        val fadeIn = number(a,"fadeIn",0.0); val fadeOut = number(a,"fadeOut",0.0)
+        require(fadeIn.isFinite() && fadeOut.isFinite() && fadeIn in 0.0..3600.0 && fadeOut in 0.0..3600.0)
+        val totalDuration = ranges.sumOf { it.second-it.first }
+        var audioOffset = 0.0
+        val processAudio = fadeIn > 0 || fadeOut > 0 || gain != 1.0 || audioLevels.values.any { ((it as? Number)?.toDouble() ?: 0.0) != 0.0 }
         val edited = ranges.map { (from, to) ->
             val item = MediaItem.Builder().setUri(Uri.fromFile(input)).setClippingConfiguration(MediaItem.ClippingConfiguration.Builder()
                 .setStartPositionMs((from*1000).roundToLong()).setEndPositionMs((to*1000).roundToLong()).build()).build()
+            val offset = audioOffset; audioOffset += to-from
             EditedMediaItem.Builder(item).setRemoveVideo(!video).setRemoveAudio(video && a["mute"] == true)
-                .setEffects(Effects(emptyList(), if(video) effects else emptyList())).build()
+                .setEffects(Effects(if(processAudio) listOf(ClipAudioProcessor(gain, audioLevels, fadeIn, fadeOut, totalDuration, offset)) else emptyList(), if(video) effects else emptyList())).build()
         }
         val tracks = mutableSetOf<Int>()
         if (video) tracks.add(C.TRACK_TYPE_VIDEO)
         if (info["audio"] == true && (!video || a["mute"] != true)) tracks.add(C.TRACK_TYPE_AUDIO)
         val sequence = EditedMediaItemSequence.Builder(tracks).addItems(edited).build()
-        val encoder = DefaultEncoderFactory.Builder(activity).setEnableFallback(false)
-            .setRequestedAudioEncoderSettings(AudioEncoderSettings.Builder().setBitrate(number(a,"audioBitrate",192.0).toInt()*1000).build()).build()
+        val encoderBuilder = DefaultEncoderFactory.Builder(activity).setEnableFallback(false)
+            .setRequestedAudioEncoderSettings(AudioEncoderSettings.Builder().setBitrate(number(a,"audioBitrate",192.0).toInt()*1000).build())
+        (a["videoBitrate"] as? Number)?.let { require(it.toInt() in 100..50000); encoderBuilder.setRequestedVideoEncoderSettings(VideoEncoderSettings.Builder().setBitrate(it.toInt()*1000).build()) }
+        val encoder = encoderBuilder.build()
         val builder = Transformer.Builder(activity).setAudioMimeType(MimeTypes.AUDIO_AAC).setEncoderFactory(encoder)
             .addListener(object: Transformer.Listener {
                 override fun onCompleted(composition: Composition, exportResult: ExportResult) {
@@ -227,6 +254,17 @@ class NativeMediaEngine(private val activity: Activity, messenger: BinaryMesseng
             }
             val rotation = number(job.request,"rotation",0.0).toInt(); require(rotation in listOf(0,90,180,270))
             if (rotation != 0) replace(Bitmap.createBitmap(bitmap,0,0,bitmap.width,bitmap.height,Matrix().apply { postRotate(rotation.toFloat()) },true))
+            if (job.request["flipHorizontal"] == true || job.request["flipVertical"] == true) {
+                replace(Bitmap.createBitmap(bitmap,0,0,bitmap.width,bitmap.height,Matrix().apply {
+                    postScale(if(job.request["flipHorizontal"] == true) -1f else 1f, if(job.request["flipVertical"] == true) -1f else 1f)
+                },true))
+            }
+            val scale = number(job.request,"imageScale",1.0)
+            require(scale.isFinite() && scale in .1..1.0)
+            if(scale != 1.0) replace(Bitmap.createScaledBitmap(bitmap,max(1,(bitmap.width*scale).roundToInt()),max(1,(bitmap.height*scale).roundToInt()),true))
+            (job.request["imageAdjustments"] as? Map<*,*>)?.takeIf { it.isNotEmpty() }?.let {
+                replace(ImageLook.apply(bitmap,it))
+            }
             (job.request["height"] as? Number)?.let { val h = it.toInt(); require(h in 2..4096)
                 replace(Bitmap.createScaledBitmap(bitmap,max(1,(bitmap.width.toDouble()*h/bitmap.height).roundToInt()),h,true)) }
             if (job.state != "processing") return
@@ -267,12 +305,12 @@ class NativeMediaEngine(private val activity: Activity, messenger: BinaryMesseng
             catch(e: Exception) { try { activity.contentResolver.delete(uri,null,null) } catch(_: Exception) {}; throw e } }
         return true
     }
-    private fun mime(file: File) = when(file.extension) { "mp4" -> "video/mp4"; "m4a" -> "audio/mp4"; "png" -> "image/png"; "webp" -> "image/webp"; else -> "image/jpeg" }
+    private fun mime(file: File) = when(file.extension) { "mp4" -> "video/mp4"; "m4a" -> "audio/mp4"; "wav" -> "audio/wav"; "zip" -> "application/zip"; "png" -> "image/png"; "webp" -> "image/webp"; else -> "image/jpeg" }
     private fun gallery(path: String, result: MethodChannel.Result) {
         require(Build.VERSION.SDK_INT >= 29) { "Use Save to Files on Android 9 or earlier." }
         val file = output(path)
         background(result) {
-            val collection = when(file.extension) { "mp4" -> MediaStore.Video.Media.EXTERNAL_CONTENT_URI; "m4a" -> MediaStore.Audio.Media.EXTERNAL_CONTENT_URI; else -> MediaStore.Images.Media.EXTERNAL_CONTENT_URI }
+            val collection = when(file.extension) { "mp4" -> MediaStore.Video.Media.EXTERNAL_CONTENT_URI; "m4a", "wav" -> MediaStore.Audio.Media.EXTERNAL_CONTENT_URI; else -> MediaStore.Images.Media.EXTERNAL_CONTENT_URI }
             val values = ContentValues().apply { put(MediaStore.MediaColumns.DISPLAY_NAME,"MediaForge_${file.name}"); put(MediaStore.MediaColumns.MIME_TYPE,mime(file)); put(MediaStore.MediaColumns.IS_PENDING,1) }
             val uri = activity.contentResolver.insert(collection,values) ?: error("Could not create a gallery item.")
             try {

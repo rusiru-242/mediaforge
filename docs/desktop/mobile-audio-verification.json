@@ -1,0 +1,108 @@
+{
+  "platform": "android",
+  "checks": {
+    "native_capabilities": {
+      "passed": true
+    },
+    "unicode_video_probe": {
+      "passed": true
+    },
+    "trim_crop_resize_mp4_with_audio": {
+      "passed": true
+    },
+    "cut_interval_removes_real_duration": {
+      "passed": true
+    },
+    "wav_trim_cuts_fades_effects": {
+      "passed": true
+    },
+    "m4a_fades_export": {
+      "passed": true
+    },
+    "audio_m4a_has_no_video": {
+      "passed": true
+    },
+    "image_crop_rotation_resize_png": {
+      "passed": true
+    },
+    "png_transparency_is_preserved": {
+      "passed": true
+    },
+    "mixed_sequential_batch": {
+      "passed": true
+    },
+    "actual_native_cancellation": {
+      "passed": true
+    },
+    "invalid_media_and_unsupported_format": {
+      "passed": true
+    },
+    "video_filter_and_audio_effect_export": {
+      "passed": true
+    },
+    "scoped_gallery_save": {
+      "passed": true
+    },
+    "cleanup_does_not_delete_input": {
+      "passed": true
+    }
+  },
+  "success": true,
+  "formats": {
+    "video": [
+      "mp4"
+    ],
+    "audio": [
+      "m4a",
+      "wav"
+    ],
+    "image": [
+      "jpg",
+      "png",
+      "webp"
+    ]
+  },
+  "progressSamples": [
+    null,
+    1.0
+  ],
+  "wavFadeOutput": "/data/user/0/com.mediaforge.app/cache/mediaforge-jobs/736f71d3-e331-454c-8ced-21da25fa3c39.wav",
+  "wavGalleryUri": "content://media/external/audio/media/38",
+  "m4aFadeOutput": "/data/user/0/com.mediaforge.app/cache/mediaforge-jobs/4d9e3e88-1730-4a58-85d8-f88ad97d34bf.m4a",
+  "m4aGalleryUri": "content://media/external/audio/media/39",
+  "hostVerificationPassed": true,
+  "hostOutputs": [
+    {
+      "file": "MediaForge_4d9e3e88-1730-4a58-85d8-f88ad97d34bf.m4a",
+      "format": "mov,mp4,m4a,3gp,3g2,mj2",
+      "codec": "aac",
+      "duration": "1.333696",
+      "fadeRmsStartMiddleEnd": [
+        8.188113119008745e-06,
+        0.08689271471488422,
+        0.0032456623806522197
+      ]
+    },
+    {
+      "file": "MediaForge_736f71d3-e331-454c-8ced-21da25fa3c39.wav",
+      "format": "wav",
+      "codec": "pcm_s16le",
+      "duration": "1.083923",
+      "fadeRmsStartMiddleEnd": [
+        0.003581449902690414,
+        0.06260728244400308,
+        0.006801874551307533
+      ]
+    }
+  ],
+  "flutterRegressionTestsPassed": 10,
+  "flutterAnalyzePassed": true,
+  "releaseApk": {
+    "path": "apps\\flutter_app\\build\\app\\outputs\\flutter-apk\\app-release.apk",
+    "bytes": 57438856,
+    "sha256": "fa9ac71d68b839e82e0c320a499571697353fc797620044bb72d8f844ca885ae",
+    "gradleBuild": "Flutter reports Built app-release.apk (54.8MB)",
+    "note": "PowerShell wrapper reported exit 1 after stderr warning redirection; build log reports success and APK ZIP integrity was verified.",
+    "emulatorInstall": "adb install -r: Success"
+  }
+}

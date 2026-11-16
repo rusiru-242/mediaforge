@@ -46,6 +46,7 @@ final class NativeMediaEngine: NSObject, UIDocumentPickerDelegate {
         do {
             switch call.method {
             case "capabilities": result(["video": ["mp4", "mov"], "audio": ["m4a"], "image": ["jpg", "png"], "cropVideo": true, "cut": true, "imageRotation": true, "maxHeight": 2160])
+            case "outputDirectory": result(root.path)
             case "probe":
                 let url = try input(a["path"] as? String ?? "")
                 background(result) { try self.probe(url) }

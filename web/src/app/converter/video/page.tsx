@@ -846,8 +846,8 @@ export default function VideoConverterPage() {
             {/* Container Format Pills */}
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-semibold text-on-surface dark:text-slate-100">{exportMode === 'audio' ? 'Audio Format' : 'Container Format'}</label>
-              <div className="grid grid-cols-4 gap-1 p-1 bg-surface-container-low dark:bg-slate-800 rounded-2xl">
-                {(exportMode === 'audio' ? ['mp3', 'm4a', 'wav'] : ['mp4', 'webm', 'mov', 'mkv']).map((fmt) => (
+              <div className={`grid ${exportMode === 'audio' ? 'grid-cols-3' : 'grid-cols-5'} gap-1 p-1 bg-surface-container-low dark:bg-slate-800 rounded-2xl`}>
+                {(exportMode === 'audio' ? ['mp3', 'm4a', 'wav'] : ['mp4', 'webm', 'mov', 'mkv', 'avi']).map((fmt) => (
                   <button
                     key={fmt}
                     type="button"

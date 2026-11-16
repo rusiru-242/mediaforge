@@ -1,0 +1,18 @@
+{
+  "flutterAnalyzePassed": true,
+  "widgetTestsPassed": 4,
+  "checks": [
+    "Paste trims clipboard text and detects platform",
+    "Clear resets URL and errors and unlocks platform selection",
+    "Clipboard read locks controls",
+    "Empty clipboard preserves existing URL",
+    "Platform colors and light/dark narrow layout"
+  ],
+  "releaseApk": {
+    "path": "apps\\flutter_app\\build\\app\\outputs\\flutter-apk\\app-release.apk",
+    "bytes": 59224840,
+    "sha256": "7eaee95fd315f35ef5a9c183388963d1755637ee973dde9be3ad656fa6fca361",
+    "result": "Flutter reports Built app-release.apk (56.5MB); archive integrity passed",
+    "note": "PowerShell wrapper exit 1 follows redirected native stderr warnings; build log reports success."
+  }
+}

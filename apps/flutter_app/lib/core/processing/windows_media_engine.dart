@@ -11,7 +11,12 @@ class WindowsMediaEngine extends MediaProcessingEngine {
         MediaKind.video: LocalMediaEngine.videoFormats,
         MediaKind.audio: LocalMediaEngine.audioFormats,
         MediaKind.image: LocalMediaEngine.imageFormats
-      }, maxHeight: 2160);
+      },
+          maxHeight: 2160,
+          videoFilters: true,
+          audioEffects: true,
+          encoderTuning: true,
+          audioFades: true);
   @override
   Future<MediaDetails> probeMedia(String path) async {
     final d = await api.engine.probe(path);
@@ -29,12 +34,27 @@ class WindowsMediaEngine extends MediaProcessingEngine {
   @override
   Future<String> submit(MediaRequest r) async {
     r.validate();
+    if (r.imageScale != 1 ||
+        r.flipHorizontal ||
+        r.flipVertical ||
+        r.imageAdjustments.isNotEmpty) {
+      throw UnsupportedError(
+          'Image adjustments are not connected in this engine adapter.');
+    }
     if (!(await capabilities()).formats[r.kind]!.contains(r.format)) {
       throw UnsupportedError('Unsupported output format for this media type.');
     }
     final f = await api.upload(r.input);
     final d = await probeMedia(r.input);
     final c = r.crop;
+    final look = switch (r.videoFilter) {
+      'vivid' => [.03, 1.12, 1.45, 0.0],
+      'vivid-warm' => [.03, 1.1, 1.3, .3],
+      'vivid-cool' => [.02, 1.1, 1.3, -.3],
+      'dramatic' => [-.04, 1.4, .8, 0.0],
+      'mono' => [0.0, 1.15, 0.0, 0.0],
+      _ => [0.0, 1.0, 1.0, 0.0],
+    };
     final job = await api.createJob('/conversions', {
       'inputFileId': f['id'],
       'outputFormat': r.format,
@@ -45,6 +65,16 @@ class WindowsMediaEngine extends MediaProcessingEngine {
       'imageQuality': r.quality,
       'audioBitrate': r.audioBitrate,
       'removeAudio': r.mute,
+      'brightness': look[0],
+      'contrast': look[1],
+      'saturation': look[2],
+      'warmth': look[3],
+      'volume': r.volume,
+      'fadeInDuration': r.fadeIn,
+      'fadeOutDuration': r.fadeOut,
+      'audioEffects': r.audioEffects.keys.toList(),
+      'audioEffectLevels': r.audioEffects,
+      if (r.videoBitrate != null) 'videoBitrate': '${r.videoBitrate}k',
       'imageRotation': r.rotation,
       'removeSegments': r.cuts.map((c) => c.toMap()).toList(),
       if (c != null) ...{

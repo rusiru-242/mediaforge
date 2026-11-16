@@ -31,10 +31,20 @@ class EngineCapabilities {
   final Map<MediaKind, List<String>> formats;
   final bool cropVideo, cut, imageRotation;
   final int maxHeight;
+  final bool videoFilters,
+      audioEffects,
+      encoderTuning,
+      audioFades,
+      imageEditing;
   const EngineCapabilities(this.formats,
       {this.cropVideo = true,
       this.cut = true,
       this.imageRotation = true,
+      this.videoFilters = false,
+      this.audioEffects = false,
+      this.encoderTuning = false,
+      this.audioFades = false,
+      this.imageEditing = false,
       this.maxHeight = 1080});
   factory EngineCapabilities.fromMap(Map<Object?, Object?> d) =>
       EngineCapabilities({
@@ -44,6 +54,11 @@ class EngineCapabilities {
           cropVideo: d['cropVideo'] == true,
           cut: d['cut'] == true,
           imageRotation: d['imageRotation'] == true,
+          videoFilters: d['videoFilters'] == true,
+          audioEffects: d['audioEffects'] == true,
+          encoderTuning: d['encoderTuning'] == true,
+          audioFades: d['audioFades'] == true,
+          imageEditing: d['imageEditing'] == true,
           maxHeight: (d['maxHeight'] as num? ?? 1080).toInt());
 }
 
@@ -77,7 +92,13 @@ class MediaRequest {
   final int quality, audioBitrate, rotation;
   final MediaCrop? crop;
   final List<MediaCut> cuts;
-  final bool mute;
+  final bool mute, flipHorizontal, flipVertical;
+  final double imageScale;
+  final Map<String, double> imageAdjustments;
+  final String videoFilter;
+  final int? videoBitrate;
+  final double volume, fadeIn, fadeOut;
+  final Map<String, double> audioEffects;
   const MediaRequest(
       {required this.input,
       required this.kind,
@@ -90,14 +111,68 @@ class MediaRequest {
       this.rotation = 0,
       this.crop,
       this.cuts = const [],
-      this.mute = false});
+      this.videoFilter = 'original',
+      this.videoBitrate,
+      this.volume = 1,
+      this.fadeIn = 0,
+      this.fadeOut = 0,
+      this.audioEffects = const {},
+      this.mute = false,
+      this.flipHorizontal = false,
+      this.flipVertical = false,
+      this.imageScale = 1,
+      this.imageAdjustments = const {}});
   void validate() {
+    if (!imageScale.isFinite ||
+        imageScale < .1 ||
+        imageScale > 1 ||
+        kind != MediaKind.image &&
+            (imageScale != 1 ||
+                flipHorizontal ||
+                flipVertical ||
+                imageAdjustments.isNotEmpty) ||
+        imageAdjustments.entries.any((e) =>
+            !['brightness', 'contrast', 'saturation', 'warmth']
+                .contains(e.key) ||
+            !e.value.isFinite ||
+            (['contrast', 'saturation'].contains(e.key)
+                ? e.value < 0 || e.value > 2
+                : e.value < -1 || e.value > 1))) {
+      throw ArgumentError('Invalid image adjustments.');
+    }
+    if (kind != MediaKind.video &&
+            (videoFilter != 'original' || videoBitrate != null) ||
+        kind == MediaKind.image &&
+            (volume != 1 ||
+                audioEffects.isNotEmpty ||
+                fadeIn != 0 ||
+                fadeOut != 0)) {
+      throw ArgumentError('Effects do not match the selected media type.');
+    }
     if (kind != MediaKind.image && rotation != 0 ||
         kind == MediaKind.audio && (crop != null || height != null || mute)) {
       throw ArgumentError(
           'This transform is not supported for the selected media type.');
     }
-    if (input.isEmpty ||
+    if (!fadeIn.isFinite ||
+        !fadeOut.isFinite ||
+        fadeIn < 0 ||
+        fadeOut < 0 ||
+        fadeIn > 3600 ||
+        fadeOut > 3600 ||
+        input.isEmpty ||
+        !['original', 'vivid', 'vivid-warm', 'vivid-cool', 'dramatic', 'mono']
+            .contains(videoFilter) ||
+        !volume.isFinite ||
+        volume < 0 ||
+        volume > 2 ||
+        videoBitrate != null &&
+            (videoBitrate! < 100 || videoBitrate! > 50000) ||
+        audioEffects.entries.any((e) =>
+            !['reverb', 'echo', 'bass', 'treble', 'warmth'].contains(e.key) ||
+            !e.value.isFinite ||
+            e.value < 0 ||
+            e.value > 100) ||
         !RegExp(r'^[a-z0-9]{2,5}$').hasMatch(format) ||
         !start.isFinite ||
         start < 0 ||
@@ -133,7 +208,17 @@ class MediaRequest {
         'rotation': rotation,
         'crop': crop?.toMap(),
         'cuts': cuts.map((c) => c.toMap()).toList(),
-        'mute': mute
+        'mute': mute,
+        'flipHorizontal': flipHorizontal,
+        'flipVertical': flipVertical,
+        'imageScale': imageScale,
+        'imageAdjustments': imageAdjustments,
+        'videoFilter': videoFilter,
+        'videoBitrate': videoBitrate,
+        'volume': volume,
+        'fadeIn': fadeIn,
+        'fadeOut': fadeOut,
+        'audioEffects': audioEffects
       };
 }
 

@@ -15,6 +15,9 @@ import 'package:mediaforge_desktop/core/processing/native_media_engine.dart';
 import 'package:mediaforge_desktop/core/processing/media_queue.dart';
 import 'package:mediaforge_desktop/core/processing/media_file_store.dart';
 import 'native_fixtures.dart';
+import 'package:mediaforge_desktop/core/processing/batch_archive.dart';
+import 'package:archive/archive.dart';
+import 'package:mediaforge_desktop/features/mobile/video_look.dart';
 
 class NoNetwork extends HttpOverrides {
   @override
@@ -117,6 +120,42 @@ void main() {
           expect(
               (await engine.probeMedia(done.output!)).duration, closeTo(1, .3));
         });
+        await check('wav_trim_cuts_fades_effects', () async {
+          final done = await export(MediaRequest(
+              input: video.path,
+              kind: MediaKind.audio,
+              format: 'wav',
+              start: .1,
+              end: 1.4,
+              cuts: const [MediaCut(.6, .8)],
+              volume: .7,
+              fadeIn: .3,
+              fadeOut: .3,
+              audioEffects: const {'echo': 20}));
+          final d = await engine.probeMedia(done.output!);
+          expect(d.audio, true);
+          expect(d.video, false);
+          expect(d.duration, closeTo(1.1, .05));
+          report['wavFadeOutput'] = done.output;
+          report['wavGalleryUri'] =
+              await engine.save(done.output!, gallery: true);
+        });
+        await check('m4a_fades_export', () async {
+          final done = await export(MediaRequest(
+              input: video.path,
+              kind: MediaKind.audio,
+              format: 'm4a',
+              start: .1,
+              end: 1.4,
+              fadeIn: .3,
+              fadeOut: .3));
+          final d = await engine.probeMedia(done.output!);
+          expect(d.audio, true);
+          expect(d.video, false);
+          report['m4aFadeOutput'] = done.output;
+          report['m4aGalleryUri'] =
+              await engine.save(done.output!, gallery: true);
+        });
         await check('audio_m4a_has_no_video', () async {
           final done = await export(MediaRequest(
               input: video.path,
@@ -129,6 +168,82 @@ void main() {
           expect(d.audio, true);
           expect(d.video, false);
           expect(d.duration, closeTo(1, .3));
+        });
+        await check('image_filters_flips_scale_and_formats', () async {
+          final recorder = ui.PictureRecorder();
+          final canvas = Canvas(recorder);
+          for (final entry in [
+            (const Rect.fromLTWH(0, 0, 40, 30), const Color(0xFFFF0000)),
+            (const Rect.fromLTWH(40, 0, 40, 30), const Color(0xFF00FF00)),
+            (const Rect.fromLTWH(0, 30, 40, 30), const Color(0xFF0000FF)),
+            (const Rect.fromLTWH(40, 30, 40, 30), const Color(0xFFFFFF00)),
+          ]) {
+            canvas.drawRect(entry.$1, Paint()..color = entry.$2);
+          }
+          canvas.drawRect(const Rect.fromLTWH(0, 0, 4, 4),
+              Paint()..blendMode = BlendMode.clear);
+          final picture = recorder.endRecording();
+          final bitmap = await picture.toImage(80, 60);
+          final png = await bitmap.toByteData(format: ui.ImageByteFormat.png);
+          final input = await File('${folder.path}/colored image.png')
+              .writeAsBytes(png!.buffer.asUint8List());
+          bitmap.dispose();
+          picture.dispose();
+          for (final look in imageLookSettings.entries) {
+            final p = look.value;
+            final done = await export(MediaRequest(
+                input: input.path,
+                kind: MediaKind.image,
+                format: 'png',
+                flipHorizontal: true,
+                imageAdjustments: {
+                  'brightness': p[0],
+                  'contrast': p[1],
+                  'saturation': p[2],
+                  'warmth': p[3]
+                }));
+            final codec = await ui
+                .instantiateImageCodec(await File(done.output!).readAsBytes());
+            final frame = await codec.getNextFrame();
+            final pixels = await frame.image
+                .toByteData(format: ui.ImageByteFormat.rawRgba);
+            int at(int x, int y, int channel) =>
+                pixels!.getUint8((y * 80 + x) * 4 + channel);
+            expect(at(79, 0, 3), 0,
+                reason:
+                    'Transparent crop corner must flip and stay transparent');
+            if (look.key == 'mono') {
+              expect(
+                  (at(10, 10, 0) - at(10, 10, 1)).abs(), lessThanOrEqualTo(1));
+              expect(
+                  (at(10, 10, 1) - at(10, 10, 2)).abs(), lessThanOrEqualTo(1));
+            }
+            if (look.key == 'original') {
+              expect(at(10, 10, 1), greaterThan(240));
+              expect(at(10, 10, 0), lessThan(10));
+            }
+            frame.image.dispose();
+            codec.dispose();
+          }
+          for (final f in ['jpg', 'png', 'webp']) {
+            final done = await export(MediaRequest(
+                input: input.path,
+                kind: MediaKind.image,
+                format: f,
+                crop: const MediaCrop(.25, 0, .5, 1),
+                rotation: 90,
+                flipVertical: true,
+                imageScale: .5,
+                imageAdjustments: const {
+                  'brightness': .1,
+                  'contrast': 1.2,
+                  'saturation': 1.3,
+                  'warmth': .2
+                }));
+            final d = await engine.probeMedia(done.output!);
+            expect(d.width, 30);
+            expect(d.height, 20);
+          }
         });
         await check('image_crop_rotation_resize_png', () async {
           final done = await export(MediaRequest(
@@ -210,6 +325,36 @@ void main() {
               throwsUnsupportedError);
         });
         if (Platform.isAndroid) {
+          await check('video_filter_and_audio_effect_export', () async {
+            for (final filter in [
+              'vivid',
+              'vivid-warm',
+              'vivid-cool',
+              'dramatic',
+              'mono'
+            ]) {
+              await export(MediaRequest(
+                  input: video.path,
+                  kind: MediaKind.video,
+                  format: 'mp4',
+                  height: 240,
+                  videoFilter: filter,
+                  videoBitrate: 900,
+                  volume: .6,
+                  audioEffects: const {
+                    'reverb': 25,
+                    'echo': 35,
+                    'bass': 45,
+                    'treble': 55,
+                    'warmth': 65
+                  }));
+            }
+            await export(MediaRequest(
+                input: video.path,
+                kind: MediaKind.audio,
+                format: 'm4a',
+                volume: 0));
+          });
           await check('scoped_gallery_save', () async {
             expect(await engine.save(outputs.first, gallery: true),
                 startsWith('content://'));
@@ -233,6 +378,20 @@ void main() {
             expect(picked.audio, true);
           });
         }
+        await check('completed_outputs_zip_packaging', () async {
+          final path =
+              await BatchArchive().create(await engine.outputDirectory(), [
+            (outputs.first, 'video.mp4'),
+            (report['wavFadeOutput'] as String, 'audio.wav'),
+            (outputs.last, 'last-output')
+          ]);
+          final zip = ZipDecoder()
+              .decodeBytes(await File(path).readAsBytes(), verify: true);
+          expect(zip.length, 3);
+          expect(zip.files.every((f) => f.size > 0), true);
+          expect(zip.files[0].name, '1_video.mp4');
+          report['zipOutput'] = path;
+        });
         await check('cleanup_does_not_delete_input', () async {
           await engine.cleanup();
           expect(await video.exists(), true);
