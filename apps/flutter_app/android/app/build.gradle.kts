@@ -17,6 +17,7 @@ android {
     defaultConfig {
         applicationId = "com.mediaforge.app"
         minSdk = maxOf(flutter.minSdkVersion, 26)
+        ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
@@ -52,6 +53,7 @@ flutter {
 }
 
 dependencies {
+    implementation("dev.ffmpegkit-maintained:ffmpeg-kit-full:8.1.9")
     implementation("androidx.media3:media3-transformer:1.9.3")
     implementation("androidx.media3:media3-effect:1.9.3")
     implementation("androidx.exifinterface:exifinterface:1.4.2")

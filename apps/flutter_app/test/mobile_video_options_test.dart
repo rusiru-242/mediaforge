@@ -92,14 +92,10 @@ void main() {
                     audioEffects: true,
                     encoderTuning: true)))));
     await tester.scrollUntilVisible(find.text('Container Format'), 150);
-    for (final f in ['MP4', 'WEBM', 'MOV', 'MKV', 'AVI']) {
-      expect(find.widgetWithText(ChoiceChip, f), findsOneWidget);
+    expect(find.widgetWithText(ChoiceChip, 'MP4'), findsOneWidget);
+    for (final f in ['WEBM', 'MOV', 'MKV', 'AVI']) {
+      expect(find.widgetWithText(ChoiceChip, f), findsNothing);
     }
-    expect(
-        tester
-            .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'AVI'))
-            .onSelected,
-        isNull);
     expect(
         tester
             .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'MP4'))

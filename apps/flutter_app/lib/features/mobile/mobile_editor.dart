@@ -443,14 +443,17 @@ class MobileEditorState extends State<MobileEditor> {
         Text(error,
             style: TextStyle(color: Theme.of(context).colorScheme.error)),
       if (path == null)
-        StudioCard(
-            child: Column(children: [
-          const Icon(Icons.file_upload_outlined, size: 48),
-          const SizedBox(height: 16),
-          Text('Import ${widget.kind.name} to begin'),
-          const Text(
-              'Files stay on your device. Local processing works offline.')
-        ])),
+        InkWell(
+            onTap: locked ? null : pick,
+            borderRadius: BorderRadius.circular(24),
+            child: StudioCard(
+                child: Column(children: [
+              const Icon(Icons.file_upload_outlined, size: 48),
+              const SizedBox(height: 16),
+              Text('Import ${widget.kind.name} to begin'),
+              const Text(
+                  'Files stay on your device. Local processing works offline.')
+            ]))),
       if (details != null) ...[
         Text(path!.split(Platform.pathSeparator).last,
             maxLines: 2, overflow: TextOverflow.ellipsis),
@@ -711,16 +714,7 @@ class MobileEditorState extends State<MobileEditor> {
               style: Theme.of(context).textTheme.labelLarge),
           const SizedBox(height: 8),
           Wrap(spacing: 8, runSpacing: 8, children: [
-            for (final f in {
-              ...(image
-                  ? ['webp', 'avif', 'jpg', 'png']
-                  : exportAudio || widget.kind == MediaKind.audio
-                      ? (widget.kind == MediaKind.audio
-                          ? ['mp3', 'wav', 'aac', 'flac', 'ogg', 'm4a']
-                          : ['mp3', 'm4a', 'wav'])
-                      : ['mp4', 'webm', 'mov', 'mkv', 'avi']),
-              ...formats
-            })
+            for (final f in formats)
               Tooltip(
                   message: formats.contains(f)
                       ? 'Export ${f.toUpperCase()}'
@@ -895,7 +889,8 @@ class MobileEditorState extends State<MobileEditor> {
                   ? null
                   : (v) => change(() => quality = v))
         ],
-        if (widget.kind == MediaKind.audio && format != 'wav') ...[
+        if (widget.kind == MediaKind.audio &&
+            !['wav', 'flac'].contains(format)) ...[
           const SizedBox(height: 12),
           const Text('Target bitrate'),
           Wrap(spacing: 8, runSpacing: 8, children: [
@@ -908,6 +903,9 @@ class MobileEditorState extends State<MobileEditor> {
                       : (_) => change(() => bitrate = b)),
           ]),
         ],
+        if (widget.kind == MediaKind.audio && format == 'flac')
+          const Text(
+              'Lossless FLAC. Preserves the processed PCM audio without lossy compression.'),
         if (widget.kind == MediaKind.audio && format == 'wav')
           const Text(
               'Lossless PCM WAV. Uses the source sample rate and channels.'),
@@ -943,15 +941,19 @@ class MobileEditorState extends State<MobileEditor> {
               'Use Preview effects to listen to fades and effects before saving.'),
         ],
         const SizedBox(height: 16),
-        FilledButton.icon(
-            onPressed:
-                path == null || locked || formats.isEmpty ? null : export,
-            icon: const Icon(Icons.file_download_outlined),
-            label: const Text('Export locally'))
+        if (entry?.snapshot.state != ProcessingState.completed ||
+            processedPreview)
+          FilledButton.icon(
+              onPressed:
+                  path == null || locked || formats.isEmpty ? null : export,
+              icon: const Icon(Icons.file_download_outlined),
+              label: const Text('Export'))
       ])),
-      if (entry != null) ...[
+      if (entry != null && !processedPreview) ...[
         const SizedBox(height: 16),
         MobileJobPanel(
+            key: ValueKey(entry!.id),
+            autoSave: !previewPending && !processedPreview,
             entry: entry!,
             engine: widget.engine,
             queue: widget.queue,
@@ -969,12 +971,14 @@ class MobileJobPanel extends StatefulWidget {
   final NativeMediaEngine engine;
   final MediaQueue queue;
   final VoidCallback? onSaved;
+  final bool autoSave;
   const MobileJobPanel(
       {super.key,
       required this.entry,
       required this.engine,
       required this.queue,
-      this.onSaved});
+      this.onSaved,
+      this.autoSave = false});
   @override
   State<MobileJobPanel> createState() => _MobileJobPanelState();
 }
@@ -982,6 +986,7 @@ class MobileJobPanel extends StatefulWidget {
 class _MobileJobPanelState extends State<MobileJobPanel> {
   bool saving = false;
   String message = '';
+  bool autoSaveStarted = false;
   Future<void> save(bool gallery) async {
     setState(() => saving = true);
     try {
@@ -1001,6 +1006,15 @@ class _MobileJobPanelState extends State<MobileJobPanel> {
   @override
   Widget build(BuildContext context) {
     final j = widget.entry.snapshot;
+    if (widget.autoSave &&
+        !autoSaveStarted &&
+        j.state == ProcessingState.completed &&
+        j.output != null) {
+      autoSaveStarted = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) save(false);
+      });
+    }
     return StudioCard(
         child:
             Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
@@ -1016,10 +1030,12 @@ class _MobileJobPanelState extends State<MobileJobPanel> {
       ],
       if (j.state == ProcessingState.completed && j.output != null)
         Wrap(spacing: 8, runSpacing: 8, children: [
-          FilledButton(
-              onPressed: saving ? null : () => save(false),
-              child: const Text('Save to Files')),
-          if (!Platform.isIOS || !j.output!.endsWith('.m4a'))
+          if (!widget.autoSave)
+            FilledButton(
+                onPressed: saving ? null : () => save(false),
+                child: const Text('Save to Files')),
+          if (!widget.autoSave &&
+              (!Platform.isIOS || !j.output!.endsWith('.m4a')))
             OutlinedButton(
                 onPressed: saving ? null : () => save(true),
                 child: const Text('Save to Gallery')),

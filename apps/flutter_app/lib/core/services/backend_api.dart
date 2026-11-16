@@ -107,11 +107,19 @@ class BackendApi implements MediaApi {
   /// Bounded polling. Progress comes exclusively from the actual backend job.
   @override
   Stream<BackendJob> watch(String id,
-      {Duration interval = const Duration(milliseconds: 700),
+      {Duration interval = const Duration(seconds: 2),
       Duration limit = const Duration(hours: 2)}) async* {
     final elapsed = Stopwatch()..start();
     while (elapsed.elapsed < limit) {
-      final value = await job(id);
+      BackendJob value;
+      try {
+        value = await job(id);
+      } on BackendException catch (error) {
+        if (error.status != 429) rethrow;
+        // Keep tracking the existing job; never submit a duplicate download.
+        await Future<void>.delayed(const Duration(seconds: 10));
+        continue;
+      }
       yield value;
       if (value.terminal) return;
       await Future<void>.delayed(interval);

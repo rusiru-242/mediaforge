@@ -1,11 +1,10 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:uuid/uuid.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/services/backend_api.dart';
+import 'download_filename.dart';
 import '../../core/config/mobile_online_config.dart';
 import '../../core/processing/native_media_engine.dart';
 
@@ -151,7 +150,7 @@ class _MobileDownloaderState extends State<MobileDownloader> {
   }
 
   Future<void> download() async {
-    if (inputLocked || options.isEmpty) return;
+    if (inputLocked || options.isEmpty || output.isNotEmpty) return;
     setState(() {
       busy = true;
       error = '';
@@ -182,8 +181,15 @@ class _MobileDownloaderState extends State<MobileDownloader> {
       if (!done.completed || done.outputFileId == null) {
         throw StateError(done.error ?? 'Download failed.');
       }
-      final folder = await getApplicationDocumentsDirectory();
-      final path = '${folder.path}/MediaForge_${const Uuid().v4()}.$format';
+      final folder = await widget.engine.outputDirectory();
+      final filename = downloadFilename(
+          metadata?['title']?.toString(), o['quality']?.toString(), format);
+      var path = '$folder/$filename';
+      var copy = 2;
+      while (await File(path).exists()) {
+        final stem = filename.substring(0, filename.length - format.length - 1);
+        path = '$folder/$stem (${copy++}).$format';
+      }
       await api!.save('/files/${done.outputFileId}/download', path);
       try {
         final media = await widget.engine.probeMedia(path);
@@ -199,7 +205,17 @@ class _MobileDownloaderState extends State<MobileDownloader> {
         await File(path).delete();
         rethrow;
       }
-      if (mounted) setState(() => output = path);
+      if (!mounted) return;
+      setState(() {
+        output = path;
+        status = 'Download complete. Choose where to save.';
+      });
+      final saved = await widget.engine.save(path);
+      if (mounted) {
+        setState(() => status = saved == null
+            ? 'Download complete. Save cancelled; you can still share the file.'
+            : 'Saved successfully.');
+      }
     } catch (e) {
       if (mounted) setState(() => error = e.toString());
     } finally {
@@ -323,16 +339,25 @@ class _MobileDownloaderState extends State<MobileDownloader> {
                       child: Text(
                           '${options[i]['format']} - ${options[i]['quality']}'))
               ],
-              onChanged:
-                  inputLocked ? null : (v) => setState(() => selection = v!)),
-          FilledButton(
-              onPressed: inputLocked ? null : download,
-              child: const Text('Download'))
+              onChanged: inputLocked
+                  ? null
+                  : (v) => setState(() {
+                        selection = v!;
+                        output = '';
+                        status = '';
+                        error = '';
+                      })),
+          if (output.isEmpty)
+            FilledButton(
+                onPressed: inputLocked ? null : download,
+                child: const Text('Download'))
         ],
         if (output.isNotEmpty)
           OutlinedButton(
-              onPressed: () => Share.shareXFiles([XFile(output)]),
-              child: const Text('Share / Save downloaded media'))
+              onPressed:
+                  inputLocked ? null : () => Share.shareXFiles([XFile(output)]),
+              child: const Text('Share')),
+        if (!busy && status.isNotEmpty) Text(status)
       ]),
     );
   }

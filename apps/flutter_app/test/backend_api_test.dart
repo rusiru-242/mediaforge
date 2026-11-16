@@ -8,6 +8,24 @@ import 'package:mediaforge_desktop/features/desktop/desktop_downloader.dart';
 import 'package:mediaforge_desktop/features/desktop/desktop_task.dart';
 
 void main() {
+  test('Rate limited polling resumes the same job without creating another',
+      () async {
+    var calls = 0;
+    final api = BackendApi(client: MockClient((request) async {
+      expect(request.method, 'GET');
+      expect(request.url.path, endsWith('/jobs/existing'));
+      calls++;
+      return calls == 1
+          ? http.Response('{"message":"Too many requests"}', 429)
+          : http.Response(
+              '{"id":"existing","status":"COMPLETED","progress":100,"outputFileId":"file"}',
+              200);
+    }));
+    final values = await api.watch('existing').toList();
+    expect(calls, 2);
+    expect(values.single.completed, isTrue);
+    api.close();
+  });
   test('Expired desktop output becomes exportable again instead of stale Save',
       () async {
     final directory =
