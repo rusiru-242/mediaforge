@@ -1,0 +1,28 @@
+{
+  "installer": "C:\\Users\\REDTECH\\Documents\\Projects\\mediaforge\\mediaforge\\releases\\MediaForge-Setup-v1.0.exe",
+  "testDirectory": "C:\\Users\\REDTECH\\Documents\\Projects\\mediaforge\\mediaforge\\apps\\flutter_app\\build\\installer-verification\\20261116-234542\\MediaForge App",
+  "checks": {
+    "install": true,
+    "runtimeFilesVerified": 62,
+    "startMenuShortcut": true,
+    "optionalDesktopShortcut": true,
+    "installedAppsRegistration": true,
+    "applicationLaunch": {
+      "title": "MediaForge",
+      "pid": 27328,
+      "responding": true,
+      "executable": "C:\\Users\\REDTECH\\Documents\\Projects\\mediaforge\\mediaforge\\apps\\flutter_app\\build\\installer-verification\\20261116-234542\\MediaForge App\\mediaforge_desktop.exe"
+    },
+    "applicationNormalClose": true,
+    "ffmpeg": "ffmpeg version 9.0.1-essentials_build-www.gyan.dev Copyright (c) 2000-2026 the FFmpeg developers",
+    "ffprobe": "ffprobe version 9.0.1-essentials_build-www.gyan.dev Copyright (c) 2007-2026 the FFmpeg developers",
+    "yt-dlp": "2026.10.26",
+    "backendBundled": false,
+    "uninstallExitCode": 0,
+    "uninstall": true,
+    "installDirectoryRemoved": true
+  },
+  "success": true,
+  "installerSignature": "NotSigned",
+  "verificationScope": "Current Windows 11 x64 machine; isolated per-user install path. Clean machine and full editor/downloader workflows not tested."
+}

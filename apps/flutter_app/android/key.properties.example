@@ -1,0 +1,6 @@
+# Copy to key.properties (gitignored). Never commit actual signing credentials.
+storeFile=C:/path/to/private/mediaforge-release.jks
+keyAlias=mediaforge
+# Supply passwords through the local secure prompt or these environment variables:
+# MEDIAFORGE_ANDROID_STORE_PASSWORD
+# MEDIAFORGE_ANDROID_KEY_PASSWORD
