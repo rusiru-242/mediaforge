@@ -20,7 +20,7 @@ $expectedEngine = Join-Path $FlutterSdk 'bin/cache/artifacts/engine/windows-x64-
 if ((Get-FileHash -LiteralPath $expectedEngine).Hash -ne (Get-FileHash -LiteralPath (Join-Path $releaseRoot 'flutter_windows.dll')).Hash) {
     throw 'The staged Flutter runtime is not the release engine. Rebuild Windows Release before packaging.'
 }
-foreach ($name in @('mediaforge_desktop.exe','flutter_windows.dll','data/app.so','data/icudtl.dat','tools/ffmpeg.exe','tools/ffprobe.exe','tools/yt-dlp.exe','tools/FFmpeg-LICENSE','tools/SOURCE-NOTICE.txt')) {
+foreach ($name in @('mediaforge_desktop.exe','flutter_windows.dll','libmpv-2.dll','data/app.so','data/icudtl.dat','data/flutter_assets/AssetManifest.bin','tools/ffmpeg.exe','tools/ffprobe.exe','tools/yt-dlp.exe','tools/FFmpeg-LICENSE','tools/SOURCE-NOTICE.txt')) {
     if (!(Test-Path -LiteralPath (Join-Path $releaseRoot $name))) { throw "Missing release dependency: $name" }
 }
 if (!$CrtDirectory) {

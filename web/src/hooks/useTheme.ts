@@ -3,12 +3,15 @@
 import { useEffect, useState } from "react";
 
 export function useTheme() {
-  const [theme, setTheme] = useState<"light" | "dark">("dark");
+  const [theme, setTheme] = useState<"light" | "dark">("light");
 
   useEffect(() => {
-    const savedTheme = localStorage.getItem("mediaforge-theme") as "light" | "dark" | null;
-    const systemPrefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    const initialTheme = savedTheme || (systemPrefersDark ? "dark" : "light");
+    let initialTheme: "light" | "dark" = "light";
+    try {
+      if (localStorage.getItem("mediaforge-theme") === "dark") initialTheme = "dark";
+    } catch {
+      // Light remains the default when storage is unavailable.
+    }
 
     setTheme(initialTheme);
     if (initialTheme === "dark") {
@@ -21,7 +24,11 @@ export function useTheme() {
   const toggleTheme = () => {
     const nextTheme = theme === "dark" ? "light" : "dark";
     setTheme(nextTheme);
-    localStorage.setItem("mediaforge-theme", nextTheme);
+    try {
+      localStorage.setItem("mediaforge-theme", nextTheme);
+    } catch {
+      // Theme switching still works when browser storage is blocked.
+    }
     if (nextTheme === "dark") {
       document.documentElement.classList.add("dark");
     } else {
