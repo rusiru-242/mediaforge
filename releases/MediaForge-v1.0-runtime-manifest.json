@@ -1,0 +1,312 @@
+﻿[
+    {
+        "path":  "concrt140.dll",
+        "bytes":  368064,
+        "sha256":  "8efda0374a4b4df975feeefbea3d86cafdd36802a0144c3d261295bd268071c7"
+    },
+    {
+        "path":  "d3dcompiler_47.dll",
+        "bytes":  4891080,
+        "sha256":  "5653bc7b0e2701561464ef36602ff6171c96bffe96e4c3597359cd7addcba88a"
+    },
+    {
+        "path":  "dartjni.dll",
+        "bytes":  58880,
+        "sha256":  "8250e8531339be1670a0429c06aa2f25ec268af75185c74ade9d6018f870919c"
+    },
+    {
+        "path":  "desktop_drop_plugin.dll",
+        "bytes":  90624,
+        "sha256":  "cdf71864d2985eff110dc4b3908718b15f72c3ba9db4f42cff0b2067999fdcac"
+    },
+    {
+        "path":  "flutter_windows.dll",
+        "bytes":  21274112,
+        "sha256":  "8bd7b61eee31aa436edb182db41624d1cd3b2688a7e03622320dbeae067b5251"
+    },
+    {
+        "path":  "libEGL.dll",
+        "bytes":  472904,
+        "sha256":  "b2590bd0692f0381fc45c20bf1c7f7f713c9ea19c7ea6bab62efdd1fadc4eaac"
+    },
+    {
+        "path":  "libGLESv2.dll",
+        "bytes":  7414088,
+        "sha256":  "620bb6e38d7ed6c760a0cf4a8eb6a8f64b259b96ff286551cd32cefc6c35ca39"
+    },
+    {
+        "path":  "libmpv-2.dll",
+        "bytes":  29764622,
+        "sha256":  "d5f0694b08c124e785d858d00082f3e3b158dd9138bfc48c0382bf1eb443a5fc"
+    },
+    {
+        "path":  "mediaforge_desktop.exe",
+        "bytes":  79872,
+        "sha256":  "1af90dac5c662b1ba0da8d91afa9c679863fb88486966dbaa71d511ec4f5ade5"
+    },
+    {
+        "path":  "media_kit_libs_windows_video_plugin.dll",
+        "bytes":  12288,
+        "sha256":  "b386654cd70b1fde27fca1d9ece4f719980404348cf75f54203713d4f6d6665a"
+    },
+    {
+        "path":  "media_kit_video_plugin.dll",
+        "bytes":  150016,
+        "sha256":  "56e64539a6768beee6086456a3f14d2f5ac006c91bf3dd032e3ef502cf0f120b"
+    },
+    {
+        "path":  "msvcp140.dll",
+        "bytes":  652136,
+        "sha256":  "59d325227321d52b9a523ea401ce6787a5d59f78229a0ff3a6f124e5d3445685"
+    },
+    {
+        "path":  "msvcp140_1.dll",
+        "bytes":  35696,
+        "sha256":  "1c6522f4d005539109aa040f063659704bfda94a224142f50942573cfbcf7ec9"
+    },
+    {
+        "path":  "msvcp140_2.dll",
+        "bytes":  271800,
+        "sha256":  "56318c983acc3914f8523be61f6b1f1c91e6c1ae4b6c531169882aa59baaec6b"
+    },
+    {
+        "path":  "msvcp140_atomic_wait.dll",
+        "bytes":  58736,
+        "sha256":  "8b10c6bd4c3c427ce7c8be96ef0fef0f8187bc236962be62a03caef834b37dcd"
+    },
+    {
+        "path":  "msvcp140_codecvt_ids.dll",
+        "bytes":  31080,
+        "sha256":  "695dbb4921cc1536429d238488cbee73581357a2fa05bb5c87b0f6ae48efcaca"
+    },
+    {
+        "path":  "screen_retriever_windows_plugin.dll",
+        "bytes":  119296,
+        "sha256":  "9a5379b17ed67fc6e205f82acb61ec5b8ee43eabcfd55e3aa2dfe0a2038870b9"
+    },
+    {
+        "path":  "share_plus_plugin.dll",
+        "bytes":  137216,
+        "sha256":  "77abcfe73763336839d3143e3f4956d231f056f1052cf6471fc70bd6f327e516"
+    },
+    {
+        "path":  "url_launcher_windows_plugin.dll",
+        "bytes":  97792,
+        "sha256":  "ca8e95f42ba406829c63edfd62771fda03de309f283159d8e68beba74030d7eb"
+    },
+    {
+        "path":  "vccorlib140.dll",
+        "bytes":  351600,
+        "sha256":  "d247b63cf9b93a5769b5ac205e10fe29029c8ddce1b800159dc6061a36a1c149"
+    },
+    {
+        "path":  "vcruntime140.dll",
+        "bytes":  176488,
+        "sha256":  "eb1ee979bf02324712346e5bdbfc59c785388bc50d18cc2688aae4b0734915a0"
+    },
+    {
+        "path":  "vcruntime140_1.dll",
+        "bytes":  50544,
+        "sha256":  "a14b4a42a2c6df04d6d53a8340816023d953406f7f3d94996c7cab30c414ff63"
+    },
+    {
+        "path":  "vcruntime140_threads.dll",
+        "bytes":  38840,
+        "sha256":  "44a0a0b925242699f2b31bf40a43b54ab3513584dfe7869521d1983e40ea1f06"
+    },
+    {
+        "path":  "vk_swiftshader.dll",
+        "bytes":  4808008,
+        "sha256":  "4f33eea716491972cb1ad123a78acef485f852581130d3f3a98a1981009004f2"
+    },
+    {
+        "path":  "vulkan-1.dll",
+        "bytes":  872776,
+        "sha256":  "3be9a95dd9019aa1aca47ade26f5c1c7c0047f3cf6f633d586c9ec0d3b459566"
+    },
+    {
+        "path":  "window_manager_plugin.dll",
+        "bytes":  129024,
+        "sha256":  "a563cd4689c8e4676f07c63217488c2185291b8eb4f6055df553aa5aac814e7b"
+    },
+    {
+        "path":  "zlib.dll",
+        "bytes":  203264,
+        "sha256":  "82d5bf175cf882ac9afc1558b416e674606d055966bc09529076b28a498fc0e4"
+    },
+    {
+        "path":  "data\\app.so",
+        "bytes":  8291208,
+        "sha256":  "51d1bc39d506b080a9f1b9173f89edf798bee091c9893dcb25a3c9cc8bd85c18"
+    },
+    {
+        "path":  "data\\icudtl.dat",
+        "bytes":  864880,
+        "sha256":  "325a86063d26334c2eabe1743cea073b612540fbf3d8fc2ef0b5708e3763a8c7"
+    },
+    {
+        "path":  "data\\flutter_assets\\AssetManifest.bin",
+        "bytes":  1171,
+        "sha256":  "cd294d0f9ca91f1b0dd420355428ca60a9d6c2d98867a42a7ed5bbf7f3c0f7be"
+    },
+    {
+        "path":  "data\\flutter_assets\\FontManifest.json",
+        "bytes":  668,
+        "sha256":  "33ab52f9d4e41c99ad1d5c2feafafe241ebc44dbdce777648c17e63e43f8d618"
+    },
+    {
+        "path":  "data\\flutter_assets\\NativeAssetsManifest.json",
+        "bytes":  45,
+        "sha256":  "9548a31e4a048135c1d94f919328bfb62ae2c7bb3cab96557c7941daa97776cb"
+    },
+    {
+        "path":  "data\\flutter_assets\\NOTICES.Z",
+        "bytes":  111105,
+        "sha256":  "ff36cc4d6447c0a533a9a9eb78518128753c16271b9e1cb1f5657c1ef3e879a7"
+    },
+    {
+        "path":  "data\\flutter_assets\\assets\\fonts\\Inter-400.ttf",
+        "bytes":  341396,
+        "sha256":  "2991ce7d8d018f84f5ead7aeea39b390d8662f566c0df9682fb2b544fff79728"
+    },
+    {
+        "path":  "data\\flutter_assets\\assets\\fonts\\Inter-500.ttf",
+        "bytes":  341984,
+        "sha256":  "bcecd1681472788223a8341a59e0f4a8b6e56dafbd45be475230be2953ce3eda"
+    },
+    {
+        "path":  "data\\flutter_assets\\assets\\fonts\\Inter-600.ttf",
+        "bytes":  342660,
+        "sha256":  "7efb955decb314050a49579088979650c071b61692cb4882977c957391161140"
+    },
+    {
+        "path":  "data\\flutter_assets\\assets\\fonts\\Inter-700.ttf",
+        "bytes":  343104,
+        "sha256":  "c8d792f614653cb85d13f6ff99b898e3563051bc32b7a3236f69ecd59340a9a3"
+    },
+    {
+        "path":  "data\\flutter_assets\\assets\\fonts\\Inter-OFL.txt",
+        "bytes":  4377,
+        "sha256":  "5b9321a4298cfeb6b34354164a1c3afc3db114569984c502b9b35d988fd58c57"
+    },
+    {
+        "path":  "data\\flutter_assets\\assets\\fonts\\PlusJakartaSans-400.ttf",
+        "bytes":  96572,
+        "sha256":  "f7a79dbcce076b643ff2623af1c9515dd7bda4ef6e3bcbdfeb7ff6d6489d0fa9"
+    },
+    {
+        "path":  "data\\flutter_assets\\assets\\fonts\\PlusJakartaSans-500.ttf",
+        "bytes":  96584,
+        "sha256":  "7db84c9b00bceb8953b53d043650f91594e9c5728ee414af428f4d2badae02d8"
+    },
+    {
+        "path":  "data\\flutter_assets\\assets\\fonts\\PlusJakartaSans-600.ttf",
+        "bytes":  96564,
+        "sha256":  "aeef466dd08d35f487b8b3ad9b053179b30fb7fb88a701dbafa15f921e78e000"
+    },
+    {
+        "path":  "data\\flutter_assets\\assets\\fonts\\PlusJakartaSans-700.ttf",
+        "bytes":  96500,
+        "sha256":  "4b051cbe8f0dbe1d94167878dcd0897ce6d0e805e651c11774a1566939d17d3c"
+    },
+    {
+        "path":  "data\\flutter_assets\\assets\\fonts\\PlusJakartaSans-800.ttf",
+        "bytes":  96444,
+        "sha256":  "d07d68aa73733038d1fa2df4356c167f4ddd22e0de47f4e04feefa5228e2df11"
+    },
+    {
+        "path":  "data\\flutter_assets\\assets\\fonts\\PlusJakartaSans-OFL.txt",
+        "bytes":  4402,
+        "sha256":  "995c7199cab65954f545996326755daee7b63cc6b42b06c13da1f9502ab08a99"
+    },
+    {
+        "path":  "data\\flutter_assets\\assets\\icons\\.gitkeep",
+        "bytes":  13,
+        "sha256":  "b2603fbf717f5ac6e6e9d140eb274f39837072a438c5191d9c7de607c135c4d7"
+    },
+    {
+        "path":  "data\\flutter_assets\\assets\\images\\.gitkeep",
+        "bytes":  13,
+        "sha256":  "b2603fbf717f5ac6e6e9d140eb274f39837072a438c5191d9c7de607c135c4d7"
+    },
+    {
+        "path":  "data\\flutter_assets\\fonts\\MaterialIcons-Regular.otf",
+        "bytes":  11016,
+        "sha256":  "bfe725510ee12d34fd59cbcde608b43cd828e042591f0abadb392ecf49a7e7bc"
+    },
+    {
+        "path":  "data\\flutter_assets\\packages\\media_kit\\assets\\web\\hls1.4.10.js",
+        "bytes":  374690,
+        "sha256":  "30b278794fd3f269a47e6dc7b76ae9a04f08acffdd72f9b8cc26d49d3ba09c38"
+    },
+    {
+        "path":  "data\\flutter_assets\\packages\\wakelock_plus\\assets\\no_sleep.js",
+        "bytes":  13669,
+        "sha256":  "726c644cda17bf271d996fb629806a59409607e9b00e0dfbf75adfd3986bbb7e"
+    },
+    {
+        "path":  "data\\flutter_assets\\shaders\\ink_sparkle.frag",
+        "bytes":  21856,
+        "sha256":  "1fe8436a743884cb65078fe8c7b38e18f5365f2a2961270916f426fd13c604af"
+    },
+    {
+        "path":  "data\\flutter_assets\\shaders\\stretch_effect.frag",
+        "bytes":  17616,
+        "sha256":  "bc7599dbbbaab310efe41520574138d21fb18a88c8fe4495ed79315309336f6f"
+    },
+    {
+        "path":  "tools\\FFmpeg-corresponding-upstream-source.tar.gz",
+        "bytes":  17310870,
+        "sha256":  "88b7e61092a4633ce5cf335604dda75b83ef9c2f650fb5d56c8d30160363a058"
+    },
+    {
+        "path":  "tools\\FFmpeg-LICENSE",
+        "bytes":  35147,
+        "sha256":  "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903"
+    },
+    {
+        "path":  "tools\\FFmpeg-README.txt",
+        "bytes":  41650,
+        "sha256":  "1c8c50e4df1623673ec236bafe774f3c4ee41a1e6b0cde05e31b7d89b31efa06"
+    },
+    {
+        "path":  "tools\\ffmpeg.exe",
+        "bytes":  102856192,
+        "sha256":  "72a489eccd008c2ec2c0a5856c5c75bc3d8bbfa90166c4566865c246445e6aa3"
+    },
+    {
+        "path":  "tools\\ffprobe.exe",
+        "bytes":  102652416,
+        "sha256":  "19202b23c0043f15ad1b7bce2344f406fd52bd6efd8f995ce02e7392a1cec52f"
+    },
+    {
+        "path":  "tools\\manifest.json",
+        "bytes":  662,
+        "sha256":  "dad81a87debb507f11f74f1e99a67006cd6fbe04ebb36085ddcf0b006bbf666c"
+    },
+    {
+        "path":  "tools\\SOURCE-NOTICE.txt",
+        "bytes":  971,
+        "sha256":  "476c86a524a3ed09c416c74dd55beca096ca45cf14a91e55c78a02811a0103d0"
+    },
+    {
+        "path":  "tools\\yt-dlp-LICENSE",
+        "bytes":  1211,
+        "sha256":  "7e12e5df4bae12cb21581ba157ced20e1986a0508dd10d0e8a4ab9a4cf94e85c"
+    },
+    {
+        "path":  "tools\\yt-dlp-SHA2-256SUMS",
+        "bytes":  1595,
+        "sha256":  "0d7ec4303a02bcbe66154d478852cdf2e07688d39dc4597316e4424ac4e74356"
+    },
+    {
+        "path":  "tools\\yt-dlp-THIRD_PARTY_LICENSES.txt",
+        "bytes":  243550,
+        "sha256":  "472aefe951c7db35e1657c1d13fd337140511ed6f2b329205105ad441c5a02b7"
+    },
+    {
+        "path":  "tools\\yt-dlp.exe",
+        "bytes":  23575744,
+        "sha256":  "f5389d3698ecde4ef06f4e6b1ce0294fe9ac1396228c8990b8d3416d6d177a7d"
+    }
+]

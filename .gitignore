@@ -260,3 +260,7 @@ backend/target/surefire-reports/
 .sass-cache/
 .connect.lock
 
+# Release binaries are generated locally; keep source, manifests and release notes in Git.
+/releases/*.apk
+/releases/*.exe
+/releases/*.zip
