@@ -15,6 +15,8 @@ import {
   ArrowRight,
   Scissors,
   Settings,
+  Monitor,
+  Smartphone,
 } from 'lucide-react';
 
 export default function HomePage() {
@@ -54,6 +56,37 @@ export default function HomePage() {
               <Download className="w-4 h-4 text-secondary" />
               <span>Download Media</span>
             </Link>
+          </div>
+          <div className="w-full max-w-xl pt-2 sm:pt-3">
+            <p className="text-sm font-medium text-on-surface-variant mb-3">Get the MediaForge app</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <a
+                href="https://github.com/rusiru-242/mediaforge/raw/refs/heads/main/releases/MediaForge-Setup-v1.0.exe"
+                download="MediaForge-Setup-v1.0.exe"
+                aria-label="Download MediaForge for Windows"
+                className="flex items-center gap-3 rounded-2xl border border-outline-variant/40 bg-surface-container-lowest dark:bg-slate-900 px-4 py-3 text-left text-slate-900 dark:text-slate-100 hover:border-primary hover:bg-primary/5 dark:hover:bg-slate-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-950"
+              >
+                <Monitor className="w-5 h-5 text-primary shrink-0" aria-hidden="true" />
+                <span className="flex-1 min-w-0">
+                  <span className="block text-sm font-semibold">Download for Windows</span>
+                  <span className="block text-xs text-on-surface-variant mt-0.5">Windows 11 · Installer</span>
+                </span>
+                <Download className="w-4 h-4 text-primary shrink-0" aria-hidden="true" />
+              </a>
+              <a
+                href="https://github.com/rusiru-242/mediaforge/raw/refs/heads/main/releases/MediaForge-Android-v1.0.apk"
+                download="MediaForge-Android-v1.0.apk"
+                aria-label="Download MediaForge for Android"
+                className="flex items-center gap-3 rounded-2xl border border-outline-variant/40 bg-surface-container-lowest dark:bg-slate-900 px-4 py-3 text-left text-slate-900 dark:text-slate-100 hover:border-primary hover:bg-primary/5 dark:hover:bg-slate-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-950"
+              >
+                <Smartphone className="w-5 h-5 text-primary shrink-0" aria-hidden="true" />
+                <span className="flex-1 min-w-0">
+                  <span className="block text-sm font-semibold">Download for Android</span>
+                  <span className="block text-xs text-on-surface-variant mt-0.5">Android · APK</span>
+                </span>
+                <Download className="w-4 h-4 text-primary shrink-0" aria-hidden="true" />
+              </a>
+            </div>
           </div>
         </div>
       </div>
