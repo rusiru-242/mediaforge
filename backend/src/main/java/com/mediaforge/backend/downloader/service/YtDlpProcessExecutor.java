@@ -156,6 +156,25 @@ public class YtDlpProcessExecutor {
      */
     public MediaMetadata extractMetadata(URI uri) {
         urlValidator.validateUri(uri);
+        final int maxAttempts = 3;
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+            MetadataAttempt result = extractMetadataAttempt(uri);
+            if (!result.retryable() || attempt == maxAttempts) return result.metadata();
+
+            long delayMillis = 250L << (attempt - 1);
+            log.warn("Retrying transient metadata failure for host {} (attempt {}/{}, delay={}ms)",
+                    uri.getHost(), attempt + 1, maxAttempts, delayMillis);
+            try {
+                Thread.sleep(delayMillis);
+            } catch (InterruptedException ex) {
+                Thread.currentThread().interrupt();
+                return result.metadata();
+            }
+        }
+        throw new IllegalStateException("Metadata retry loop exited unexpectedly.");
+    }
+
+    private MetadataAttempt extractMetadataAttempt(URI uri) {
         List<String> cmd = new ArrayList<>(getExecutableCommand());
         cmd.addAll(runtimeArguments());
         cmd.add("--ignore-config");
@@ -187,32 +206,36 @@ public class YtDlpProcessExecutor {
                 log.warn("Extractor inspection timed out after {}s for URL {}", timeoutSeconds, uri.getHost());
                 MediaMetadata meta = new MediaMetadata();
                 meta.setMessage("Media stream inspection timed out while probing source server.");
-                return meta;
+                return new MetadataAttempt(meta, true);
             }
 
             outThread.join(2000);
             errThread.join(2000);
 
             if (process.exitValue() == 0 && stdout.length() > 0) {
-                return parseExtractorJson(stdout.toString(), uri);
+                return new MetadataAttempt(parseExtractorJson(stdout.toString(), uri), false);
             } else {
-                String cleanError = sanitizeExtractorError(stderr.toString());
+                String rawError = stderr.toString();
+                String cleanError = sanitizeExtractorError(rawError);
                 log.warn("Extractor returned exit code {} for host {}: {}", process.exitValue(), uri.getHost(), cleanError);
                 MediaMetadata meta = new MediaMetadata();
                 meta.setMessage(cleanError);
-                return meta;
+                return new MetadataAttempt(meta, ExtractorErrors.isRetryable(rawError));
             }
 
         } catch (Exception e) {
             log.error("Failed to start media extractor for host {} ({})", uri.getHost(), e.getClass().getSimpleName());
             MediaMetadata meta = new MediaMetadata();
-            if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+            boolean interrupted = e instanceof InterruptedException;
+            if (interrupted) Thread.currentThread().interrupt();
             meta.setMessage(ExtractorErrors.describe(e.getMessage()));
-            return meta;
+            return new MetadataAttempt(meta, !interrupted && ExtractorErrors.isRetryable(e.getMessage()));
         } finally {
             if (inspection != null) { inspections.remove(inspection); terminate(inspection); }
         }
     }
+
+    private record MetadataAttempt(MediaMetadata metadata, boolean retryable) {}
 
     private MediaMetadata parseExtractorJson(String jsonStr, URI uri) {
         try {
@@ -336,9 +359,9 @@ public class YtDlpProcessExecutor {
             return metadata;
 
         } catch (Exception e) {
-            log.error("Failed to parse extractor JSON: {}", e.getMessage());
+            log.error("Failed to parse extractor metadata for host {} ({})", uri.getHost(), e.getClass().getSimpleName());
             MediaMetadata fallback = new MediaMetadata();
-            fallback.setMessage("Failed to parse media metadata: " + e.getMessage());
+            fallback.setMessage(ExtractorErrors.describe("invalid extractor metadata"));
             return fallback;
         }
     }

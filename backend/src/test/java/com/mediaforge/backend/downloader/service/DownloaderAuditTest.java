@@ -30,12 +30,25 @@ class DownloaderAuditTest {
                 .doesNotContain("SECRET", "private", "source.mp4").contains("[remote URL]", "[local path]");
     }
 
-    @ParameterizedTest @CsvSource({"HTTP 429,RATE_LIMITED", "private video,PRIVATE_CONTENT", "login required,LOGIN_REQUIRED",
+    @ParameterizedTest @CsvSource({"HTTP Error 429: Too Many Requests,RATE_LIMITED", "worker 429 started,EXTRACTOR_FAILURE",
+            "private video,PRIVATE_CONTENT", "login required,LOGIN_REQUIRED",
+            "Sign in to confirm your age,LOGIN_REQUIRED",
+            "Sign in to confirm you're not a bot,SOURCE_ACCESS_DENIED",
+            "HTTP Error 503: Service Unavailable,UPSTREAM_FAILURE",
             "not available in your country,REGION_RESTRICTED", "HTTP 404,MEDIA_UNAVAILABLE", "connection timed out,NETWORK_FAILURE",
             "unsupported URL,UNSUPPORTED_MEDIA", "Unexpected response from webpage request,SOURCE_ACCESS_DENIED", "DRM protected,DRM_PROTECTED"})
     void classifiesFailuresWithoutLeakingSecrets(String raw, String code) {
         assertThat(ExtractorErrors.describe(raw+" https://example.com/?token=SECRET C:\\private\\file"))
                 .contains(code).doesNotContain("SECRET", "private\\file");
+    }
+
+    @Test void retriesOnlyTransientExtractorFailures() {
+        assertThat(ExtractorErrors.isRetryable("HTTP Error 503: Service Unavailable")).isTrue();
+        assertThat(ExtractorErrors.isRetryable("Read timed out")).isTrue();
+        assertThat(ExtractorErrors.isRetryable("HTTP Error 429: Too Many Requests")).isFalse();
+        assertThat(ExtractorErrors.isRetryable("Sign in to confirm you're not a bot")).isFalse();
+        assertThat(ExtractorErrors.isRetryable("HTTP Error 403: Forbidden")).isFalse();
+        assertThat(ExtractorErrors.isRetryable("CAPTCHA verification required")).isFalse();
     }
 
     @Test void estimatesOnlyKnownEncodingAndDuration() {
@@ -75,5 +88,15 @@ class DownloaderAuditTest {
         assertThat(metadata.getFileSize()).isNull();
         assertThat(metadata.getSourceName()).isEqualTo("instagram");
         assertThat(metadata.getAvailableQualities()).containsExactly("720p (HD)");
+    }
+
+    @Test void invalidExtractorJsonDoesNotExposeRawSourceDetails() throws Exception {
+        var extractor = new YtDlpProcessExecutor(new ObjectMapper(), new com.mediaforge.backend.converter.service.FFmpegProcessExecutor());
+        var method = YtDlpProcessExecutor.class.getDeclaredMethod("parseExtractorJson", String.class, URI.class);
+        method.setAccessible(true);
+        var metadata = (com.mediaforge.backend.downloader.model.MediaMetadata) method.invoke(extractor,
+                "https://example.com/watch?token=SECRET", URI.create("https://www.youtube.com/watch?v=owned"));
+
+        assertThat(metadata.getMessage()).contains("EXTRACTOR_FAILURE").doesNotContain("SECRET", "example.com");
     }
 }
