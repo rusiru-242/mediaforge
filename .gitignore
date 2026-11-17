@@ -261,6 +261,5 @@ backend/target/surefire-reports/
 .connect.lock
 
 # Release binaries are generated locally; keep source, manifests and release notes in Git.
-/releases/*.apk
-/releases/*.exe
+
 /releases/*.zip
