@@ -10,6 +10,7 @@ import com.mediaforge.backend.downloader.model.DownloadTask;
 import com.mediaforge.backend.downloader.model.DownloadedMedia;
 import com.mediaforge.backend.downloader.model.MediaFormatOption;
 import com.mediaforge.backend.downloader.model.MediaMetadata;
+import com.mediaforge.backend.downloader.model.PlatformUrls;
 import com.mediaforge.backend.downloader.model.ProgressCallback;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -90,6 +91,67 @@ public class YtDlpProcessExecutor {
         this.outputVerifier = outputVerifier;
         this.objectMapper = objectMapper != null ? objectMapper : new ObjectMapper();
         this.ffmpegExecutor = ffmpegExecutor;
+    }
+
+    @jakarta.annotation.PostConstruct
+    void logRuntimeConfiguration() {
+        List<String> executableCommand = getExecutableCommand();
+        String executable = String.join(" ", executableCommand);
+        String configuredPathStatus = configuredYtDlpPath == null || configuredYtDlpPath.isBlank()
+                ? "not-configured"
+                : configuredYtDlpPath.equals(executableCommand.get(0)) ? "selected" : "fallback";
+        if (configuredPathStatus.equals("fallback")) {
+            log.warn("Configured YTDLP_PATH is not executable; using resolved command {} instead", executable);
+        }
+
+        String nodeExecutable = nodeExecutableCommand();
+        String nodeVersion = readVersion(List.of(nodeExecutable));
+        String extractorVersion = readVersion(executableCommand);
+        String runtimeMode = jsRuntimes == null || jsRuntimes.isBlank() ? "auto-detect" : "explicit";
+        if (extractorVersion.startsWith("unavailable-")) {
+            log.warn("yt-dlp executable check failed: status={} command={}", extractorVersion, executable);
+        }
+        if (nodeVersion.startsWith("unavailable-")) {
+            log.warn("Node executable check failed: status={} command={}", nodeVersion, nodeExecutable);
+        }
+        log.info("Downloader runtime: Java version={} yt-dlp version={} command={} YTDLP_PATH={} JS runtime mode={} Node version={} command={}",
+                System.getProperty("java.version"), extractorVersion, executable, configuredPathStatus,
+                runtimeMode, nodeVersion, nodeExecutable);
+    }
+
+    private String nodeExecutableCommand() {
+        if (jsRuntimes != null) {
+            for (String runtime : jsRuntimes.split(",")) {
+                String value = runtime.trim();
+                if (value.equals("node")) return "node";
+                if (value.startsWith("node:") && value.length() > 5) return value.substring(5);
+            }
+        }
+        return "node";
+    }
+
+    private String readVersion(List<String> baseCommand) {
+        List<String> command = new ArrayList<>(baseCommand);
+        command.add("--version");
+        Process process = null;
+        try {
+            process = new ProcessBuilder(command).redirectErrorStream(true).start();
+            if (!process.waitFor(4, TimeUnit.SECONDS)) return "unavailable-timeout";
+            if (process.exitValue() != 0) return "unavailable-exit-" + process.exitValue();
+
+            byte[] output = process.getInputStream().readNBytes(128);
+            String version = new String(output, StandardCharsets.UTF_8).lines().findFirst().orElse("").trim()
+                    .replaceAll("[^A-Za-z0-9._+ -]", "_");
+            if (version.isEmpty()) return "unavailable-empty-output";
+            return version.substring(0, Math.min(80, version.length()));
+        } catch (IOException ex) {
+            return "unavailable-" + ex.getClass().getSimpleName();
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            return "unavailable-interrupted";
+        } finally {
+            if (process != null && process.isAlive()) terminate(process);
+        }
     }
 
     public synchronized List<String> getExecutableCommand() {
@@ -203,7 +265,8 @@ public class YtDlpProcessExecutor {
             boolean finished = process.waitFor(timeoutSeconds, TimeUnit.SECONDS);
             if (!finished) {
                 process.destroyForcibly();
-                log.warn("Extractor inspection timed out after {}s for URL {}", timeoutSeconds, uri.getHost());
+                log.warn("Extractor inspection timed out: platform={} timeoutSeconds={}",
+                        PlatformUrls.platform(uri), timeoutSeconds);
                 MediaMetadata meta = new MediaMetadata();
                 meta.setMessage("Media stream inspection timed out while probing source server.");
                 return new MetadataAttempt(meta, true);
@@ -216,15 +279,18 @@ public class YtDlpProcessExecutor {
                 return new MetadataAttempt(parseExtractorJson(stdout.toString(), uri), false);
             } else {
                 String rawError = stderr.toString();
-                String cleanError = sanitizeExtractorError(rawError);
-                log.warn("Extractor returned exit code {} for host {}: {}", process.exitValue(), uri.getHost(), cleanError);
+                Integer httpStatus = ExtractorErrors.httpStatus(rawError);
+                log.warn("yt-dlp metadata failed: platform={} exitCode={} category={} httpStatus={}",
+                        PlatformUrls.platform(uri), process.exitValue(),
+                        ExtractorErrors.diagnosticCategory(rawError), httpStatus == null ? "unknown" : httpStatus);
                 MediaMetadata meta = new MediaMetadata();
-                meta.setMessage(cleanError);
+                meta.setMessage(sanitizeExtractorError(rawError));
                 return new MetadataAttempt(meta, ExtractorErrors.isRetryable(rawError));
             }
 
         } catch (Exception e) {
-            log.error("Failed to start media extractor for host {} ({})", uri.getHost(), e.getClass().getSimpleName());
+            log.error("Failed to start media extractor: platform={} errorType={}",
+                    PlatformUrls.platform(uri), e.getClass().getSimpleName());
             MediaMetadata meta = new MediaMetadata();
             boolean interrupted = e instanceof InterruptedException;
             if (interrupted) Thread.currentThread().interrupt();

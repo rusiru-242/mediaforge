@@ -42,6 +42,22 @@ class DownloaderAuditTest {
                 .contains(code).doesNotContain("SECRET", "private\\file");
     }
 
+    @Test void diagnosticsIdentifySourceFailureWithoutLoggingExtractorOutput() {
+        assertThat(ExtractorErrors.diagnosticCategory("Sign in to confirm you're not a bot"))
+                .isEqualTo("VERIFICATION_CHALLENGE");
+        assertThat(ExtractorErrors.diagnosticCategory("HTTP Error 403: Forbidden"))
+                .isEqualTo("HTTP_403_ACCESS_DENIED");
+        assertThat(ExtractorErrors.diagnosticCategory("HTTP Error 429: Too Many Requests"))
+                .isEqualTo("HTTP_429_RATE_LIMIT");
+        assertThat(ExtractorErrors.diagnosticCategory("HTTP Error 503: Service Unavailable"))
+                .isEqualTo("HTTP_5XX_UPSTREAM");
+        assertThat(ExtractorErrors.diagnosticCategory("unrecognized extractor response")).isEqualTo("OTHER");
+
+        assertThat(ExtractorErrors.httpStatus("HTTP Error 403: Forbidden")).isEqualTo(403);
+        assertThat(ExtractorErrors.httpStatus("response code: 429")).isEqualTo(429);
+        assertThat(ExtractorErrors.httpStatus("worker 429 started")).isNull();
+    }
+
     @Test void retriesOnlyTransientExtractorFailures() {
         assertThat(ExtractorErrors.isRetryable("HTTP Error 503: Service Unavailable")).isTrue();
         assertThat(ExtractorErrors.isRetryable("Read timed out")).isTrue();
