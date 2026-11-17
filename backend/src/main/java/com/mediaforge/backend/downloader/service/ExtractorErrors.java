@@ -1,6 +1,7 @@
 package com.mediaforge.backend.downloader.service;
 
 import java.util.Locale;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /** Stable, credential-free messages suitable for the API and job state. */
@@ -10,6 +11,8 @@ public final class ExtractorErrors {
     private static final Pattern HTTP_5XX = Pattern.compile(
             "(?i)(?:\\bHTTP(?:\\s+Error)?\\s+5\\d\\d\\b|\\b5\\d\\d\\s+(?:Server Error|Service Unavailable|Bad Gateway|Gateway Timeout)\\b)");
     private static final Pattern HTTP_403 = Pattern.compile("(?i)\\bHTTP(?:\\s+Error)?\\s+403\\b");
+    private static final Pattern HTTP_STATUS = Pattern.compile(
+            "(?i)\\bHTTP(?:\\s+Error)?\\s+(\\d{3})\\b|\\b(?:status|response)(?:\\s+code)?\\s*[:=]?\\s*(\\d{3})\\b");
 
     private ExtractorErrors() {}
 
@@ -23,7 +26,7 @@ public final class ExtractorErrors {
     }
 
     public static String describe(String raw) {
-        String text = raw == null ? "" : raw.toLowerCase(Locale.ROOT).replace('\u2018', '\'').replace('\u2019', '\'');
+        String text = normalize(raw);
         if (isVerificationChallenge(text)) return "[SOURCE_ACCESS_DENIED] The platform requires an access check that this server cannot complete. Only publicly accessible media is supported.";
         if (text.contains("drm")) return "[DRM_PROTECTED] This media is DRM-protected and cannot be downloaded.";
         if (HTTP_429.matcher(text).find()) return "[RATE_LIMITED] The source is rate limiting requests. Try again later.";
@@ -40,8 +43,33 @@ public final class ExtractorErrors {
         return "[EXTRACTOR_FAILURE] The platform returned media data the extractor could not read. Try another public link or retry later.";
     }
 
+    static String diagnosticCategory(String raw) {
+        String text = normalize(raw);
+        Integer status = httpStatus(text);
+        if (isVerificationChallenge(text)) return "VERIFICATION_CHALLENGE";
+        if ((status != null && status == 429) || HTTP_429.matcher(text).find()) return "HTTP_429_RATE_LIMIT";
+        if ((status != null && status == 403) || HTTP_403.matcher(text).find()) return "HTTP_403_ACCESS_DENIED";
+        if (isSourceAccessDenied(text)) return "SOURCE_ACCESS_DENIED";
+        if (requiresAuthentication(text)) return "AUTHENTICATION_REQUIRED";
+        if (status != null && status >= 500) return "HTTP_5XX_UPSTREAM";
+        if (status != null) return "HTTP_" + status;
+        if (text.contains("timed out") || text.contains("timeout")) return "TRANSIENT_TIMEOUT";
+        if (isRetryable(text)) return "TRANSIENT_NETWORK_ERROR";
+        return "OTHER";
+    }
+
+    static Integer httpStatus(String raw) {
+        Matcher matcher = HTTP_STATUS.matcher(normalize(raw));
+        while (matcher.find()) {
+            String value = matcher.group(1) != null ? matcher.group(1) : matcher.group(2);
+            int status = Integer.parseInt(value);
+            if (status >= 400 && status <= 599) return status;
+        }
+        return null;
+    }
+
     static boolean isRetryable(String raw) {
-        String text = raw == null ? "" : raw.toLowerCase(Locale.ROOT).replace('\u2018', '\'').replace('\u2019', '\'');
+        String text = normalize(raw);
         if (isVerificationChallenge(text) || isSourceAccessDenied(text) || HTTP_429.matcher(text).find()
                 || requiresAuthentication(text) || text.contains("private video") || text.contains("private content")
                 || text.contains("drm") || text.contains("age-restricted") || text.contains("members-only")
@@ -57,6 +85,10 @@ public final class ExtractorErrors {
                 || text.contains("unexpected eof")
                 || text.contains("temporary failure in name resolution")
                 || text.contains("temporary failure resolving");
+    }
+
+    private static String normalize(String raw) {
+        return raw == null ? "" : raw.toLowerCase(Locale.ROOT).replace('\u2018', '\'').replace('\u2019', '\'');
     }
 
     private static boolean isVerificationChallenge(String text) {
