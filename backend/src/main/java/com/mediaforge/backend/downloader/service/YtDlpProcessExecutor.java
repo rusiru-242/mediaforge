@@ -47,6 +47,18 @@ public class YtDlpProcessExecutor {
     private final ObjectMapper objectMapper;
     private final FFmpegProcessExecutor ffmpegExecutor;
     private final Map<UUID, Process> activeProcesses = new ConcurrentHashMap<>();
+    private final Set<Process> inspections = ConcurrentHashMap.newKeySet();
+
+    @jakarta.annotation.PreDestroy
+    public void shutdown() {
+        activeProcesses.values().forEach(this::terminate);
+        inspections.forEach(this::terminate);
+        activeProcesses.clear(); inspections.clear();
+    }
+    private void terminate(Process process) {
+        process.descendants().forEach(ProcessHandle::destroyForcibly);
+        if (process.isAlive()) process.destroyForcibly();
+    }
     @org.springframework.beans.factory.annotation.Autowired
     private com.mediaforge.backend.validation.UrlSecurityValidator urlValidator = new com.mediaforge.backend.validation.UrlSecurityValidator();
 
@@ -58,6 +70,13 @@ public class YtDlpProcessExecutor {
 
     @Value("${app.downloader.download-timeout-seconds:3600}")
     private int downloadTimeoutSeconds = 3600;
+
+    @Value("${app.downloader.js-runtimes:}")
+    private String jsRuntimes;
+
+    private List<String> runtimeArguments() {
+        return jsRuntimes == null || jsRuntimes.isBlank() ? List.of() : List.of("--js-runtimes", jsRuntimes);
+    }
 
     private List<String> resolvedExecutableCommand;
 
@@ -138,6 +157,7 @@ public class YtDlpProcessExecutor {
     public MediaMetadata extractMetadata(URI uri) {
         urlValidator.validateUri(uri);
         List<String> cmd = new ArrayList<>(getExecutableCommand());
+        cmd.addAll(runtimeArguments());
         cmd.add("--ignore-config");
         cmd.add("-J");
         cmd.add("--no-playlist");
@@ -147,11 +167,14 @@ public class YtDlpProcessExecutor {
         StringBuilder stdout = new StringBuilder();
         StringBuilder stderr = new StringBuilder();
 
+        Process inspection = null;
         try (var network = new ExtractorNetworkProxy(urlValidator)) {
             cmd.addAll(getExecutableCommand().size(), List.of("--proxy", network.address()));
             ProcessBuilder pb = new ProcessBuilder(cmd);
             pb.environment().put("NO_PROXY", ""); pb.environment().put("no_proxy", "");
             Process process = pb.start();
+            inspection = process;
+            inspections.add(process);
 
             Thread outThread = new Thread(() -> readStream(process.getInputStream(), stdout));
             Thread errThread = new Thread(() -> readStream(process.getErrorStream(), stderr));
@@ -183,8 +206,11 @@ public class YtDlpProcessExecutor {
         } catch (Exception e) {
             log.error("Failed to start media extractor for host {} ({})", uri.getHost(), e.getClass().getSimpleName());
             MediaMetadata meta = new MediaMetadata();
+            if (e instanceof InterruptedException) Thread.currentThread().interrupt();
             meta.setMessage(ExtractorErrors.describe(e.getMessage()));
             return meta;
+        } finally {
+            if (inspection != null) { inspections.remove(inspection); terminate(inspection); }
         }
     }
 
@@ -338,6 +364,7 @@ public class YtDlpProcessExecutor {
         if (task.isCancelled()) throw new IOException("Download cancelled.");
 
         List<String> command = new ArrayList<>(getExecutableCommand());
+        command.addAll(runtimeArguments());
         command.addAll(List.of("--ignore-config", "--no-playlist", "--newline", "--no-simulate", "--no-warnings"));
         command.addAll(downloadNetworkArguments());
         command.addAll(List.of("--ffmpeg-location", ffmpegExecutor.getFfmpegLocation()));
@@ -416,6 +443,7 @@ public class YtDlpProcessExecutor {
     JsonNode inspectSource(DownloadTask task) throws IOException {
         urlValidator.validateUri(task.getSourceUri());
         List<String> command = new ArrayList<>(getExecutableCommand());
+        command.addAll(runtimeArguments());
         command.addAll(List.of("--ignore-config", "--no-playlist", "-J", task.getSourceUri().toString()));
         StringBuilder json = new StringBuilder();
         runExtractorProcess(task, command, Math.max(15, timeoutSeconds), line -> {

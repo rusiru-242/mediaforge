@@ -6,6 +6,7 @@ import org.hibernate.validator.constraints.URL;
 public class DownloadValidateRequest {
 
     @NotBlank(message = "url is required")
+    @jakarta.validation.constraints.Size(max = 4096, message = "URL cannot exceed 4096 characters")
     private String url;
 
     public DownloadValidateRequest() {

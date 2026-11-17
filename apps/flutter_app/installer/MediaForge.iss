@@ -8,7 +8,7 @@
 [Setup]
 AppId={{8BE30DAE-3227-4595-8D03-D5359B66DE26}
 AppName=MediaForge
-AppVersion=1.0
+AppVersion=1.0.0
 AppVerName=MediaForge v1.0
 VersionInfoVersion=1.0.0.0
 VersionInfoDescription=MediaForge Windows Installer

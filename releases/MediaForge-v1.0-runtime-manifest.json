@@ -80,6 +80,11 @@
         "sha256":  "695dbb4921cc1536429d238488cbee73581357a2fa05bb5c87b0f6ae48efcaca"
     },
     {
+        "path":  "native_assets.json",
+        "bytes":  45,
+        "sha256":  "9548a31e4a048135c1d94f919328bfb62ae2c7bb3cab96557c7941daa97776cb"
+    },
+    {
         "path":  "screen_retriever_windows_plugin.dll",
         "bytes":  119296,
         "sha256":  "9a5379b17ed67fc6e205f82acb61ec5b8ee43eabcfd55e3aa2dfe0a2038870b9"
@@ -136,8 +141,8 @@
     },
     {
         "path":  "data\\app.so",
-        "bytes":  8291208,
-        "sha256":  "51d1bc39d506b080a9f1b9173f89edf798bee091c9893dcb25a3c9cc8bd85c18"
+        "bytes":  8307592,
+        "sha256":  "5a285d0699b23529cada6c2a2c0701b3d47c95bee5fac77f9026cbc371ac8e6b"
     },
     {
         "path":  "data\\icudtl.dat",

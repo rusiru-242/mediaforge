@@ -12,6 +12,13 @@ import java.net.URI;
 @Service
 public class MediaMetadataServiceImpl implements MediaMetadataService {
 
+    @org.springframework.beans.factory.annotation.Value("${app.downloader.metadata-concurrency:2}")
+    private int concurrency = 2;
+    private java.util.concurrent.Semaphore slots;
+
+    @jakarta.annotation.PostConstruct
+    void init() { slots = new java.util.concurrent.Semaphore(Math.max(1, Math.min(16, concurrency))); }
+
     private final UrlSecurityValidator urlValidator;
     private final MediaSourceAdapterRegistry adapterRegistry;
 
@@ -22,8 +29,14 @@ public class MediaMetadataServiceImpl implements MediaMetadataService {
 
     @Override
     public MediaMetadata extractMetadata(String url) throws IOException {
-        URI validatedUri = urlValidator.validate(url);
-        MediaSourceAdapter adapter = adapterRegistry.getAdapter(validatedUri);
-        return adapter.extractMetadata(validatedUri);
+        // Direct unit construction remains supported, using the same bounded defaults.
+        if (slots == null) init();
+        if (!slots.tryAcquire()) throw new org.springframework.web.server.ResponseStatusException(
+                org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE, "Metadata workers are busy. Retry later.");
+        try {
+            URI validatedUri = urlValidator.validate(url);
+            MediaSourceAdapter adapter = adapterRegistry.getAdapter(validatedUri);
+            return adapter.extractMetadata(validatedUri);
+        } finally { slots.release(); }
     }
 }

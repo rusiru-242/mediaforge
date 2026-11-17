@@ -37,7 +37,7 @@ public class RateLimitingFilter extends OncePerRequestFilter {
 
         // Exempt health checks and documentation from rate limiting
         String uri = request.getRequestURI();
-        if (uri.startsWith("/v3/api-docs") || uri.startsWith("/swagger-ui") || uri.equals("/api/v1/health")) {
+        if ("OPTIONS".equals(request.getMethod()) || uri.equals("/actuator/health") || uri.startsWith("/actuator/health/") || uri.startsWith("/v3/api-docs") || uri.startsWith("/swagger-ui") || uri.equals("/api/v1/health")) {
             filterChain.doFilter(request, response);
             return;
         }
@@ -46,10 +46,22 @@ public class RateLimitingFilter extends OncePerRequestFilter {
         boolean polling = "GET".equals(request.getMethod()) && uri.matches(
                 "/api/v1/jobs/[0-9a-fA-F-]{36}(?:/progress(?:/sse)?)?");
         int limit = polling ? Math.max(requestsPerMinute, 600) : requestsPerMinute;
-        String clientIp = getClientIp(request);
+        String clientIp = request.getRemoteAddr();
         String bucket = clientIp + (polling ? ":progress" : ":operations");
         long currentWindow = System.currentTimeMillis() / 60000;
 
+        // Retain only live windows; do not keep every historical client forever.
+        if (requestCounts.size() > 1000) {
+            requestCounts.entrySet().removeIf(entry -> entry.getValue().window() != currentWindow);
+        }
+        if (requestCounts.size() >= 20000 && !requestCounts.containsKey(bucket)) {
+            response.setStatus(429);
+            response.setHeader("Retry-After", "60");
+            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+            objectMapper.writeValue(response.getWriter(), new ApiErrorResponse(429, "Too Many Requests",
+                    "RATE_LIMIT_EXCEEDED", "Server request capacity reached. Retry later.", uri));
+            return;
+        }
         WindowCounter counter = requestCounts.compute(bucket, (key, existing) -> {
             if (existing == null || existing.window() != currentWindow) {
                 return new WindowCounter(currentWindow, new AtomicInteger(1));
@@ -79,13 +91,8 @@ public class RateLimitingFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
-    private String getClientIp(HttpServletRequest request) {
-        String xfHeader = request.getHeader("X-Forwarded-For");
-        if (xfHeader == null || xfHeader.isEmpty() || !xfHeader.contains(",")) {
-            return request.getRemoteAddr();
-        }
-        return xfHeader.split(",")[0].trim();
-    }
+    // Never parse caller-controlled forwarding headers here. A trusted ingress
+    // must strip/replace them; prod defaults to the actual network peer address.
 
     private record WindowCounter(long window, AtomicInteger counter) {
     }

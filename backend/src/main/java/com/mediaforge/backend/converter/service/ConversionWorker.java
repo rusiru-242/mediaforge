@@ -31,6 +31,9 @@ public class ConversionWorker {
     @Value("${app.converter.max-concurrent-jobs:4}")
     private int maxConcurrentJobs;
 
+    @Value("${app.converter.queue-capacity:20}")
+    private int queueCapacity = 20;
+
     private final MediaJobRepository jobRepository;
     private final JobEventRepository eventRepository;
     private final MediaConversionService conversionService;
@@ -57,9 +60,10 @@ public class ConversionWorker {
     @PostConstruct
     public void init() {
         this.taskExecutor = new ThreadPoolTaskExecutor();
-        this.taskExecutor.setCorePoolSize(Math.max(2, maxConcurrentJobs / 2));
-        this.taskExecutor.setMaxPoolSize(Math.max(4, maxConcurrentJobs));
-        this.taskExecutor.setQueueCapacity(200);
+        int workers = Math.max(1, Math.min(16, maxConcurrentJobs));
+        this.taskExecutor.setCorePoolSize(workers);
+        this.taskExecutor.setMaxPoolSize(workers);
+        this.taskExecutor.setQueueCapacity(Math.max(0, queueCapacity));
         this.taskExecutor.setThreadNamePrefix("conv-worker-");
         this.taskExecutor.initialize();
         log.info("ConversionWorker pool initialized with max concurrency: {}", maxConcurrentJobs);
@@ -67,6 +71,7 @@ public class ConversionWorker {
 
     @PreDestroy
     public void shutdown() {
+        ffmpegExecutor.shutdown();
         if (this.taskExecutor != null) {
             this.taskExecutor.shutdown();
         }
@@ -76,7 +81,11 @@ public class ConversionWorker {
      * Submits a conversion task to the worker executor pool.
      */
     public void submit(UUID jobId, MediaFile inputFile, String targetFormat, ConversionOptions options) {
-        taskExecutor.submit(() -> processConversionJob(jobId, inputFile, targetFormat, options));
+        try {
+            taskExecutor.submit(() -> processConversionJob(jobId, inputFile, targetFormat, options));
+        } catch (org.springframework.core.task.TaskRejectedException ex) {
+            handleJobFailure(jobId, "Conversion queue is full. Retry later.");
+        }
     }
 
     private void processConversionJob(UUID jobId, MediaFile inputFile, String targetFormat, ConversionOptions options) {
@@ -195,7 +204,7 @@ public class ConversionWorker {
         MediaJob job = jobRepository.findById(jobId).orElse(null);
         if (job != null && job.getStatus() != JobStatus.COMPLETED) {
             job.setStatus(JobStatus.FAILED);
-            job.setErrorMessage(errorMessage != null ? errorMessage : "Media conversion failed during processing");
+            job.setErrorMessage(com.mediaforge.backend.downloader.service.ExtractorErrors.redact(errorMessage));
             jobRepository.save(job);
 
             JobEvent event = new JobEvent(UUID.randomUUID(), job, "CONVERSION_FAILED",
@@ -204,7 +213,7 @@ public class ConversionWorker {
         }
 
         ConversionProgress prog = new ConversionProgress(jobId, JobStatus.FAILED, 0, "Failed", 0, null, 0);
-        prog.setErrorMessage(errorMessage);
+        prog.setErrorMessage(com.mediaforge.backend.downloader.service.ExtractorErrors.redact(errorMessage));
         progressService.updateProgress(jobId, prog);
     }
 

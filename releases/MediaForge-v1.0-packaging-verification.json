@@ -1,0 +1,80 @@
+﻿{
+    "date":  "2026-11-17T10:11:25.5981934Z",
+    "installer":  "C:\\Users\\REDTECH\\Documents\\Projects\\mediaforge\\mediaforge\\releases\\MediaForge-Setup-v1.0.exe",
+    "bytes":  123109726,
+    "sha256":  "e62b1a73b5f67c3e721544d2064b72131d4ff37948fe10a6a29e0b87a4ee9299",
+    "isolatedPayloadDirectory":  "C:\\Users\\REDTECH\\AppData\\Local\\Temp\\MediaForge-Release-Verification-50551c522fc64c58836bae6fa27a360f",
+    "verifiedRuntimeFiles":  63,
+    "applicationStartup":  true,
+    "normalCloseTest":  "Timed out after 10 seconds; only the test process was terminated",
+    "engineVerification":  {
+                               "standalone":  true,
+                               "executable":  "C:\\Users\\REDTECH\\AppData\\Local\\Temp\\MediaForge-Release-Verification-50551c522fc64c58836bae6fa27a360f\\mediaforge_desktop.exe",
+                               "checks":  {
+                                              "no_backend_listener":  {
+                                                                          "passed":  false,
+                                                                          "error":  "Bad state: Stop Spring Boot before offline verification."
+                                                                      },
+                                              "packaged_tools":  {
+                                                                     "passed":  true
+                                                                 },
+                                              "no_global_ffmpeg_or_java_on_path":  {
+                                                                                       "passed":  true
+                                                                                   },
+                                              "video_unicode_trim_crop_resize_mp4":  {
+                                                                                         "passed":  true
+                                                                                     },
+                                              "audio_mp3":  {
+                                                                "passed":  true
+                                                            },
+                                              "audio_m4a":  {
+                                                                "passed":  true
+                                                            },
+                                              "audio_wav":  {
+                                                                "passed":  true
+                                                            },
+                                              "image_filter_crop_rotate_resize_webp":  {
+                                                                                           "passed":  true
+                                                                                       },
+                                              "mixed_batch_zip":  {
+                                                                      "passed":  true
+                                                                  },
+                                              "process_cancellation":  {
+                                                                           "passed":  true
+                                                                       },
+                                              "invalid_input_and_missing_tools":  {
+                                                                                      "passed":  true
+                                                                                  },
+                                              "large_256MiB_streaming_save":  {
+                                                                                  "passed":  true
+                                                                              }
+                                          },
+                               "success":  false,
+                               "toolVersions":  {
+                                                    "FFmpeg":  "ffmpeg version 9.0.1-essentials_build-www.gyan.dev Copyright (c) 2000-2026 the FFmpeg developers",
+                                                    "FFprobe":  "ffprobe version 9.0.1-essentials_build-www.gyan.dev Copyright (c) 2007-2026 the FFmpeg developers",
+                                                    "Extractor":  "2026.10.26"
+                                                },
+                               "lastProgressSamples":  [
+                                                           0.0,
+                                                           0.0,
+                                                           100.0
+                                                       ]
+                           },
+    "engineExitCode":  1,
+    "installerInstallationTest":  "Not run: existing MediaForge installation preserved",
+    "onlineDownloads":  "Not tested",
+    "desktopCleanupCandidates":  [
+
+                                 ],
+    "releaseCleanupCandidates":  [
+                                     {
+                                         "path":  "C:\\Users\\REDTECH\\Documents\\Projects\\mediaforge\\mediaforge\\releases\\MediaForge-Windows-v1.0.zip",
+                                         "bytes":  149882933,
+                                         "approval":  "Explicitly approved by user; this ZIP only was deleted"
+                                     }
+                                 ],
+    "compilerPayloadFilesConfirmed":  63,
+    "installDirectory":  "%LOCALAPPDATA%\\Programs\\MediaForge",
+    "shortcutConfiguration":  "Start Menu; optional Desktop; Installed Apps uninstaller (configuration inspected, not installed this run)"
+}

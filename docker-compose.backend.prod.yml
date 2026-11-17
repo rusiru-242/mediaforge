@@ -1,0 +1,34 @@
+# Backend only. Put an HTTPS reverse proxy in front; do not publish 8081 globally.
+services:
+  backend:
+    build:
+      context: ./backend
+    image: mediaforge-backend:1.0.0
+    init: true
+    restart: unless-stopped
+    environment:
+      PORT: 8081
+      SPRING_PROFILES_ACTIVE: prod
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
+      DOWNLOAD_WORKERS: ${DOWNLOAD_WORKERS:-1}
+      METADATA_CONCURRENCY: ${METADATA_CONCURRENCY:-1}
+      CONVERTER_MAX_CONCURRENT_JOBS: ${CONVERTER_MAX_CONCURRENT_JOBS:-1}
+      STORAGE_RETENTION_HOURS: ${STORAGE_RETENTION_HOURS:-6}
+    ports:
+      - "127.0.0.1:8081:8081"
+    volumes:
+      - media_storage:/app/storage
+    cpus: 2
+    mem_limit: 4g
+    pids_limit: 256
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 40s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+volumes:
+  media_storage:

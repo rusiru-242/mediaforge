@@ -89,6 +89,11 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(finder);
       await tester.pumpAndSettle();
+      final confirm = find.widgetWithText(FilledButton, 'Continue');
+      if (confirm.evaluate().isNotEmpty) {
+        await tester.tap(confirm);
+        await tester.pumpAndSettle();
+      }
     }
 
     Future<JsonMap> probe(String path) async {
@@ -147,6 +152,28 @@ void main() {
           editor.imageQuality = 75;
           editor.saturation = 1.45;
         });
+      }
+      if (kind != 'image') {
+        editor.effectTimer?.cancel();
+        await pumpWork(editor.applyPreviewEffects);
+        expect(editor.error, isEmpty);
+        expect(editor.player!.state.track.audio.uri, true);
+        await editor.playPause();
+        await tester.pump(const Duration(milliseconds: 300));
+        expect(editor.error, isEmpty);
+        await editor.pause();
+        for (final name in ['echo', 'treble', 'warmth']) {
+          editor.effects = {name: 65};
+          await pumpWork(editor.applyPreviewEffects);
+          expect(editor.error, isEmpty, reason: '$kind $name');
+          expect(editor.player!.state.track.audio.uri, true);
+        }
+        editor.effects = {};
+        await pumpWork(editor.applyPreviewEffects);
+        expect(editor.error, isEmpty);
+        expect(editor.player!.state.track.audio.uri, false);
+        editor.effects = {'reverb': 25, 'bass': 40};
+        await pumpWork(editor.applyPreviewEffects);
       }
       debugPrint('Native test: exporting $kind');
       await pumpWork(editor.export);

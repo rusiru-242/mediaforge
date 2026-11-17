@@ -40,6 +40,21 @@ public class DownloadServiceImpl implements DownloadService {
 
     private static final Logger log = LoggerFactory.getLogger(DownloadServiceImpl.class);
 
+    @org.springframework.beans.factory.annotation.Value("${app.downloader.allowed-platforms:}")
+    private String allowedPlatforms;
+
+    private URI validateSource(String url) {
+        URI uri = urlValidator.validate(url);
+        if (allowedPlatforms != null && !allowedPlatforms.isBlank()) {
+            String platform = com.mediaforge.backend.downloader.model.PlatformUrls.platform(uri);
+            boolean allowed = java.util.Arrays.stream(allowedPlatforms.split(","))
+                    .map(String::trim).anyMatch(platform::equals);
+            if (!allowed) throw new com.mediaforge.backend.exception.UrlSecurityException(
+                    "Only YouTube, Facebook and Instagram media URLs are supported.");
+        }
+        return uri;
+    }
+
     private final UrlSecurityValidator urlValidator;
     private final MediaMetadataService metadataService;
     private final MediaDownloadService mediaDownloadService;
@@ -66,7 +81,7 @@ public class DownloadServiceImpl implements DownloadService {
 
     @Override
     public DownloadValidateResponse validateUrl(DownloadValidateRequest request) {
-        URI validatedUri = urlValidator.validate(request.getUrl());
+        URI validatedUri = validateSource(request.getUrl());
         String platform = urlValidator.extractPlatform(validatedUri);
 
         List<String> formats = new ArrayList<>();
@@ -105,7 +120,7 @@ public class DownloadServiceImpl implements DownloadService {
 
     @Override
     public MediaMetadataResponse getMetadata(DownloadValidateRequest request) {
-        URI validatedUri = urlValidator.validate(request.getUrl());
+        URI validatedUri = validateSource(request.getUrl());
         String platform = urlValidator.extractPlatform(validatedUri);
 
         try {
@@ -214,7 +229,7 @@ public class DownloadServiceImpl implements DownloadService {
         if (request.getMediaType() != null && audioOnly != "audio".equalsIgnoreCase(request.getMediaType())) {
             throw new IllegalArgumentException("Selected format conflicts with requested media type.");
         }
-        URI validatedUri = urlValidator.validate(request.getUrl());
+        URI validatedUri = validateSource(request.getUrl());
         String platform = urlValidator.extractPlatform(validatedUri);
 
         MediaJob job = new MediaJob(

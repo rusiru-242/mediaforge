@@ -13,6 +13,15 @@ public class InMemoryConversionRequestRepository implements ConversionRequestRep
 
     private final Map<UUID, ConversionRequest> storageByJob = new ConcurrentHashMap<>();
 
+    @org.springframework.scheduling.annotation.Scheduled(fixedDelay = 300000)
+    public void cleanupExpiredReferences() {
+        var now = java.time.OffsetDateTime.now();
+        storageByJob.entrySet().removeIf(entry -> {
+            var job = entry.getValue().getJob();
+            return job != null && job.getExpiresAt() != null && job.getExpiresAt().isBefore(now);
+        });
+    }
+
     @Override
     public ConversionRequest save(ConversionRequest request) {
         if (request == null) {

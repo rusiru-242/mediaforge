@@ -1,11 +1,58 @@
 server:
-  forward-headers-strategy: framework
+  address: 0.0.0.0
+  # Use FRAMEWORK only behind an ingress that strips/replaces forwarding headers.
+  forward-headers-strategy: ${FORWARD_HEADERS_STRATEGY:NONE}
+  shutdown: graceful
+  tomcat:
+    threads:
+      max: ${HTTP_MAX_THREADS:40}
+    max-connections: ${HTTP_MAX_CONNECTIONS:200}
+    accept-count: ${HTTP_ACCEPT_COUNT:50}
+    connection-timeout: 20s
   error:
     include-message: never
     include-binding-errors: never
     include-stacktrace: never
     include-exception: false
-
+spring:
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+  servlet:
+    multipart:
+      file-size-threshold: 0B
+      location: ${UPLOAD_TEMP_PATH:${java.io.tmpdir}}
+app:
+  jobs:
+    public-list-enabled: false
+  security:
+    cors:
+      allowed-origins: ${CORS_ALLOWED_ORIGINS:}
+      allow-credentials: false
+  storage:
+    retention-hours: ${STORAGE_RETENTION_HOURS:6}
+    minimum-free-bytes: ${STORAGE_MINIMUM_FREE_BYTES:1073741824}
+  downloader:
+    allowed-platforms: youtube,facebook,instagram
+    pool-size: ${DOWNLOAD_WORKERS:1}
+    metadata-concurrency: ${METADATA_CONCURRENCY:1}
+  converter:
+    max-concurrent-jobs: ${CONVERTER_MAX_CONCURRENT_JOBS:1}
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+      show-components: never
+      probes:
+        enabled: true
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
 logging:
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
@@ -14,4 +61,3 @@ logging:
     com.mediaforge.backend: INFO
     org.springframework.web: WARN
     org.springframework.security: WARN
-

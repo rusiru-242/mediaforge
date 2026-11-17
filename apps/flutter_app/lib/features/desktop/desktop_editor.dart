@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 import 'package:file_picker/file_picker.dart';
@@ -9,6 +10,7 @@ import 'package:media_kit_video/media_kit_video.dart';
 import 'package:path/path.dart' as p;
 import '../../core/config/app_config.dart';
 import '../../core/services/bundled_tools.dart';
+import '../../core/services/desktop_audio_preview.dart';
 import '../../core/services/media_api.dart';
 import '../../core/services/preview_probe.dart';
 import 'crop_surface.dart';
@@ -31,6 +33,10 @@ class DesktopEditorState extends ConsumerState<DesktopEditor> {
   VideoController? video;
   final subscriptions = <StreamSubscription<dynamic>>[];
   Timer? effectTimer;
+  final audioPreview = DesktopAudioPreview();
+  String _previewKey = '';
+  int _previewGeneration = 0;
+  bool preparingAudio = false;
   String? path;
   String format = '',
       quality = '1080p',
@@ -127,7 +133,11 @@ class DesktopEditorState extends ConsumerState<DesktopEditor> {
     for (final subscription in subscriptions) {
       subscription.cancel();
     }
-    player?.dispose();
+    final closing = player?.dispose();
+    unawaited(() async {
+      await closing;
+      await audioPreview.close();
+    }());
     task.dispose();
     super.dispose();
   }
@@ -135,25 +145,43 @@ class DesktopEditorState extends ConsumerState<DesktopEditor> {
   Future<void> applyPreviewEffects() async {
     final native = player?.platform;
     if (native is! NativePlayer || !mounted) return;
-    final filters = <String>[];
-    for (final name in ['reverb', 'echo', 'bass', 'treble', 'warmth']) {
-      final level = (effects[name] ?? 0) / 100;
-      if (level == 0) continue;
-      filters.add(switch (name) {
-        'reverb' =>
-          'aecho=${1 - .2 * level}:${1 - .12 * level}:40|70|100:${.25 * level}|${.18 * level}|${.12 * level}',
-        'echo' => 'aecho=${1 - .2 * level}:${1 - .1 * level}:180:${.3 * level}',
-        'bass' => 'bass=g=${6 * level}:f=200',
-        'treble' => 'treble=g=${5 * level}:f=3000',
-        _ => 'lowpass=f=${20000 - 15000 * level}',
-      });
-    }
+    final source = path;
+    if (source == null || isImage) return;
+    final key =
+        '$source:${effects.entries.map((e) => '${e.key}:${e.value}').join(',')}';
+    if (key == _previewKey) return;
+    _previewKey = key;
+    final generation = ++_previewGeneration;
+    setState(() => preparingAudio = effects.values.any((v) => v > 0));
     try {
-      await native.setProperty(
-          'af', filters.isEmpty ? '' : 'lavfi=[${filters.join(',')}]');
+      final output =
+          await audioPreview.render(source, Map.of(effects), duration);
+      if (!mounted || generation != _previewGeneration || path != source) {
+        return;
+      }
+      // Full FFmpeg renders effects; mpv only decodes the lossless result.
+      await native.setProperty('af', '');
+      await player!.setAudioTrack(AudioTrack.auto());
+      final tracks = jsonDecode(await native.getProperty('track-list')) as List;
+      for (final track in tracks.whereType<Map>()) {
+        if (track['type'] == 'audio' && track['external'] == true) {
+          await native.command(['audio-remove', '${track['id']}']);
+        }
+      }
+      if (output != null) {
+        await player!
+            .setAudioTrack(AudioTrack.uri(File(output).uri.toString()));
+      }
+      await audioPreview.releaseUnused(output);
+      if (mounted) setState(() => error = '');
     } catch (e) {
-      if (mounted) {
+      _previewKey = '';
+      if (mounted && generation == _previewGeneration) {
         setState(() => error = 'Audio effect preview unavailable: $e');
+      }
+    } finally {
+      if (mounted && generation == _previewGeneration) {
+        setState(() => preparingAudio = false);
       }
     }
   }
@@ -188,6 +216,11 @@ class DesktopEditorState extends ConsumerState<DesktopEditor> {
       importing = true;
       error = '';
     });
+    effectTimer?.cancel();
+    audioPreview.cancel();
+    _previewGeneration++;
+    _previewKey = '';
+    preparingAudio = false;
     probe?.close();
     probe = PreviewProbe();
     await pause();
@@ -833,7 +866,8 @@ class DesktopEditorState extends ConsumerState<DesktopEditor> {
             padding: const EdgeInsets.symmetric(vertical: 12),
             child: Text(p.basename(path!), overflow: TextOverflow.ellipsis)),
       const SizedBox(height: 16),
-      if (importing) const LinearProgressIndicator(),
+      if (importing || preparingAudio) const LinearProgressIndicator(),
+      if (preparingAudio) const Text('Preparing audio effects preview...'),
       if (error.isNotEmpty) StudioNotice(error, error: true),
       StudioPanels(
           main:

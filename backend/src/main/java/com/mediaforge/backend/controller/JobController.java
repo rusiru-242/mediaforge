@@ -25,6 +25,9 @@ import java.util.UUID;
 @Tag(name = "Job Management", description = "Database-free in-memory media job processing")
 public class JobController {
 
+    @org.springframework.beans.factory.annotation.Value("${app.jobs.public-list-enabled:true}")
+    private boolean publicListEnabled = true;
+
     private final JobService jobService;
     private final ConversionService conversionService;
     private final ConversionProgressService progressService;
@@ -64,6 +67,7 @@ public class JobController {
     @Operation(summary = "Subscribe to live job progress via Server-Sent Events", description = "Streams real-time FFmpeg progress percentages and stage updates")
     public SseEmitter subscribeJobProgress(
             @Parameter(description = "UUID of the media job") @PathVariable UUID id) {
+        jobService.getJobById(id); // Reject nonexistent IDs before allocating an SSE stream.
         return progressService.subscribe(id);
     }
 
@@ -74,6 +78,9 @@ public class JobController {
             @Parameter(description = "Page number (0-based)") @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "Page size") @RequestParam(defaultValue = "20") int size) {
 
+        if (!publicListEnabled) throw new org.springframework.web.server.ResponseStatusException(
+                HttpStatus.FORBIDDEN, "Global job listing is disabled.");
+        if (page < 0 || size < 1 || size > 100) throw new IllegalArgumentException("Page size must be between 1 and 100.");
         PageResponse<JobResponse> response = jobService.listJobs(status, page, size);
         return ResponseEntity.ok(response);
     }
