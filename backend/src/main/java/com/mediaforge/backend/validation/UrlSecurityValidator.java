@@ -41,11 +41,12 @@ public class UrlSecurityValidator {
             throw new UrlSecurityException("URL must not be empty");
         }
 
+        if (urlString.length() > 4096) throw new UrlSecurityException("URL cannot exceed 4096 characters");
         URI uri;
         try {
             uri = URI.create(urlString.trim());
         } catch (IllegalArgumentException ex) {
-            throw new UrlSecurityException("Malformed URL format: " + ex.getMessage());
+            throw new UrlSecurityException("Malformed URL format");
         }
 
         return validateUri(uri);
@@ -133,6 +134,12 @@ public class UrlSecurityValidator {
             int b0 = bytes[0] & 0xFF;
             int b1 = bytes[1] & 0xFF;
 
+            if (b0 >= 240 || (b0 == 198 && (b1 == 18 || b1 == 19))
+                    || (b0 == 192 && b1 == 0)
+                    || (b0 == 198 && b1 == 51 && (bytes[2] & 0xff) == 100)
+                    || (b0 == 203 && b1 == 0 && (bytes[2] & 0xff) == 113)) {
+                throw new UrlSecurityException("Reserved or non-public destination is forbidden");
+            }
             // 0.0.0.0/8 (Broadcast/Current network)
             if (b0 == 0) {
                 throw new UrlSecurityException("Zero-network address is forbidden: " + addr.getHostAddress());

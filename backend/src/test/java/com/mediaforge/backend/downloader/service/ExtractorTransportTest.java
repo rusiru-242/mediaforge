@@ -49,6 +49,22 @@ class ExtractorTransportTest {
             assertThat((Map<?,?>)ReflectionTestUtils.getField(extractor,"activeProcesses")).isEmpty();
         } finally { thread.shutdownNow(); }
     }
+    @Test void shutdownTerminatesARealActiveProcess() throws Exception {
+        var extractor = new YtDlpProcessExecutor(new ObjectMapper(), new FFmpegProcessExecutor());
+        var task = task(); Path signal = dir.resolve("shutdown-signal");
+        try (var thread = Executors.newSingleThreadExecutor()) {
+            var running = thread.submit(() -> {
+                try { extractor.runProcess(task, command("wait", signal), 20, line -> {}); }
+                catch (IOException expected) { /* Termination is expected. */ }
+            });
+            long end = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+            while (!Files.exists(signal) && System.nanoTime() < end) Thread.sleep(10);
+            assertThat(Files.exists(signal)).isTrue();
+            extractor.shutdown();
+            running.get(3, TimeUnit.SECONDS);
+            assertThat((Map<?, ?>) ReflectionTestUtils.getField(extractor, "activeProcesses")).isEmpty();
+        }
+    }
     @Test void networkFailureIsClassifiedWithoutLeakingCredentials() {
         var extractor=new YtDlpProcessExecutor(new ObjectMapper(),new FFmpegProcessExecutor());
         assertThatThrownBy(() -> extractor.runProcess(task(),command("fail",dir.resolve("unused")),5,line -> {}))

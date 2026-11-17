@@ -58,7 +58,7 @@ public class PlatformMediaSourceAdapter implements MediaSourceAdapter {
         this.ytDlpExecutor = ytDlpExecutor;
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(5))
-                .followRedirects(HttpClient.Redirect.NORMAL)
+                .followRedirects(HttpClient.Redirect.NEVER)
                 .build();
     }
 

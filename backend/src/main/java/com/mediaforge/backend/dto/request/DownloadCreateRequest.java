@@ -22,6 +22,7 @@ public class DownloadCreateRequest {
     public void setMediaType(String mediaType) { this.mediaType = mediaType; }
 
     @NotBlank(message = "url is required")
+    @jakarta.validation.constraints.Size(max = 4096, message = "URL cannot exceed 4096 characters")
     private String url;
 
     @NotBlank(message = "selectedFormat is required")

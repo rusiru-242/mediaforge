@@ -30,6 +30,9 @@ public class FFmpegProcessExecutor {
     @Value("${app.converter.timeout-seconds:600}")
     private int timeoutSeconds = 600;
 
+    @Value("${app.converter.ffmpeg-threads:2}")
+    private int ffmpegThreads = 2;
+
     private final Map<UUID, Process> activeProcesses = new ConcurrentHashMap<>();
     private String resolvedFfmpegExecutable;
 
@@ -112,13 +115,17 @@ public class FFmpegProcessExecutor {
         fullCommand.add(ffmpeg);
         fullCommand.add("-y"); // Overwrite output if scratch exists
         fullCommand.addAll(List.of("-protocol_whitelist", "file,pipe"));
-        fullCommand.addAll(args);
+        List<String> boundedArgs = new ArrayList<>(args);
+        if (!boundedArgs.contains("-threads") && !boundedArgs.isEmpty()) {
+            boundedArgs.addAll(boundedArgs.size() - 1, List.of("-threads", Integer.toString(Math.max(1, Math.min(8, ffmpegThreads)))));
+        }
+        fullCommand.addAll(boundedArgs);
         fullCommand.add("-progress");
         fullCommand.add("pipe:1");
         fullCommand.add("-nostats");
 
         // The output file path is expected to be the last argument in args
-        log.info("Executing FFmpeg for job {}: {}", jobId, String.join(" ", fullCommand));
+        log.info("Executing FFmpeg for job {} ({} arguments)", jobId, fullCommand.size());
 
         ProcessBuilder pb = new ProcessBuilder(fullCommand);
         Process process = pb.start();
@@ -240,6 +247,11 @@ public class FFmpegProcessExecutor {
             return true;
         }
         return false;
+    }
+
+    @jakarta.annotation.PreDestroy
+    public void shutdown() {
+        for (UUID id : List.copyOf(activeProcesses.keySet())) cancelProcess(id);
     }
 
     public boolean cancel(UUID jobId) {

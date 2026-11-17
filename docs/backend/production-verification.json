@@ -1,0 +1,172 @@
+{
+  "date": "2026-11-17",
+  "deploymentPerformed": false,
+  "build": {
+    "javaTarget": 21,
+    "localJavaRuntime": "22.0.2",
+    "springBoot": "3.5.16",
+    "springdoc": "2.8.17",
+    "maven": "3.9.11",
+    "executableJar": "backend/target/mediaforge-backend-1.0.0.jar",
+    "compilation": "passed",
+    "tests": {
+      "run": 225,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 4
+    },
+    "testsPassed": 221,
+    "testCommand": "mvnw -B -ntp -Dmediaforge.media-integration=true verify",
+    "packaging": "passed: final combined Maven verify (including real media integration tests and executable JAR packaging)",
+    "logs": [
+      "backend/target/production-verified.log"
+    ],
+    "resolvedTestRunnerIssue": "An earlier smoke run used Oracle javapath shim, leaving its owned child JVM holding the JAR. Only that test JVM was stopped, runner changed to use real java.home executable, cleanup and full verify rerun passed."
+  },
+  "productionJarSmoke": {
+    "passed": true,
+    "port": 18081,
+    "realToolChecksEnabled": true,
+    "checks": {
+      "/actuator/health": {
+        "status": 200
+      },
+      "/": {
+        "status": 404
+      },
+      "/api/v1": {
+        "status": 404
+      },
+      "/unknown-smoke-route": {
+        "status": 404
+      },
+      "/api/v1/health": {
+        "status": 200
+      },
+      "/api/v1/conversions/formats": {
+        "status": 200
+      },
+      "/actuator/env": {
+        "status": 403
+      },
+      "/api/v1/jobs": {
+        "status": 403
+      },
+      "/api/v1/conversions": {
+        "status": 202
+      },
+      "/api/v1/downloads/metadata": {
+        "status": 400
+      },
+      "/api/v1/jobs/8a1b59fb-2ec3-409a-b036-25e2cf296f57": {
+        "status": 200
+      },
+      "realUploadConversionDownload": {
+        "passed": true,
+        "filename": true,
+        "mimeType": "video/mp4",
+        "height": 360,
+        "video": true,
+        "audio": true
+      },
+      "cloudPortOverride": {
+        "passed": true,
+        "port": 18081
+      },
+      "toolHealth": {
+        "passed": true,
+        "checksDisabled": false
+      }
+    },
+    "testProcessCleanedUp": true,
+    "existing8081ProcessPreserved": 31956
+  },
+  "mediaTools": {
+    "localFfmpeg": "9.0.1",
+    "localFfprobe": "9.0.1",
+    "localYtdlp": "2026.10.26",
+    "dockerYtdlpPin": "2026.10.26",
+    "dockerNodeMajor": 22,
+    "containerVersionsExecuted": false
+  },
+  "docker": {
+    "cliAvailable": false,
+    "imageBuild": "NOT RUN",
+    "containerStartup": "NOT RUN",
+    "containerTools": "NOT RUN",
+    "reason": "Docker CLI/daemon unavailable. YAML statically parsed; Dockerfile version checks not executed."
+  },
+  "platforms": {
+    "productionApiAllowed": [
+      "youtube",
+      "facebook",
+      "instagram"
+    ],
+    "productionApiRejects": [
+      "tiktok",
+      "twitter",
+      "direct",
+      "vimeo"
+    ],
+    "realCloudDownloadsTested": false
+  },
+  "clients": {
+    "websiteBuildVariable": "NEXT_PUBLIC_API_BASE_URL",
+    "androidBuildVariable": "MEDIAFORGE_ONLINE_API_BASE",
+    "desktop": "Uses LocalMediaApi; hosted API routing requires future client integration",
+    "apkOrInstallerRebuilt": false
+  },
+  "remainingGates": [
+    "Build/run Linux AMD64 image and tool version checks inside container",
+    "Verify authorized source media from actual cloud IP",
+    "Scan JAR/image dependencies, licenses and support lifecycles",
+    "Benchmark CPU/RAM/disk and ingress limits",
+    "Configure real HTTPS API domain and exact CORS origins"
+  ],
+  "modifiedFiles": [
+    ".env.example",
+    "backend/.dockerignore",
+    "backend/.mvn/wrapper/maven-wrapper.properties",
+    "backend/Dockerfile",
+    "backend/pom.xml",
+    "backend/src/main/java/com/mediaforge/backend/config/MediaRuntimeHealthIndicator.java",
+    "backend/src/main/java/com/mediaforge/backend/config/ProductionSafetyConfiguration.java",
+    "backend/src/main/java/com/mediaforge/backend/controller/JobController.java",
+    "backend/src/main/java/com/mediaforge/backend/converter/service/ConversionProgressServiceImpl.java",
+    "backend/src/main/java/com/mediaforge/backend/converter/service/ConversionWorker.java",
+    "backend/src/main/java/com/mediaforge/backend/converter/service/FFmpegProcessExecutor.java",
+    "backend/src/main/java/com/mediaforge/backend/downloader/adapter/PlatformMediaSourceAdapter.java",
+    "backend/src/main/java/com/mediaforge/backend/downloader/service/MediaDownloadServiceImpl.java",
+    "backend/src/main/java/com/mediaforge/backend/downloader/service/MediaMetadataServiceImpl.java",
+    "backend/src/main/java/com/mediaforge/backend/downloader/service/YtDlpProcessExecutor.java",
+    "backend/src/main/java/com/mediaforge/backend/dto/request/BatchConversionRequest.java",
+    "backend/src/main/java/com/mediaforge/backend/dto/request/DownloadCreateRequest.java",
+    "backend/src/main/java/com/mediaforge/backend/dto/request/DownloadValidateRequest.java",
+    "backend/src/main/java/com/mediaforge/backend/exception/GlobalExceptionHandler.java",
+    "backend/src/main/java/com/mediaforge/backend/repository/InMemoryConversionRequestRepository.java",
+    "backend/src/main/java/com/mediaforge/backend/repository/InMemoryDownloadRequestRepository.java",
+    "backend/src/main/java/com/mediaforge/backend/repository/InMemoryJobEventRepository.java",
+    "backend/src/main/java/com/mediaforge/backend/security/RateLimitingFilter.java",
+    "backend/src/main/java/com/mediaforge/backend/security/SecurityConfig.java",
+    "backend/src/main/java/com/mediaforge/backend/security/StorageAdmissionFilter.java",
+    "backend/src/main/java/com/mediaforge/backend/service/impl/DownloadServiceImpl.java",
+    "backend/src/main/java/com/mediaforge/backend/validation/UrlSecurityValidator.java",
+    "backend/src/main/resources/application-prod.yml",
+    "backend/src/main/resources/application.yml",
+    "backend/src/test/java/com/mediaforge/backend/controller/ProductionContractIntegrationTest.java",
+    "backend/src/test/java/com/mediaforge/backend/downloader/service/ExtractorTransportTest.java",
+    "backend/src/test/java/com/mediaforge/backend/security/ProductionHardeningTest.java",
+    "backend/src/test/java/com/mediaforge/backend/security/ProductionResourceLimitsTest.java",
+    "backend/tools/production-smoke.ps1",
+    "docker-compose.backend.prod.yml",
+    "docker-compose.prod.yml",
+    "docker-compose.yml",
+    "docs/BACKEND_PRODUCTION_DEPLOYMENT.md",
+    "docs/backend/production-audit.md",
+    "docs/backend/production-verification.json",
+    "web/Dockerfile"
+  ],
+  "preservedUserChanges": [
+    "Android APK and Windows installer already deleted before task; untouched"
+  ]
+}

@@ -13,6 +13,15 @@ public class InMemoryJobEventRepository implements JobEventRepository {
 
     private final Map<UUID, List<JobEvent>> eventsByJob = new ConcurrentHashMap<>();
 
+    @org.springframework.scheduling.annotation.Scheduled(fixedDelay = 300000)
+    public void cleanupExpiredReferences() {
+        var now = java.time.OffsetDateTime.now();
+        eventsByJob.entrySet().removeIf(entry -> {
+            var job = entry.getValue().isEmpty() ? null : entry.getValue().get(0).getJob();
+            return job != null && job.getExpiresAt() != null && job.getExpiresAt().isBefore(now);
+        });
+    }
+
     @Override
     public JobEvent save(JobEvent event) {
         if (event == null) {

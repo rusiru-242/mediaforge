@@ -7,6 +7,7 @@ import java.util.List;
 public class BatchConversionRequest {
 
     @NotEmpty(message = "Conversion items list cannot be empty")
+    @jakarta.validation.constraints.Size(max = 50, message = "A batch may contain at most 50 items")
     @Valid
     private List<ConversionCreateRequest> items;
 

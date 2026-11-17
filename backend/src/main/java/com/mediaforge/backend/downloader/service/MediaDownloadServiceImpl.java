@@ -27,6 +27,7 @@ import java.net.URI;
 import java.nio.file.Path;
 import java.time.OffsetDateTime;
 import java.util.Map;
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -50,6 +51,16 @@ public class MediaDownloadServiceImpl implements MediaDownloadService {
 
     @Value("${app.downloader.max-file-size-bytes:524288000}")
     private long maxFileSizeBytes;
+
+    @Value("${app.downloader.queue-capacity:20}")
+    private int queueCapacity = 20;
+
+    @jakarta.annotation.PostConstruct
+    void configureQueue() {
+        // Constructor retains the bounded test-compatible executor. Reject earlier
+        // when the configured production queue budget has been reached.
+        queueCapacity = Math.max(0, Math.min(100, queueCapacity));
+    }
 
     public MediaDownloadServiceImpl(
             MediaSourceAdapterRegistry adapterRegistry,
@@ -96,7 +107,7 @@ public class MediaDownloadServiceImpl implements MediaDownloadService {
     }
 
     @Override
-    public void submitDownloadJob(UUID jobId, URI sourceUri, String targetFormat, String targetQuality, ConversionOptions editOptions) {
+    public synchronized void submitDownloadJob(UUID jobId, URI sourceUri, String targetFormat, String targetQuality, ConversionOptions editOptions) {
         Path scratchDir = storageService.getScratchDirectory(jobId);
         DownloadTask task = new DownloadTask(jobId, sourceUri, targetFormat, targetQuality, maxFileSizeBytes, scratchDir, editOptions);
         activeTasks.put(jobId, task);
@@ -107,7 +118,13 @@ public class MediaDownloadServiceImpl implements MediaDownloadService {
             jobRepository.save(job);
         });
 
-        try { executorService.submit(() -> executeDownload(task)); }
+        try {
+            var pool = (java.util.concurrent.ThreadPoolExecutor) executorService;
+            if (pool.getPoolSize() >= pool.getMaximumPoolSize() && pool.getQueue().size() >= queueCapacity) {
+                throw new java.util.concurrent.RejectedExecutionException("Queue full");
+            }
+            executorService.submit(() -> executeDownload(task));
+        }
         catch (java.util.concurrent.RejectedExecutionException ex) {
             activeTasks.remove(jobId);
             storageService.cleanupScratch(jobId);
@@ -338,6 +355,7 @@ public class MediaDownloadServiceImpl implements MediaDownloadService {
     @PreDestroy
     public void shutdown() {
         log.info("Shutting down MediaDownloadService executor pool...");
+        for (UUID id : List.copyOf(activeTasks.keySet())) cancelActiveDownload(id);
         executorService.shutdown();
         try {
             if (!executorService.awaitTermination(5, TimeUnit.SECONDS)) {

@@ -156,6 +156,12 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 ? servletRequest.getRequest().getRequestURI() : request.getDescription(false);
     }
 
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ApiErrorResponse> handleInvalidInput(IllegalArgumentException ex, HttpServletRequest request) {
+        return ResponseEntity.badRequest().body(new ApiErrorResponse(400, "Bad Request", "INVALID_REQUEST",
+                com.mediaforge.backend.downloader.service.ExtractorErrors.redact(ex.getMessage()), request.getRequestURI()));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiErrorResponse> handleGeneralException(Exception ex, HttpServletRequest request) {
         log.error("Unhandled server exception at {}", request.getRequestURI(), ex);

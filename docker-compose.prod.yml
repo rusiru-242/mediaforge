@@ -8,38 +8,45 @@ services:
       dockerfile: Dockerfile
     image: mediaforge-backend:1.0.0
     container_name: mediaforge-backend-prod
+    init: true
+    pids_limit: 256
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 40s
     restart: unless-stopped
     environment:
-      PORT: 8080
+      PORT: 8081
       SPRING_PROFILES_ACTIVE: prod
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,https://mediaforge.local}
-      STORAGE_LOCAL_PATH: /app/uploads
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
+      STORAGE_LOCAL_PATH: /app/storage
       FFMPEG_PATH: /usr/bin/ffmpeg
       FFPROBE_PATH: /usr/bin/ffprobe
-      CONVERTER_STORAGE_DIR: /app/storage/conversions
-      CONVERTER_SCRATCH_DIR: /app/storage/scratch
+      YTDLP_PATH: /opt/extractor/bin/yt-dlp
+      YTDLP_JS_RUNTIMES: node:/usr/local/bin/node
+      DOWNLOAD_WORKERS: ${DOWNLOAD_WORKERS:-1}
+      METADATA_CONCURRENCY: ${METADATA_CONCURRENCY:-1}
+      CONVERTER_MAX_CONCURRENT_JOBS: ${CONVERTER_MAX_CONCURRENT_JOBS:-1}
       RATE_LIMIT_RPM: ${RATE_LIMIT_RPM:-120}
-      STORAGE_RETENTION_HOURS: 24
-      JAVA_OPTS: "-Xms512m -Xmx1536m -XX:+UseG1GC"
+      STORAGE_RETENTION_HOURS: ${STORAGE_RETENTION_HOURS:-6}
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8081:8081"
     volumes:
-      - backend_uploads:/app/uploads
-      - backend_conversions:/app/storage/conversions
+      - backend_storage:/app/storage
     deploy:
       resources:
         limits:
-          cpus: '4.0'
-          memory: 2048M
+          cpus: '2.0'
+          memory: 4096M
         reservations:
           cpus: '0.5'
           memory: 512M
     healthcheck:
-      test: ["CMD-SHELL", "wget -q --spider http://localhost:8080/api/v1/health || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS --max-time 10 http://127.0.0.1:8081/actuator/health || exit 1"]
       interval: 30s
-      timeout: 5s
+      timeout: 12s
       retries: 3
-      start_period: 30s
+      start_period: 90s
     networks:
       - mediaforge-prod-net
 
@@ -50,13 +57,15 @@ services:
     build:
       context: ./web
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:?Set the public HTTPS API URL before building web}
     image: mediaforge-web:1.0.0
     container_name: mediaforge-web-prod
     restart: unless-stopped
     environment:
       NODE_ENV: production
       PORT: 3000
-      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://backend:8080/api/v1}
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL}
     ports:
       - "3000:3000"
     depends_on:
@@ -80,10 +89,8 @@ services:
       - mediaforge-prod-net
 
 volumes:
-  backend_uploads:
-    name: mediaforge_prod_uploads
-  backend_conversions:
-    name: mediaforge_prod_conversions
+  backend_storage:
+    name: mediaforge_prod_storage
 
 networks:
   mediaforge-prod-net:

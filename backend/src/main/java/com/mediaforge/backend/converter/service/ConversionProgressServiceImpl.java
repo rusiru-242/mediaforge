@@ -19,6 +19,22 @@ public class ConversionProgressServiceImpl implements ConversionProgressService 
 
     private static final Logger log = LoggerFactory.getLogger(ConversionProgressServiceImpl.class);
 
+    private final Map<UUID, Long> updatedAt = new ConcurrentHashMap<>();
+    @org.springframework.beans.factory.annotation.Value("${app.storage.retention-hours:24}")
+    private int retentionHours = 24;
+
+    @org.springframework.scheduling.annotation.Scheduled(fixedDelay = 300000)
+    public void cleanupExpiredProgress() {
+        long cutoff = System.currentTimeMillis() - Math.max(1, retentionHours) * 3600000L;
+        updatedAt.forEach((id, time) -> {
+            ConversionProgress progress = progressCache.get(id);
+            if (time < cutoff && progress != null && (progress.getStatus() == JobStatus.COMPLETED
+                    || progress.getStatus() == JobStatus.FAILED || progress.getStatus() == JobStatus.CANCELLED)) {
+                progressCache.remove(id); updatedAt.remove(id); complete(id);
+            }
+        });
+    }
+
     private final Map<UUID, ConversionProgress> progressCache = new ConcurrentHashMap<>();
     private final Map<UUID, List<SseEmitter>> emitterMap = new ConcurrentHashMap<>();
 
@@ -27,6 +43,7 @@ public class ConversionProgressServiceImpl implements ConversionProgressService 
         if (jobId == null || progress == null) return;
 
         progressCache.put(jobId, progress);
+        updatedAt.put(jobId, System.currentTimeMillis());
 
         List<SseEmitter> emitters = emitterMap.get(jobId);
         if (emitters != null && !emitters.isEmpty()) {
@@ -62,7 +79,12 @@ public class ConversionProgressServiceImpl implements ConversionProgressService 
     }
 
     @Override
-    public SseEmitter subscribe(UUID jobId) {
+    public synchronized SseEmitter subscribe(UUID jobId) {
+        if (emitterMap.values().stream().mapToInt(List::size).sum() >= 256
+                || emitterMap.getOrDefault(jobId, List.of()).size() >= 8) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE, "Progress stream capacity reached.");
+        }
         // 10-minute timeout for conversion progress SSE stream
         SseEmitter emitter = new SseEmitter(600_000L);
 

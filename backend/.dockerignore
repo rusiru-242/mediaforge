@@ -1,0 +1,15 @@
+**
+!pom.xml
+!src/
+!src/**
+src/test/
+src/test/**
+**/.env
+**/.env.*
+**/*secret*
+**/*.jks
+**/*.keystore
+**/*.pem
+**/*.key
+**/application-local.*
+**/application-private.*

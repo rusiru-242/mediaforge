@@ -13,6 +13,15 @@ public class InMemoryDownloadRequestRepository implements DownloadRequestReposit
 
     private final Map<UUID, DownloadRequest> storageByJob = new ConcurrentHashMap<>();
 
+    @org.springframework.scheduling.annotation.Scheduled(fixedDelay = 300000)
+    public void cleanupExpiredReferences() {
+        var now = java.time.OffsetDateTime.now();
+        storageByJob.entrySet().removeIf(entry -> {
+            var job = entry.getValue().getJob();
+            return job != null && job.getExpiresAt() != null && job.getExpiresAt().isBefore(now);
+        });
+    }
+
     @Override
     public DownloadRequest save(DownloadRequest request) {
         if (request == null) {
