@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import React from 'react';
 import DownloaderPage from '@/app/downloader/page';
 import { apiClient } from '@/services/apiClient';
@@ -79,6 +79,19 @@ describe('Online Downloader Page Redesign', () => {
     expect((screen.getByRole('button', { name: 'Analyzing...' }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'https://example.com/other.mp4' } });
     expect((screen.getByRole('textbox') as HTMLInputElement).value).toBe('https://example.com/clip.mp4');
+    expect(apiClient.getMediaMetadata).toHaveBeenCalledTimes(1);
+  });
+  it('coalesces repeated Analyze events before React has rendered the probing state', () => {
+    vi.mocked(apiClient.getMediaMetadata).mockReturnValueOnce(new Promise(() => {}));
+    render(<DownloaderPage />);
+    const input = screen.getByRole('textbox');
+    fireEvent.change(input, { target: { value: 'https://example.com/clip.mp4' } });
+
+    act(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'Analyze' }));
+      fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+    });
+
     expect(apiClient.getMediaMetadata).toHaveBeenCalledTimes(1);
   });
   it('replaces a completed save link with a new download action when format or bitrate changes', async () => {

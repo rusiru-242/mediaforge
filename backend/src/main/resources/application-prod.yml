@@ -35,6 +35,8 @@ app:
     allowed-platforms: youtube,facebook,instagram
     pool-size: ${DOWNLOAD_WORKERS:1}
     metadata-concurrency: ${METADATA_CONCURRENCY:1}
+    metadata-cache-ttl-seconds: ${METADATA_CACHE_TTL_SECONDS:60}
+    metadata-cache-max-entries: ${METADATA_CACHE_MAX_ENTRIES:128}
   converter:
     max-concurrent-jobs: ${CONVERTER_MAX_CONCURRENT_JOBS:1}
 management:

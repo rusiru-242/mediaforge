@@ -95,7 +95,7 @@ export function MediaInfoCard({ metadata }: MediaInfoCardProps) {
                 Direct Stream Unavailable
               </p>
               <p className="text-amber-800/90 dark:text-amber-300/80 leading-relaxed">
-                {metadata.message || `This media cannot be downloaded directly because the source server requires authentication, DRM credentials, or restricts automated downloads.`}
+                {metadata.message || 'The source did not provide publicly accessible media details. Try another public link or import a local file.'}
               </p>
             </div>
           </div>

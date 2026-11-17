@@ -49,5 +49,7 @@ describe('MediaInfoCard component', () => {
 
     render(<MediaInfoCard metadata={restrictedMetadata} />);
     expect(screen.getByText('Direct Download Unavailable')).toBeDefined();
+    expect(screen.getByText(/source did not provide publicly accessible media details/i)).toBeDefined();
+    expect(screen.queryByText(/requires authentication/i)).toBeNull();
   });
 });

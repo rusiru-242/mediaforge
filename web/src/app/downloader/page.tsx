@@ -150,6 +150,7 @@ function DownloaderContent() {
   const [selectedPlatform, setSelectedPlatform] = useState<string>('youtube');
   const [url, setUrl] = useState('');
   const [isProbing, setIsProbing] = useState(false);
+  const probeInFlightRef = useRef(false);
   const [metadata, setMetadata] = useState<MediaMetadataResponse | null>(null);
   const [probeError, setProbeError] = useState<string | null>(null);
 
@@ -290,9 +291,10 @@ function DownloaderContent() {
 
   const triggerProbe = useCallback(
     async (targetUrl: string) => {
-      if (inputLockedRef.current) return;
+      if (probeInFlightRef.current || inputLockedRef.current) return;
       if (!validateUrl(targetUrl)) return;
 
+      probeInFlightRef.current = true;
       setIsProbing(true);
       setProbeError(null);
       setJobError(null);
@@ -317,6 +319,7 @@ function DownloaderContent() {
         setMetadata(null);
         setProbeError(err.message || 'Unable to inspect media. Ensure the URL is public and supported.');
       } finally {
+        probeInFlightRef.current = false;
         setIsProbing(false);
       }
     },

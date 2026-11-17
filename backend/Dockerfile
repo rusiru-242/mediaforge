@@ -35,6 +35,7 @@ ENV PORT=8081 \
     OMP_NUM_THREADS=1
 USER 10001:10001
 RUN ffmpeg -version && ffprobe -version && /opt/extractor/bin/yt-dlp --version && node --version \
+    && test -x /opt/extractor/bin/yt-dlp && test -x /usr/local/bin/node \
     && test -w /app/storage && test -w /app/tmp
 EXPOSE 8081
 HEALTHCHECK --interval=30s --timeout=12s --start-period=90s --retries=3 \
