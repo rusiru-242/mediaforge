@@ -1,6 +1,16 @@
 import type { NextConfig } from "next";
 import path from "path";
 
+const isDevelopment = process.env.NODE_ENV === "development";
+const apiOrigin = new URL(
+  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8081/api/v1"
+).origin;
+const developmentConnectSources = isDevelopment
+  ? " http://localhost:8080 http://127.0.0.1:8080 http://localhost:8081 http://127.0.0.1:8081"
+  : "";
+const developmentMediaSources = isDevelopment ? " http:" : "";
+const developmentScriptSources = isDevelopment ? " 'unsafe-eval'" : "";
+
 const nextConfig: NextConfig = {
   output: "standalone",
   reactStrictMode: true,
@@ -37,7 +47,7 @@ const nextConfig: NextConfig = {
           },
           {
             key: "Content-Security-Policy",
-            value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: http: https:; connect-src 'self' http://localhost:8081 http://127.0.0.1:8081 http://localhost:8080 http://127.0.0.1:8080 https:; font-src 'self' data:; frame-ancestors 'none';",
+            value: `default-src 'self'; script-src 'self' 'unsafe-inline'${developmentScriptSources}; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: ${apiOrigin}${developmentMediaSources}; connect-src 'self' ${apiOrigin}${developmentConnectSources}; font-src 'self' data:; frame-ancestors 'none';`,
           },
         ],
       },

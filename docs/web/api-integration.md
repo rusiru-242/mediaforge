@@ -3,7 +3,12 @@
 ## 1. Overview
 The MediaForge Web Portal integrates with the Spring Boot 3 REST API developed and merged in Phase 02. The web frontend communicates over standard HTTP JSON requests, parsing RFC 7807 problem details on failure and tracking async jobs.
 
-Base URL is configured via environment variable `NEXT_PUBLIC_API_BASE_URL` (defaults to `http://localhost:8080/api/v1`).
+Base URL is configured via `NEXT_PUBLIC_API_BASE_URL`. Local development defaults
+to `http://localhost:8081/api/v1`; production builds require an explicit HTTPS URL,
+for example `https://<your-api-host>/api/v1`. This value is public browser
+configuration, not a credential. See
+[frontend production deployment](../FRONTEND_PRODUCTION_DEPLOYMENT.md) for Vercel and
+backend CORS setup.
 
 ---
 
@@ -44,21 +49,24 @@ Base URL is configured via environment variable `NEXT_PUBLIC_API_BASE_URL` (defa
 - **Request Body:**
   ```json
   {
-    "url": "https://example.com/video.mp4"
+    "url": "https://www.youtube.com/watch?v=<authorized-video-id>"
   }
   ```
 - **Response (200 OK):**
   ```json
   {
     "valid": true,
-    "url": "https://example.com/video.mp4",
-    "platform": "generic",
+    "url": "https://www.youtube.com/watch?v=<authorized-video-id>",
+    "platform": "youtube",
     "availableFormats": ["mp4", "webm", "mp3"],
     "availableQualities": ["1080p", "720p", "480p"],
     "message": "URL is supported and valid"
   }
   ```
 - **SSRF Failure (400 Bad Request):** Returns RFC 7807 payload when private IP/loopback is targeted.
+
+The online downloader supports YouTube, Facebook, and Instagram only. TikTok,
+Twitter/X, and generic direct URLs are not supported.
 
 ---
 
@@ -68,7 +76,7 @@ Base URL is configured via environment variable `NEXT_PUBLIC_API_BASE_URL` (defa
 - **Request Body:**
   ```json
   {
-    "url": "https://example.com/video.mp4",
+    "url": "https://www.youtube.com/watch?v=<authorized-video-id>",
     "selectedFormat": "mp4",
     "selectedQuality": "1080p"
   }
