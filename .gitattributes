@@ -1,2 +1,5 @@
 releases/*.exe filter=lfs diff=lfs merge=lfs -text
 releases/*.apk filter=lfs diff=lfs merge=lfs -text
+Pc_Mob/*.exe filter=lfs diff=lfs merge=lfs -text
+Pc_Mob/*.apk filter=lfs diff=lfs merge=lfs -text
+
