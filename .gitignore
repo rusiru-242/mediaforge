@@ -274,3 +274,5 @@ dist-electron/
 
 *.aab
 /releases/*.zip
+
+Pc_Mob/
