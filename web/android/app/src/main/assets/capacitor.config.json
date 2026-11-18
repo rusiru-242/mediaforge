@@ -1,0 +1,12 @@
+{
+	"appId": "com.mediaforge.app",
+	"appName": "MediaForge",
+	"webDir": "out",
+	"server": {
+		"url": "https://mediaforge-hazel.vercel.app",
+		"cleartext": false
+	},
+	"android": {
+		"allowMixedContent": false
+	}
+}

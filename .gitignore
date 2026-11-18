@@ -261,5 +261,17 @@ backend/target/surefire-reports/
 .connect.lock
 
 # Release binaries are generated locally; keep source, manifests and release notes in Git.
+# Flutter
+.dart_tool/
+**/build/
 
+# Node.js
+node_modules/
+.next/
+dist-electron/
+
+# Release binaries
+*.apk
+*.exe
+*.aab
 /releases/*.zip
