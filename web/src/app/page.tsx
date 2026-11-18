@@ -61,8 +61,8 @@ export default function HomePage() {
             <p className="text-sm font-medium text-on-surface-variant mb-3">Get the MediaForge app</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <a
-                href="https://github.com/rusiru-242/mediaforge/raw/main/releases/MediaForge-Setup-v1.0.exe"
-                download="MediaForge-Setup-v1.0.exe"
+                href="https://github.com/rusiru-242/mediaforge/raw/main/Pc_Mob/MediaForge-Setup-v1.0.0.exe"
+                download="MediaForge-Setup-v1.0.0.exe"
                 aria-label="Download MediaForge for Windows"
                 className="flex items-center gap-3 rounded-2xl border border-outline-variant/40 bg-surface-container-lowest dark:bg-slate-900 px-4 py-3 text-left text-slate-900 dark:text-slate-100 hover:border-primary hover:bg-primary/5 dark:hover:bg-slate-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-950"
               >
@@ -74,7 +74,7 @@ export default function HomePage() {
                 <Download className="w-4 h-4 text-primary shrink-0" aria-hidden="true" />
               </a>
               <a
-                href="https://github.com/rusiru-242/mediaforge/raw/main/releases/MediaForge-v1.0.0.apk"
+                href="https://github.com/rusiru-242/mediaforge/raw/main/Pc_Mob/MediaForge-v1.0.0.apk"
                 download="MediaForge-v1.0.0.apk"
                 aria-label="Download MediaForge for Android"
                 className="flex items-center gap-3 rounded-2xl border border-outline-variant/40 bg-surface-container-lowest dark:bg-slate-900 px-4 py-3 text-left text-slate-900 dark:text-slate-100 hover:border-primary hover:bg-primary/5 dark:hover:bg-slate-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-950"
