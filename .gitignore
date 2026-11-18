@@ -271,7 +271,6 @@ node_modules/
 dist-electron/
 
 # Release binaries
-*.apk
-*.exe
+
 *.aab
 /releases/*.zip
