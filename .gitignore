@@ -275,4 +275,6 @@ dist-electron/
 *.aab
 /releases/*.zip
 
-Pc_Mob/
+Pc_Mob/*
+!Pc_Mob/*.exe
+!Pc_Mob/*.apk
