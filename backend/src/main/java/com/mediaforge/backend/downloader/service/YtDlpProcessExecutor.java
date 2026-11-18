@@ -167,13 +167,28 @@ public class YtDlpProcessExecutor {
             }
         }
 
-        // 2. Python user scripts path on Windows
-        String userHome = System.getProperty("user.home");
-        if (userHome != null) {
-            Path winScriptPath = Paths.get(userHome, "AppData", "Roaming", "Python", "Python313", "Scripts", "yt-dlp.exe");
-            if (Files.exists(winScriptPath) && checkCommand(List.of(winScriptPath.toString(), "--version"))) {
-                resolvedExecutableCommand = List.of(winScriptPath.toString());
-                return resolvedExecutableCommand;
+        boolean isWindows = System.getProperty("os.name", "").toLowerCase().contains("win");
+
+        // 2. Python user scripts path on Windows only
+        if (isWindows) {
+            String userHome = System.getProperty("user.home");
+            if (userHome != null) {
+                for (String pyVer : List.of("Python313", "Python312", "Python311", "Python310")) {
+                    Path winScriptPath = Paths.get(userHome, "AppData", "Roaming", "Python", pyVer, "Scripts", "yt-dlp.exe");
+                    if (Files.exists(winScriptPath) && checkCommand(List.of(winScriptPath.toString(), "--version"))) {
+                        resolvedExecutableCommand = List.of(winScriptPath.toString());
+                        return resolvedExecutableCommand;
+                    }
+                }
+            }
+        } else {
+            // Linux/Unix standard and container installation paths
+            for (String linuxPath : List.of("/usr/local/bin/yt-dlp", "/opt/extractor/bin/yt-dlp", "/usr/bin/yt-dlp")) {
+                Path candidate = Paths.get(linuxPath);
+                if (Files.exists(candidate) && Files.isExecutable(candidate) && checkCommand(List.of(linuxPath, "--version"))) {
+                    resolvedExecutableCommand = List.of(linuxPath);
+                    return resolvedExecutableCommand;
+                }
             }
         }
 
@@ -184,9 +199,14 @@ public class YtDlpProcessExecutor {
         }
 
         // 4. Python module execution
-        if (checkCommand(List.of("python", "-m", "yt_dlp", "--version"))) {
-            resolvedExecutableCommand = List.of("python", "-m", "yt_dlp");
-            return resolvedExecutableCommand;
+        List<String> pythonBinaries = isWindows
+                ? List.of("python", "py")
+                : List.of("/opt/extractor/bin/python3", "/opt/extractor/bin/python", "python3", "python");
+        for (String pyCmd : pythonBinaries) {
+            if (checkCommand(List.of(pyCmd, "-m", "yt_dlp", "--version"))) {
+                resolvedExecutableCommand = List.of(pyCmd, "-m", "yt_dlp");
+                return resolvedExecutableCommand;
+            }
         }
 
         // Default fallback command

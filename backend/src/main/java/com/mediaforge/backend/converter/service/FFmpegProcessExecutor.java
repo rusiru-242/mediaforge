@@ -47,13 +47,24 @@ public class FFmpegProcessExecutor {
             return resolvedFfmpegExecutable;
         }
 
-        // 2. WinGet links path on Windows
-        String userHome = System.getProperty("user.home");
-        if (userHome != null) {
-            Path wingetPath = Paths.get(userHome, "AppData", "Local", "Microsoft", "WinGet", "Links", "ffmpeg.exe");
-            if (Files.exists(wingetPath) && Files.isExecutable(wingetPath)) {
-                resolvedFfmpegExecutable = resolveExecutablePath(wingetPath.toString());
-                return resolvedFfmpegExecutable;
+        // 2. WinGet links path on Windows only
+        boolean isWindows = System.getProperty("os.name", "").toLowerCase().contains("win");
+        if (isWindows) {
+            String userHome = System.getProperty("user.home");
+            if (userHome != null) {
+                Path wingetPath = Paths.get(userHome, "AppData", "Local", "Microsoft", "WinGet", "Links", "ffmpeg.exe");
+                if (Files.exists(wingetPath) && Files.isExecutable(wingetPath)) {
+                    resolvedFfmpegExecutable = resolveExecutablePath(wingetPath.toString());
+                    return resolvedFfmpegExecutable;
+                }
+            }
+        } else {
+            // Linux standard paths
+            for (String linuxPath : List.of("/usr/bin/ffmpeg", "/usr/local/bin/ffmpeg")) {
+                if (checkExecutable(linuxPath)) {
+                    resolvedFfmpegExecutable = resolveExecutablePath(linuxPath);
+                    return resolvedFfmpegExecutable;
+                }
             }
         }
 
