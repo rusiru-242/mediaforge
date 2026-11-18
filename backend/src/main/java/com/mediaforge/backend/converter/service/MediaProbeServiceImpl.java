@@ -46,13 +46,24 @@ public class MediaProbeServiceImpl implements MediaProbeService {
             return resolvedFfprobeExecutable;
         }
 
-        // 2. Check WinGet / User AppData path on Windows
-        String userHome = System.getProperty("user.home");
-        if (userHome != null) {
-            Path wingetPath = Paths.get(userHome, "AppData", "Local", "Microsoft", "WinGet", "Links", "ffprobe.exe");
-            if (Files.exists(wingetPath) && Files.isExecutable(wingetPath)) {
-                resolvedFfprobeExecutable = wingetPath.toString();
-                return resolvedFfprobeExecutable;
+        // 2. Check WinGet / User AppData path on Windows only
+        boolean isWindows = System.getProperty("os.name", "").toLowerCase().contains("win");
+        if (isWindows) {
+            String userHome = System.getProperty("user.home");
+            if (userHome != null) {
+                Path wingetPath = Paths.get(userHome, "AppData", "Local", "Microsoft", "WinGet", "Links", "ffprobe.exe");
+                if (Files.exists(wingetPath) && Files.isExecutable(wingetPath)) {
+                    resolvedFfprobeExecutable = wingetPath.toString();
+                    return resolvedFfprobeExecutable;
+                }
+            }
+        } else {
+            // Linux standard paths
+            for (String linuxPath : List.of("/usr/bin/ffprobe", "/usr/local/bin/ffprobe")) {
+                if (checkExecutable(linuxPath)) {
+                    resolvedFfprobeExecutable = linuxPath;
+                    return resolvedFfprobeExecutable;
+                }
             }
         }
 

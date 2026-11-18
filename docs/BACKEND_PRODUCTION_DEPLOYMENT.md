@@ -187,6 +187,18 @@ Do not replace its port with the development URL. Set health path
 `/actuator/health`, choose resources after benchmarking, keep a single instance.
 If mounting a disk, use `/app/storage`, ensure UID 10001 can write, and account for
 deploy interruption. Configure a custom HTTPS API domain only after health is UP.
+
+**Render Environment Variables:**
+* `SPRING_PROFILES_ACTIVE=prod`
+* `YTDLP_PATH=/usr/local/bin/yt-dlp` (also symlinked to `/opt/extractor/bin/yt-dlp`)
+* `FFMPEG_PATH=/usr/bin/ffmpeg`
+* `FFPROBE_PATH=/usr/bin/ffprobe`
+* `YTDLP_JS_RUNTIMES=node:/usr/local/bin/node`
+* `CORS_ALLOWED_ORIGINS=https://your-frontend-domain.com`
+* `STORAGE_LOCAL_PATH=/app/storage`
+* `UPLOAD_TEMP_PATH=/app/tmp`
+* `TMPDIR=/app/tmp`
+
 Verify provider body-size, request-duration, temporary disk and outbound networking
 limits before accepting large uploads. Disable automatic deploys during active jobs
 or accept that in-memory jobs are lost.

@@ -39,11 +39,31 @@ public class MediaRuntimeHealthIndicator implements HealthIndicator {
     @Override public synchronized Health health() {
         if (!storageAvailable()) return Health.down().build();
         if (checkTools && System.currentTimeMillis() - checkedAt > 30000) {
-            toolsAvailable = executable(ffmpeg, "-version") && executable(ffprobe, "-version")
-                    && executable(extractor.isBlank() ? "yt-dlp" : extractor, "--version");
+            toolsAvailable = checkFfmpeg() && checkFfprobe() && checkExtractor();
             checkedAt = System.currentTimeMillis();
         }
         return !checkTools || toolsAvailable ? Health.up().build() : Health.down().build();
+    }
+    private boolean checkFfmpeg() {
+        if (ffmpeg != null && !ffmpeg.isBlank() && executable(ffmpeg, "-version")) return true;
+        for (String candidate : java.util.List.of("ffmpeg", "/usr/bin/ffmpeg", "/usr/local/bin/ffmpeg")) {
+            if (executable(candidate, "-version")) return true;
+        }
+        return false;
+    }
+    private boolean checkFfprobe() {
+        if (ffprobe != null && !ffprobe.isBlank() && executable(ffprobe, "-version")) return true;
+        for (String candidate : java.util.List.of("ffprobe", "/usr/bin/ffprobe", "/usr/local/bin/ffprobe")) {
+            if (executable(candidate, "-version")) return true;
+        }
+        return false;
+    }
+    private boolean checkExtractor() {
+        if (extractor != null && !extractor.isBlank() && executable(extractor, "--version")) return true;
+        for (String candidate : java.util.List.of("yt-dlp", "/usr/local/bin/yt-dlp", "/opt/extractor/bin/yt-dlp", "/usr/bin/yt-dlp")) {
+            if (executable(candidate, "--version")) return true;
+        }
+        return false;
     }
     private boolean executable(String file, String argument) {
         Process process = null;
